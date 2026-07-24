@@ -7,7 +7,7 @@ def test_unknown_video_size_is_rejected_by_default():
     )
 
     assert should_send is False
-    assert reason == "服务端未返回视频大小，已改用合并转发发送解析链接"
+    assert reason == "服务端未返回视频大小，未直接发送视频"
 
 
 def test_video_size_policy_accepts_files_within_limit():

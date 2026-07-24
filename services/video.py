@@ -83,12 +83,12 @@ class VideoSendPolicy:
             if bool(self.config.get("allow_unknown_video_size", False)):
                 return True, "视频大小未知，已按配置允许发送"
             reason = size_info.reason or "视频大小未知"
-            return False, f"{reason}，已改用合并转发发送解析链接"
+            return False, f"{reason}，未直接发送视频"
 
         if size_info.size_mb > max_size_mb:
             return False, (
                 f"视频大小 {format_video_size(size_info.size_mb)} "
-                f"超过限制 {max_size_mb:.2f} MB，已改用合并转发发送解析链接"
+                f"超过限制 {max_size_mb:.2f} MB，未直接发送视频"
             )
 
         return True, (f"视频大小 {format_video_size(size_info.size_mb)}，未超过限制")

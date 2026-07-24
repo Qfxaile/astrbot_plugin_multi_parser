@@ -6,7 +6,6 @@ import httpx
 
 from ...core.http import build_cookies, cookie_config_value
 from ...models import BaseParser, OrderedContent, ParseContext, ParseResult
-from ...utils import replace_links
 
 
 def _original_image_url(url: str) -> str:
@@ -171,7 +170,7 @@ class BilibiliParser(BaseParser):
             platform=self.name,
             title=info.get("title", "未知标题"),
             author=info.get("author", "未知作者"),
-            description=replace_links(info.get("desc", "")),
+            description=info.get("desc", ""),
             cover_urls=[_original_image_url(str(info.get("pic", "")))],
             video_url=play_url,
             extra_lines=extra_lines,
@@ -237,7 +236,7 @@ class BilibiliParser(BaseParser):
             platform=self.name,
             title=str(room_info.get("title") or "B站直播间"),
             author=str(base_info.get("uname") or "未知主播"),
-            description=replace_links(str(room_info.get("description") or "")),
+            description=str(room_info.get("description") or ""),
             cover_urls=[cover_url] if cover_url else [],
             extra_lines=extra_lines,
         )

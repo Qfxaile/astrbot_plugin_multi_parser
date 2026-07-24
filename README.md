@@ -23,7 +23,8 @@
 - **覆盖八个平台**：支持 Bilibili、抖音、小红书、贴吧、微博、微信、小黑盒和知乎的常见视频、直播、图文及分享链接。
 - **保留原图质量**：图片在内存中下载后以原始字节发送，不主动缩放或转码。
 - **灵活组织内容**：可选择始终合并、超过图片或文字阈值时合并，或始终普通发送。
-- **控制视频体积**：发送前探测远程视频大小，超过限制时改为发送解析链接。
+- **控制视频体积**：发送前探测远程视频大小，超过限制时可提示、发送直链或尝试发送群文件。
+- **过滤正文链接**：可选替换解析结果中的网页链接，同时保留用户发送的原消息。
 - **解析音乐分享**：识别抖音短链跳转的汽水音乐单曲，发送歌曲简介、封面和音频。
 - **按需配置登录态**：大多数平台 Cookie 为可选项；视频号短链需要腾讯元宝 Web 登录令牌换取官方预览令牌。
 - **管理员私聊登录**：八个平台均保留登录命令入口；抖音、小红书和知乎二维码登录获取 Cookies 暂未实现，当前调用会登录失败。
@@ -82,7 +83,9 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 
 | 配置项 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `platform_switches` | 对象（布尔开关） | 八个平台全部启用 | 分别控制 B站、抖音、小红书、贴吧、微博、微信、小黑盒和知乎解析器 |
+| `platform_switches` | 对象（布尔开关） | 八个平台全部启用 | 分别控制 B站、抖音、小红书、贴吧、微博、微信、小黑盒和知乎解析器；配置页会在每个平台下方显示当前支持的内容格式 |
+| `filter_output_links` | 布尔值 | `false` | 是否替换插件解析结果标题、简介、正文和附加说明中的网页链接；不修改用户原消息 |
+| `filtered_link_text` | 文本 | `[详细内容请打开原链接查看]` | 开启链接过滤后显示的替换文案 |
 | `forward_mode` | 选项 | `threshold` | 内容发送方式：始终合并、超过阈值时合并或始终不合并（不推荐） |
 | `forward_image_threshold` | 整数 | `2` | 阈值模式下，图片数量严格超过该值时合并发送 |
 | `forward_text_threshold` | 整数 | `260` | 阈值模式下，最终可见文字字符数严格超过该值时合并发送 |
@@ -90,6 +93,7 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 | `image_download_concurrency` | 整数 | `4` | 同时下载的图片数量，取值范围为 `1`～`16` |
 | `send_video_by_url` | 布尔值 | `true` | 是否通过远程 URL 直接发送解析到的视频 |
 | `max_video_size_mb` | 浮点数 | `50` | 视频直发体积上限，单位为 MB；小于等于 `0` 表示不限制 |
+| `video_over_limit_action` | 选项 | `direct_link` | 视频超限或不允许发送未知大小视频时：仅提示、发送直链或发送群文件 |
 | `allow_unknown_video_size` | 布尔值 | `false` | 无法探测视频大小时，是否仍尝试直接发送 |
 | `size_check_timeout_seconds` | 浮点数 | `10` | 视频大小探测超时，单位为秒 |
 | `enable_parse_reaction` | 布尔值 | `true` | 识别到受支持链接后，是否通过 OneBot v11 给原消息添加表情回应 |
@@ -172,15 +176,16 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 
 ### 视频内容
 
-启用 `send_video_by_url` 后，插件只通过 `HEAD` 或 `Range` 请求探测文件大小，不会把完整视频下载到本地。
+启用 `send_video_by_url` 后，插件先通过 `HEAD` 或 `Range` 请求探测文件大小。选择“发送群文件”且命中 OneBot 群聊时，插件会把视频 HTTPS 地址交给协议端，由 NapCat 等协议端自行下载并上传，不在 AstrBot 容器创建视频临时文件。
 
 | 检查结果 | 处理方式 |
 | --- | --- |
 | 文件大小未超过 `max_video_size_mb` | 通过远程 URL 单独发送视频 |
-| 文件大小超过限制 | OneBot 使用原生转发、Satori 使用节点消息，其他平台发送普通文本解析链接 |
-| 文件大小未知，且不允许未知大小 | 按消息平台能力发送解析链接 |
+| 文件大小超过限制 | 按 `video_over_limit_action` 发送提示、直链或尝试 OneBot 群文件 |
+| 文件大小未知，且不允许未知大小 | 按 `video_over_limit_action` 处理 |
 | 文件大小未知，但允许未知大小 | 尝试通过远程 URL 发送视频 |
-| 解析链接投递失败 | 降级为被动普通文本，附带失败原因和视频链接 |
+| 群文件不可用、协议端下载失败或上传失败 | 自动降级为发送直链 |
+| 超限处理投递失败 | 降级为被动普通文本，附带失败原因和视频链接 |
 
 插件会先发送作品信息，再处理视频。关闭 `send_video_by_url` 时，视频 URL 只在作品摘要中出现一次；即使视频发送失败，已经解析到的标题和封面仍会保留。
 
@@ -193,7 +198,7 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 <details>
 <summary><strong>为什么解析成功了，却没有直接发出视频？</strong></summary>
 
-视频可能超过 `max_video_size_mb`，也可能无法通过 `HEAD` 或 `Range` 获取大小。此时插件会按消息平台能力发送解析链接；不支持合并转发的平台使用普通文本。可以根据适配器能力调整 `max_video_size_mb` 或 `allow_unknown_video_size`。
+视频可能超过 `max_video_size_mb`，也可能无法通过 `HEAD` 或 `Range` 获取大小。此时插件会按 `video_over_limit_action` 处理；选择群文件时仅 OneBot 群聊会尝试上传，其他适配器、私聊和上传失败场景自动发送直链。
 
 </details>
 
@@ -232,7 +237,7 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 - 图片地址必须使用 HTTP(S)、默认端口和受信任的平台域名；私有地址及不安全重定向会被拒绝。
 - 图片重定向最多跟随 5 次，并在每次跳转前重新校验目标地址。
 - 图片错误日志仅记录主机名和错误摘要，避免泄漏带令牌的完整 URL。
-- 图片仅在内存中短暂处理；视频始终使用远程 URL，不创建本地媒体缓存。
+- 图片仅在内存中短暂处理；视频和群文件都使用远程 URL，不在插件目录创建本地视频缓存。
 
 ## 项目结构
 
@@ -240,6 +245,7 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 astrbot_plugin_multi_parser/
 ├── main.py                    # 插件装配、事件监听与解析调度
 ├── core/                      # 解析与登录契约、HTTP 安全、媒体物化和渲染
+│   └── utils.py               # 消息上下文提取与文本链接替换
 ├── services/                  # 登录、配置迁移、消息交付和视频策略
 ├── platforms/                 # 各内容平台适配器
 │   ├── bilibili/              # B站内容解析与二维码登录

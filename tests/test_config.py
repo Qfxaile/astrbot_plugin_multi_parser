@@ -51,6 +51,18 @@ def test_schema_uses_platform_switches_without_legacy_settings():
         "腾讯元宝 Cookies"
     )
     assert schema["max_video_size_mb"]["default"] == 50
+    assert schema["filter_output_links"]["default"] is False
+    assert schema["filtered_link_text"]["default"] == "[详细内容请打开原链接查看]"
+
+    over_limit_action = schema["video_over_limit_action"]
+    assert over_limit_action["type"] == "string"
+    assert over_limit_action["default"] == "direct_link"
+    assert over_limit_action["options"] == ["notice", "direct_link", "group_file"]
+    assert over_limit_action["labels"] == [
+        "仅发送提示",
+        "发送直链",
+        "发送群文件",
+    ]
 
 
 def test_video_send_decision_defaults_limit_to_50_mb():
