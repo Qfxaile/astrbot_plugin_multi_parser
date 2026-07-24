@@ -31,6 +31,20 @@ def qr_handler(poll_payload: dict, *, confirm_response=None):
                     "sign": "one-time-sign",
                     "imgurl": "/v2/api/qrcode?sign=one-time-sign",
                 },
+                headers=[
+                    (
+                        "Set-Cookie",
+                        "BAIDUID=device-secret; Domain=.baidu.com; Path=/",
+                    ),
+                    (
+                        "Set-Cookie",
+                        "BIDUPSID=browser-secret; Domain=.baidu.com; Path=/",
+                    ),
+                    (
+                        "Set-Cookie",
+                        "PSTM=login-time; Domain=.baidu.com; Path=/",
+                    ),
+                ],
             )
         if request.url.path == "/v2/api/qrcode":
             return httpx.Response(
@@ -124,9 +138,13 @@ async def test_tieba_qr_login_saves_only_expected_domain_cookies():
         result = await provider.poll_qr_status(challenge.session_key)
 
     assert result.state == LoginPollState.SUCCESS
-    assert result.cookie_header == "BDUSS=session-secret; STOKEN=csrf-secret"
+    assert result.cookie_header == (
+        "BAIDUID=device-secret; BIDUPSID=browser-secret; PSTM=login-time; "
+        "BDUSS=session-secret"
+    )
     assert "foreign-secret" not in result.cookie_header
     assert "UNEXPECTED" not in result.cookie_header
+    assert "STOKEN" not in result.cookie_header
 
 
 @pytest.mark.asyncio

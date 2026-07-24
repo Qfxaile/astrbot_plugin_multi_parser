@@ -33,10 +33,15 @@ class TiebaLoginProvider(PlatformLoginProvider):
     MAX_QR_IMAGE_BYTES = 512 * 1024
     MAX_LOGIN_REDIRECTS = 5
     COOKIE_NAMES = (
+        "BAIDUID",
+        "BAIDUID_BFESS",
+        "BIDUPSID",
+        "PSTM",
         "BDUSS",
         "BDUSS_BFESS",
         "STOKEN",
     )
+    TIEBA_COOKIE_HOST = "tieba.baidu.com"
     LOGIN_HOSTS = frozenset({"passport.baidu.com", "tieba.baidu.com"})
     COOKIE_DOMAINS = frozenset(
         {"baidu.com", "passport.baidu.com", "tieba.baidu.com"}
@@ -310,12 +315,22 @@ class TiebaLoginProvider(PlatformLoginProvider):
         cookies: dict[str, str] = {}
         for cookie in self._client.cookies.jar:
             domain = str(cookie.domain or "").lstrip(".").lower()
-            if domain not in self.COOKIE_DOMAINS:
+            # 配置字符串不保留 Domain，因此只能持久化浏览器本来就会发往贴吧的
+            # 条目，避免把 Passport 专用 Cookie 扁平化后扩大到贴吧请求。
+            if not self._cookie_applies_to_tieba(domain):
                 continue
             if cookie.name in self.COOKIE_NAMES and cookie.value:
                 cookies[cookie.name] = cookie.value
         return "; ".join(
             f"{name}={cookies[name]}" for name in self.COOKIE_NAMES if name in cookies
+        )
+
+    @classmethod
+    def _cookie_applies_to_tieba(cls, domain: str) -> bool:
+        """判断 Cookie Domain 是否允许浏览器把该条目发送到贴吧。"""
+        return domain in cls.COOKIE_DOMAINS and (
+            domain == cls.TIEBA_COOKIE_HOST
+            or cls.TIEBA_COOKIE_HOST.endswith(f".{domain}")
         )
 
     @classmethod

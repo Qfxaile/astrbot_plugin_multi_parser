@@ -149,7 +149,12 @@ async def test_parse_materializes_images_without_leaking_tieba_cookies(
 
     result = await tieba.TiebaParser(
         {
-            "tieba_cookies": "BDUSS=secret; TIEBA_NEW_PC=1",
+            "cookies": {
+                "tieba_cookies": (
+                    "BAIDUID=device-secret; BIDUPSID=browser-secret; "
+                    "PSTM=login-time; BDUSS=session-secret; TIEBA_NEW_PC=1"
+                )
+            },
             "request_timeout_seconds": 12,
         }
     ).parse(ParseContext(text=page_url))
@@ -158,7 +163,10 @@ async def test_parse_materializes_images_without_leaking_tieba_cookies(
     page_request, image_request = requests
     assert page_request.url.params["see_lz"] == "1"
     assert page_request.url.params["pn"] == "1"
-    assert page_request.headers["Cookie"] == "BDUSS=secret; TIEBA_NEW_PC=0"
+    assert page_request.headers["Cookie"] == (
+        "BAIDUID=device-secret; BIDUPSID=browser-secret; PSTM=login-time; "
+        "BDUSS=session-secret; TIEBA_NEW_PC=0"
+    )
     assert image_request.headers["Referer"] == page_url
     assert "Cookie" not in image_request.headers
 
