@@ -19,7 +19,7 @@ def jsonp_response(request: httpx.Request, payload: dict, **kwargs) -> httpx.Res
     )
 
 
-def qr_handler(poll_payload: dict, *, confirm_response=None):
+def qr_handler(poll_payload: dict, *, confirm_response=None, auth_response=None):
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/v2/api/getqrcode":
             assert request.url.params["tpl"] == "tb"
@@ -75,6 +75,44 @@ def qr_handler(poll_payload: dict, *, confirm_response=None):
                     (
                         "Set-Cookie",
                         "UNEXPECTED=ignored; Domain=.baidu.com; Path=/",
+                    ),
+                ],
+            )
+        if request.url.path == "/v3/login/api/auth/":
+            assert request.url.params["tpl"] == "tb"
+            assert request.url.params["jump"] == ""
+            assert request.url.params["return_type"] == "3"
+            assert request.url.params["u"] == (
+                "https://tieba.baidu.com/index.html"
+            )
+            if auth_response is not None:
+                return auth_response(request)
+            return httpx.Response(
+                302,
+                request=request,
+                headers={
+                    "Location": (
+                        "https://tieba.baidu.com/index.html"
+                        "?errmsg=Auth+Login+Success&errno=0&stoken=one-time"
+                    )
+                },
+            )
+        if (
+            request.url.host == "tieba.baidu.com"
+            and request.url.path == "/index.html"
+        ):
+            return httpx.Response(
+                200,
+                request=request,
+                headers=[
+                    (
+                        "Set-Cookie",
+                        "STOKEN=tieba-secret; Domain=.baidu.com; Path=/",
+                    ),
+                    (
+                        "Set-Cookie",
+                        "TIEBA_SID=tieba-session; "
+                        "Domain=.tieba.baidu.com; Path=/",
                     ),
                 ],
             )
@@ -140,11 +178,11 @@ async def test_tieba_qr_login_saves_only_expected_domain_cookies():
     assert result.state == LoginPollState.SUCCESS
     assert result.cookie_header == (
         "BAIDUID=device-secret; BIDUPSID=browser-secret; PSTM=login-time; "
-        "BDUSS=session-secret"
+        "BDUSS=session-secret; STOKEN=tieba-secret; TIEBA_SID=tieba-session"
     )
     assert "foreign-secret" not in result.cookie_header
     assert "UNEXPECTED" not in result.cookie_header
-    assert "STOKEN" not in result.cookie_header
+    assert "csrf-secret" not in result.cookie_header
 
 
 @pytest.mark.asyncio
@@ -239,6 +277,31 @@ async def test_tieba_qr_login_rejects_untrusted_success_redirect():
             ),
         },
         confirm_response=redirect_response,
+    )
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = TiebaLoginProvider({}, client=client)
+        challenge = await provider.create_qr_challenge()
+        with pytest.raises(PlatformLoginError, match="无效的登录确认"):
+            await provider.poll_qr_status(challenge.session_key)
+
+
+@pytest.mark.asyncio
+async def test_tieba_qr_login_rejects_untrusted_authorization_redirect():
+    def redirect_response(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            302,
+            request=request,
+            headers={"Location": "https://example.com/steal-stoken"},
+        )
+
+    handler = qr_handler(
+        {
+            "errno": 0,
+            "channel_v": json.dumps(
+                {"status": 0, "v": "one-time-login-token"}
+            ),
+        },
+        auth_response=redirect_response,
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         provider = TiebaLoginProvider({}, client=client)

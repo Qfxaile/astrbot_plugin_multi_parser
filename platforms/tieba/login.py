@@ -27,7 +27,8 @@ class TiebaLoginProvider(PlatformLoginProvider):
     QR_GENERATE_URL = "https://passport.baidu.com/v2/api/getqrcode"
     QR_POLL_URL = "https://passport.baidu.com/channel/unicast"
     LOGIN_CONFIRM_URL = "https://passport.baidu.com/v3/login/main/qrbdusslogin"
-    LOGIN_RETURN_URL = "https://tieba.baidu.com/"
+    TIEBA_AUTH_URL = "https://passport.baidu.com/v3/login/api/auth/"
+    LOGIN_RETURN_URL = "https://tieba.baidu.com/index.html"
     QR_EXPIRES_IN_SECONDS = 180
     MAX_RESPONSE_BYTES = 64 * 1024
     MAX_QR_IMAGE_BYTES = 512 * 1024
@@ -40,6 +41,7 @@ class TiebaLoginProvider(PlatformLoginProvider):
         "BDUSS",
         "BDUSS_BFESS",
         "STOKEN",
+        "TIEBA_SID",
     )
     TIEBA_COOKIE_HOST = "tieba.baidu.com"
     LOGIN_HOSTS = frozenset({"passport.baidu.com", "tieba.baidu.com"})
@@ -178,10 +180,12 @@ class TiebaLoginProvider(PlatformLoginProvider):
         if not self._is_safe_token(login_token):
             raise PlatformLoginError("贴吧登录成功，但确认信息无效。")
         await self._complete_login(login_token)
+        await self._complete_tieba_authorization()
         cookie_header = self._cookie_header()
-        if not any(
+        has_baidu_session = any(
             f"{name}=" in cookie_header for name in ("BDUSS", "BDUSS_BFESS")
-        ):
+        )
+        if not has_baidu_session or "STOKEN=" not in cookie_header:
             raise PlatformLoginError("贴吧登录成功，但响应中缺少有效登录凭据。")
         return LoginPollResult(LoginPollState.SUCCESS, cookie_header)
 
@@ -248,7 +252,7 @@ class TiebaLoginProvider(PlatformLoginProvider):
         return content
 
     async def _complete_login(self, login_token: str) -> None:
-        # 一次性确认令牌只能发往百度 Passport；每次跳转都重新校验目标域名。
+        """使用二维码一次性令牌完成百度账号登录。"""
         current_url = str(
             httpx.URL(
                 self.LOGIN_CONFIRM_URL,
@@ -263,6 +267,26 @@ class TiebaLoginProvider(PlatformLoginProvider):
                 },
             )
         )
+        await self._follow_trusted_login_redirects(current_url)
+
+    async def _complete_tieba_authorization(self) -> None:
+        """把百度账号会话交换为贴吧可用的 STOKEN 登录态。"""
+        current_url = str(
+            httpx.URL(
+                self.TIEBA_AUTH_URL,
+                params={
+                    "tpl": "tb",
+                    "jump": "",
+                    "return_type": "3",
+                    "u": self.LOGIN_RETURN_URL,
+                },
+            )
+        )
+        await self._follow_trusted_login_redirects(current_url)
+
+    async def _follow_trusted_login_redirects(self, current_url: str) -> None:
+        """跟随百度账号与贴吧之间的受控 HTTPS 登录跳转。"""
+        # 一次性令牌和业务授权令牌只能在两个官方域之间流转，每跳都重新校验。
         for _ in range(self.MAX_LOGIN_REDIRECTS + 1):
             if not self._is_trusted_https_url(current_url, self.LOGIN_HOSTS):
                 raise PlatformLoginError("贴吧返回了无效的登录确认信息。")
