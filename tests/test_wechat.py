@@ -3,8 +3,8 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+from astrbot_multi_parser.core.contracts import ParseContext
 from astrbot_multi_parser.core.http import CookieAccessError
-from astrbot_multi_parser.models import ParseContext
 from astrbot_multi_parser.platforms.wechat import WeChatParser
 from astrbot_multi_parser.platforms.wechat import parser as wechat_parser
 from astrbot_multi_parser.platforms.wechat.article import parse_article_html

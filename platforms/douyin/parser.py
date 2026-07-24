@@ -4,9 +4,10 @@ from urllib.parse import parse_qs, urlparse, urlsplit
 
 import httpx
 
+from ...core.contracts import ParseContext, ParseResult
 from ...core.http import build_cookies, cookie_config_value
 from ...core.media import mark_invalid_legacy_images
-from ...models import BaseParser, ParseContext, ParseResult
+from ...core.parser import BaseParser
 from .music import is_qishui_track_url, parse_qishui_track_html
 
 

@@ -4,7 +4,8 @@ import json
 import re
 from urllib.parse import urlparse
 
-from ...models import BaseParser, ParseContext, ParseResult
+from ...core.contracts import ParseContext, ParseResult
+from ...core.parser import BaseParser
 from .handlers import (
     parse_answer_payload,
     parse_article_payload,

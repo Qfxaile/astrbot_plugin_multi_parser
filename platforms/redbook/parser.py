@@ -4,9 +4,10 @@ from urllib.parse import quote, urlparse, urlsplit, urlunsplit
 
 import httpx
 
+from ...core.contracts import ParseContext, ParseResult
 from ...core.http import build_cookies, cookie_config_value
 from ...core.media import mark_invalid_legacy_images
-from ...models import BaseParser, ParseContext, ParseResult
+from ...core.parser import BaseParser
 
 
 class RedBookParser(BaseParser):

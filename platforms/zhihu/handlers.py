@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 
-from ...models import OrderedContent, ParseResult
+from ...core.contracts import OrderedContent, ParseResult
 from .common import format_count, media_key, normalize_media_url, normalize_text
 from .content import parse_html_content
 

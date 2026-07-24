@@ -4,10 +4,10 @@ from pathlib import Path
 import httpx
 import pytest
 from astrbot.api.message_components import Image, Plain, Record
-from astrbot_multi_parser import models
+from astrbot_multi_parser import core as models
 
 
-def test_legacy_models_exports_core_contracts():
+def test_core_exports_contracts():
     from astrbot_multi_parser.core.contracts import ParseResult as CoreParseResult
 
     assert models.ParseResult is CoreParseResult

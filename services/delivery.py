@@ -8,7 +8,7 @@ from astrbot.api.event import AstrMessageEvent, MessageChain
 from astrbot.api.message_components import Image, Node, Nodes, Plain
 
 from ..core.contracts import ParseResult
-from ..core.utils import replace_links
+from .text_processing import replace_links
 
 
 class DeliveryService:

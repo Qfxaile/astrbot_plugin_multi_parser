@@ -6,9 +6,9 @@ from astrbot.api.message_components import Image, Node, Nodes, Plain, Record, Vi
 from astrbot.core.star.filter.permission import PermissionType, PermissionTypeFilter
 from astrbot.core.star.star_handler import star_handlers_registry
 from astrbot_multi_parser import main
+from astrbot_multi_parser.core.contracts import OrderedContent, ParseResult
 from astrbot_multi_parser.core.http import CookieAccessError
 from astrbot_multi_parser.main import MultiParserPlugin, VideoSizeInfo
-from astrbot_multi_parser.models import OrderedContent, ParseResult
 from astrbot_multi_parser.services.delivery import DeliveryService
 
 

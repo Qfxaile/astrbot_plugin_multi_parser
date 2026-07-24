@@ -3,7 +3,7 @@ import re
 
 import httpx
 import pytest
-from astrbot_multi_parser.models import ParseContext
+from astrbot_multi_parser.core.contracts import ParseContext
 from astrbot_multi_parser.platforms import xiaoheihe
 from astrbot_multi_parser.platforms.xiaoheihe import XiaoheiheParser
 

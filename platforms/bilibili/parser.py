@@ -4,8 +4,9 @@ from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
+from ...core.contracts import OrderedContent, ParseContext, ParseResult
 from ...core.http import build_cookies, cookie_config_value
-from ...models import BaseParser, OrderedContent, ParseContext, ParseResult
+from ...core.parser import BaseParser
 
 
 def _original_image_url(url: str) -> str:

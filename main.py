@@ -5,10 +5,10 @@ from astrbot.api.star import Context, Star
 
 from .core.contracts import ParseResult
 from .core.http import CookieAccessError
-from .core.utils import extract_context
 from .services.authentication import AuthenticationService
 from .services.configuration import build_parsers, enabled_parsers
 from .services.delivery import DeliveryService
+from .services.message_context import extract_context
 from .services.video import (
     VideoSendPolicy,
     VideoSizeInfo,

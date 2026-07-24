@@ -1,7 +1,7 @@
 import re
 from html.parser import HTMLParser
 
-from ...models import OrderedContent
+from ...core.contracts import OrderedContent
 from .common import media_key, normalize_media_url, normalize_text
 
 
