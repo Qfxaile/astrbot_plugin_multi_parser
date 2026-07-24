@@ -110,9 +110,11 @@ class BilibiliParser(BaseParser):
     )
     OPUS_PATTERN = r"https?://www\.bilibili\.com/opus/(?P<opus_id>\d+)"
     ARTICLE_PATTERN = r"https?://www\.bilibili\.com/read/cv(?P<article_id>\d+)"
+    LIVE_PATTERN = r"https?://live\.bilibili\.com/(?P<room_id>\d+)"
     DYNAMIC_API = "https://api.bilibili.com/x/polymer/web-dynamic/v1/detail"
     OPUS_API = "https://api.bilibili.com/x/polymer/web-dynamic/v1/opus/detail"
     ARTICLE_API = "https://api.bilibili.com/x/article/view"
+    LIVE_API = "https://api.live.bilibili.com/xlive/web-room/v1/index/getInfoByRoom"
     COOKIE_FAILURE_CODES = {-101, -111, -352, -412}
 
     async def match(self, context: ParseContext) -> bool:
@@ -123,6 +125,7 @@ class BilibiliParser(BaseParser):
                 self.DYNAMIC_PATTERN,
                 self.OPUS_PATTERN,
                 self.ARTICLE_PATTERN,
+                self.LIVE_PATTERN,
                 self.ID_PATTERN,
                 self.SHORT_PATTERN,
             )
@@ -136,6 +139,8 @@ class BilibiliParser(BaseParser):
             return await self._parse_opus(match.group("opus_id"))
         if match := re.search(self.ARTICLE_PATTERN, text):
             return await self._parse_article(match.group("article_id"))
+        if match := re.search(self.LIVE_PATTERN, text):
+            return await self._parse_live(match.group("room_id"))
 
         match = re.search(self.ID_PATTERN, text)
         if not match and (short_match := re.search(self.SHORT_PATTERN, text)):
@@ -178,6 +183,64 @@ class BilibiliParser(BaseParser):
             cookies=self._cookies(),
         ) as client:
             return await self.materialize_images(result, client, referer)
+
+    async def _parse_live(self, room_id: str) -> ParseResult:
+        """请求并解析 B站直播间公开信息。"""
+        referer = f"https://live.bilibili.com/{room_id}"
+        async with httpx.AsyncClient(
+            timeout=self.request_timeout,
+            headers=self._headers(referer),
+            cookies=self._cookies(),
+        ) as client:
+            response = await client.get(self.LIVE_API, params={"room_id": room_id})
+            self.raise_for_response_status(response)
+            result = self._parse_live_payload(response.json())
+            return await self.materialize_images(result, client, referer)
+
+    def _parse_live_payload(self, payload: dict) -> ParseResult:
+        """将 B站直播间载荷转换为统一解析结果。"""
+        if not isinstance(payload, dict):
+            raise ValueError("B站直播间响应格式错误")
+        self._raise_for_api_cookie_error(payload)
+        if payload.get("code") not in (None, 0):
+            raise ValueError(str(payload.get("message") or "B站直播间请求失败"))
+        data = payload.get("data") or {}
+        if not isinstance(data, dict):
+            raise ValueError("B站直播间数据为空")
+        room_info = data.get("room_info") or {}
+        if not isinstance(room_info, dict) or not room_info:
+            raise ValueError("B站直播间数据为空")
+        anchor_info = data.get("anchor_info") or {}
+        base_info = (
+            anchor_info.get("base_info")
+            if isinstance(anchor_info, dict)
+            else {}
+        ) or {}
+        if not isinstance(base_info, dict):
+            base_info = {}
+        live_status = {0: "未开播", 1: "直播中", 2: "轮播中"}.get(
+            room_info.get("live_status"), "未知"
+        )
+        extra_lines = [f"直播状态: {live_status}"]
+        areas = [
+            str(room_info.get(key) or "").strip()
+            for key in ("parent_area_name", "area_name")
+        ]
+        areas = list(dict.fromkeys(area for area in areas if area))
+        if areas:
+            extra_lines.append(f"分区: {' / '.join(areas)}")
+        online = room_info.get("online")
+        if isinstance(online, int) and online >= 0:
+            extra_lines.append(f"人气: {online:,}")
+        cover_url = _original_image_url(str(room_info.get("keyframe") or ""))
+        return ParseResult(
+            platform=self.name,
+            title=str(room_info.get("title") or "B站直播间"),
+            author=str(base_info.get("uname") or "未知主播"),
+            description=replace_links(str(room_info.get("description") or "")),
+            cover_urls=[cover_url] if cover_url else [],
+            extra_lines=extra_lines,
+        )
 
     async def _parse_dynamic(self, dynamic_id: str) -> ParseResult:
         referer = "https://www.bilibili.com"

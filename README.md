@@ -6,7 +6,7 @@
   <img src="logo.png" alt="icon" width="180">
 </p>
 
-[![Version](https://img.shields.io/badge/version-v1.0.0-2f6f5e)](https://github.com/Qfxaile/astrbot_multi_parser/releases)
+[![Version](https://img.shields.io/badge/version-v1.0.1-2f6f5e)](https://github.com/Qfxaile/astrbot_multi_parser/releases)
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-3776ab)](https://www.python.org/)
 [![AstrBot Plugin](https://img.shields.io/badge/AstrBot-plugin-4c78a8)](https://astrbot.app/)
 [![License](https://img.shields.io/badge/license-MIT-2f6f5e)](LICENSE)
@@ -20,7 +20,7 @@
 ## 功能概览
 
 - **自动识别链接**：无需命令，直接发送受支持的链接或分享卡片即可触发解析。
-- **覆盖八个平台**：支持 Bilibili、抖音、小红书、贴吧、微博、微信、小黑盒和知乎的常见视频、图文及分享链接。
+- **覆盖八个平台**：支持 Bilibili、抖音、小红书、贴吧、微博、微信、小黑盒和知乎的常见视频、直播、图文及分享链接。
 - **保留原图质量**：图片在内存中下载后以原始字节发送，不主动缩放或转码。
 - **灵活组织内容**：可选择始终合并、超过图片或文字阈值时合并，或始终普通发送。
 - **控制视频体积**：发送前探测远程视频大小，超过限制时改为发送解析链接。
@@ -32,8 +32,8 @@
 
 | 平台 | 视频 | 图文 | 短链 | 其他内容 |
 | --- | :---: | :---: | :---: | --- |
-| Bilibili | BV 号、AV 号 | Opus 图文、专栏 | `b23.tv`、`bili2233.cn` | 动态 |
-| 抖音 | 大陆抖音视频 | 普通图文、Slides | `v.douyin.com`、`jx.douyin.com` | 分享页链接、汽水音乐单曲 |
+| Bilibili | BV 号、AV 号 | Opus 图文、专栏 | `b23.tv`、`bili2233.cn` | 动态、直播间 |
+| 抖音 | 大陆抖音视频 | 普通图文、Slides | `v.douyin.com`、`jx.douyin.com` | 直播间、分享页链接、汽水音乐单曲 |
 | 小红书 | 视频笔记 | 图文笔记 | `xhslink.com` | 部分 JSON 分享卡片 |
 | 贴吧 | 首帖视频 | 楼主首帖正文 | - | `tieba.baidu.com/p/<帖子ID>` |
 | 微博 | 普通视频、微博视频页、TV | 普通微博、转发微博、长文章 | `mapp.api.weibo.cn` | 桌面端和移动端微博 |
@@ -43,6 +43,8 @@
 
 > [!NOTE]
 > 当前不支持 TikTok，也不解析 Bilibili 音频、独立音轨或 `au` 号。
+
+直播链接解析展示直播间标题、主播、开播状态、封面和平台提供的观看信息。插件不会提取或转发持续直播流，也不会在解析结果中重复发送直播间链接。
 
 ### 消息适配器
 
@@ -241,10 +243,10 @@ astrbot_plugin_multi_parser/
 ├── services/                  # 登录、配置迁移、消息交付和视频策略
 ├── platforms/                 # 各内容平台适配器
 │   ├── bilibili/              # B站内容解析与二维码登录
-│   │   ├── parser.py          # B站视频、动态、专栏和图文解析
+│   │   ├── parser.py          # B站视频、直播、动态、专栏和图文解析
 │   │   └── login.py           # B站二维码会话与 Cookie 提取
 │   ├── douyin/                # 抖音内容解析与实验性二维码登录
-│   │   ├── parser.py          # 抖音链接路由与作品解析
+│   │   ├── parser.py          # 抖音链接路由、作品与直播解析
 │   │   ├── music.py           # 汽水音乐字段提取与音频地址校验
 │   │   └── login.py           # 抖音二维码实验实现，入口保留
 │   ├── redbook/               # 小红书内容解析与实验性二维码登录

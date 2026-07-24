@@ -157,6 +157,99 @@ async def test_matches_bilibili_graphic_urls(url):
     assert await parser.match(ParseContext(text=url))
 
 
+@pytest.mark.asyncio
+async def test_matches_bilibili_live_url():
+    parser = bilibili.BilibiliParser({})
+
+    assert await parser.match(
+        ParseContext(text="https://live.bilibili.com/123456?broadcast_type=0")
+    )
+
+
+def test_live_payload_extracts_room_information():
+    payload = {
+        "code": 0,
+        "data": {
+            "room_info": {
+                "room_id": 123456,
+                "title": "直播标题",
+                "live_status": 1,
+                "parent_area_name": "游戏",
+                "area_name": "单机游戏",
+                "online": 12345,
+                "keyframe": "https://i0.hdslb.com/live.jpg@672w.webp",
+            },
+            "anchor_info": {"base_info": {"uname": "主播昵称"}},
+        },
+    }
+
+    result = bilibili.BilibiliParser({})._parse_live_payload(payload)
+
+    assert result.title == "直播标题"
+    assert result.author == "主播昵称"
+    assert result.cover_urls == ["https://i0.hdslb.com/live.jpg"]
+    assert result.extra_lines == [
+        "直播状态: 直播中",
+        "分区: 游戏 / 单机游戏",
+        "人气: 12,345",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_parse_live_requests_api_and_materializes_cover(
+    monkeypatch, assert_temporary_image
+):
+    live_url = "https://live.bilibili.com/123456"
+    cover_url = "https://i0.hdslb.com/live-cover.jpg"
+    api_request = None
+    image_request = None
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal api_request, image_request
+        if request.url.host == "api.live.bilibili.com":
+            api_request = request
+            return httpx.Response(
+                200,
+                json={
+                    "code": 0,
+                    "data": {
+                        "room_info": {
+                            "room_id": 123456,
+                            "title": "直播标题",
+                            "live_status": 1,
+                            "keyframe": cover_url,
+                        },
+                        "anchor_info": {"base_info": {"uname": "主播"}},
+                    },
+                },
+                request=request,
+            )
+        image_request = request
+        return httpx.Response(200, content=b"live-cover", request=request)
+
+    real_async_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        bilibili.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_async_client(
+            transport=httpx.MockTransport(handler), **kwargs
+        ),
+    )
+
+    result = await bilibili.BilibiliParser(
+        {"bilibili_cookies": "SESSDATA=live-session"}
+    ).parse(ParseContext(text=live_url))
+
+    assert result.title == "直播标题"
+    assert_temporary_image(result, result.cover_urls[0], b"live-cover")
+    assert api_request is not None
+    assert api_request.url.params["room_id"] == "123456"
+    assert "SESSDATA=live-session" in api_request.headers["Cookie"]
+    assert image_request is not None
+    assert image_request.headers["Referer"] == live_url
+    assert "Cookie" not in image_request.headers
+
+
 def test_dynamic_payload_extracts_text_and_images_in_order():
     payload = {
         "code": 0,

@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 from astrbot_multi_parser.core.http import CookieAccessError
@@ -51,6 +53,17 @@ async def test_matches_only_mainland_douyin_urls():
 
     assert await parser.match(ParseContext(text="https://v.douyin.com/abc123"))
     assert await parser.match(
+        ParseContext(text="https://live.douyin.com/123456789?room_id=987654321")
+    )
+    assert await parser.match(
+        ParseContext(
+            text=(
+                "https://webcast.amemv.com/douyin/webcast/reflow/"
+                "7666067452786608950"
+            )
+        )
+    )
+    assert await parser.match(
         ParseContext(text="https://music.douyin.com/qishui/share/track?track_id=123456")
     )
     assert await parser.match(
@@ -60,6 +73,158 @@ async def test_matches_only_mainland_douyin_urls():
     assert not await parser.match(
         ParseContext(text="https://www.tiktok.com/@user/video/123")
     )
+
+
+def test_live_payload_extracts_room_information():
+    payload = {
+        "status_code": 0,
+        "data": {
+            "data": [
+                {
+                    "id_str": "987654321",
+                    "status": 2,
+                    "title": "抖音直播标题",
+                    "user": {"nickname": "抖音主播"},
+                    "cover": {
+                        "url_list": [
+                            "https://p3-webcast.douyinpic.com/live-cover.webp"
+                        ]
+                    },
+                    "room_view_stats": {"display_value": "1.2万"},
+                }
+            ]
+        },
+    }
+
+    result = douyin.DouyinParser({})._parse_live_data(payload)
+
+    assert result.title == "抖音直播标题"
+    assert result.author == "抖音主播"
+    assert result.cover_urls == [
+        "https://p3-webcast.douyinpic.com/live-cover.webp"
+    ]
+    assert result.extra_lines == [
+        "直播状态: 直播中",
+        "观看人数: 1.2万",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_parse_live_requests_api_and_materializes_cover(
+    monkeypatch, assert_temporary_image
+):
+    live_url = "https://live.douyin.com/123456789"
+    cover_url = "https://p3-webcast.douyinpic.com/live-cover.webp"
+    api_request = None
+    image_request = None
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal api_request, image_request
+        if request.url.path == "/webcast/room/web/enter/":
+            api_request = request
+            return httpx.Response(
+                200,
+                json={
+                    "status_code": 0,
+                    "data": {
+                        "data": [
+                            {
+                                "status": 2,
+                                "title": "抖音直播标题",
+                                "user": {"nickname": "抖音主播"},
+                                "cover": {"url_list": [cover_url]},
+                            }
+                        ]
+                    },
+                },
+                request=request,
+            )
+        image_request = request
+        return httpx.Response(200, content=b"live-cover", request=request)
+
+    real_async_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        douyin_parser.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_async_client(
+            transport=httpx.MockTransport(handler), **kwargs
+        ),
+    )
+
+    result = await douyin.DouyinParser(
+        {"douyin_cookies": "ttwid=live-session"}
+    ).parse(ParseContext(text=live_url))
+
+    assert result.title == "抖音直播标题"
+    assert_temporary_image(result, result.cover_urls[0], b"live-cover")
+    assert api_request is not None
+    assert api_request.url.params["web_rid"] == "123456789"
+    assert "ttwid=live-session" in api_request.headers["Cookie"]
+    assert image_request is not None
+    assert image_request.headers["Referer"] == live_url
+    assert "Cookie" not in image_request.headers
+
+
+@pytest.mark.asyncio
+async def test_short_link_redirects_to_live_reflow_page(
+    monkeypatch, assert_temporary_image
+):
+    short_url = "https://v.douyin.com/0-I94aXdAUs/"
+    room_url = (
+        "https://webcast.amemv.com/douyin/webcast/reflow/7666067452786608950"
+    )
+    cover_url = "https://p3-webcast.douyinpic.com/reflow-cover.webp"
+    page_request = None
+    image_request = None
+    room_data = {
+        "idStr": "7666067452786608950",
+        "status": 2,
+        "title": "回流页直播标题",
+        "owner": {"nickname": "回流页主播"},
+        "cover": {"urlList": [cover_url]},
+        "userCount": 321,
+    }
+    rsc_data = json.dumps(
+        ["$", "$L7", None, {"data": {"room": room_data}}],
+        ensure_ascii=False,
+    )
+    rsc_payload = json.dumps([1, f"5:{rsc_data}"], ensure_ascii=False)
+    html = f"<script>self.__rsc_f.push({rsc_payload})</script>"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal page_request, image_request
+        if request.url.host == "v.douyin.com":
+            return httpx.Response(
+                302, headers={"Location": room_url}, request=request
+            )
+        if request.url.host == "webcast.amemv.com":
+            page_request = request
+            return httpx.Response(200, text=html, request=request)
+        image_request = request
+        return httpx.Response(200, content=b"reflow-cover", request=request)
+
+    real_async_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        douyin_parser.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_async_client(
+            transport=httpx.MockTransport(handler), **kwargs
+        ),
+    )
+
+    result = await douyin.DouyinParser({}).parse(ParseContext(text=short_url))
+
+    assert result.title == "回流页直播标题"
+    assert result.author == "回流页主播"
+    assert result.extra_lines == [
+        "直播状态: 直播中",
+        "观看人数: 321",
+    ]
+    assert_temporary_image(result, result.cover_urls[0], b"reflow-cover")
+    assert page_request is not None
+    assert image_request is not None
+    assert image_request.headers["Referer"] == room_url
+    assert "Cookie" not in image_request.headers
 
 
 def test_qishui_track_html_parses_summary_cover_and_audio():
