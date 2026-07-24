@@ -84,6 +84,10 @@ class FakeEvent:
             raise RuntimeError("platform unavailable")
         return self.platform_name
 
+    def get_group_id(self):
+        raw = self.message_obj.raw_message
+        return str(raw.get("group_id") or "") if isinstance(raw, dict) else ""
+
     def is_private_chat(self):
         return self.private
 
@@ -166,9 +170,7 @@ def test_plugin_respects_platform_switches():
 )
 def test_authentication_commands_require_global_admin(handler_name):
     handler = getattr(MultiParserPlugin, handler_name)
-    metadata = next(
-        item for item in star_handlers_registry if item.handler is handler
-    )
+    metadata = next(item for item in star_handlers_registry if item.handler is handler)
 
     assert any(
         isinstance(event_filter, PermissionTypeFilter)
@@ -751,6 +753,223 @@ async def test_video_fallback_uses_nodes_on_satori():
         "测试平台 解析链接\n标题: 测试标题\n说明: 视频超过大小限制",
         "视频直链:\nhttps://example.com/video.mp4",
     ]
+
+
+def test_output_link_filter_is_disabled_by_default():
+    result = ParseResult(
+        platform="测试平台",
+        description="正文 https://example.com/detail",
+    )
+
+    messages = DeliveryService({}).build_content_results(
+        FakeEvent(platform_name="telegram"),
+        result,
+        include_video_url=False,
+    )
+
+    assert messages[0][0].text == "简介:\n正文 https://example.com/detail"
+
+
+def test_output_link_filter_replaces_visible_links_with_configured_text():
+    result = ParseResult(
+        platform="测试平台",
+        title="标题 https://example.com/title",
+        description="正文 https://example.com/detail。",
+        extra_lines=["更多 www.example.com/path"],
+        ordered_contents=[
+            OrderedContent("text", "段落 https://example.com/body?a=1&b=2")
+        ],
+    )
+
+    messages = DeliveryService(
+        {
+            "filter_output_links": True,
+            "filtered_link_text": "[打开原链接查看]",
+            "forward_mode": "never",
+        }
+    ).build_content_results(
+        FakeEvent(platform_name="telegram"),
+        result,
+        include_video_url=False,
+    )
+
+    assert [component.text for component in messages[0]] == [
+        "标题 [打开原链接查看]\n简介:\n正文 [打开原链接查看]。\n更多 [打开原链接查看]",
+        "段落 [打开原链接查看]",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_direct_link_fallback_is_not_filtered():
+    event = FakeEvent(platform_name="telegram")
+    result = ParseResult(
+        platform="测试平台",
+        title="测试标题",
+        video_url="https://example.com/video.mp4",
+    )
+
+    await DeliveryService({"filter_output_links": True}).send_video_over_limit(
+        event, result, "视频超过大小限制"
+    )
+
+    assert event.sent[0][0].text.endswith("视频链接: https://example.com/video.mp4")
+
+
+@pytest.mark.asyncio
+async def test_notice_fallback_does_not_include_video_url():
+    event = FakeEvent(platform_name="telegram")
+    result = ParseResult(
+        platform="测试平台",
+        title="测试标题",
+        video_url="https://example.com/video.mp4",
+    )
+
+    await DeliveryService({"video_over_limit_action": "notice"}).send_video_over_limit(
+        event, result, "视频超过大小限制"
+    )
+
+    assert event.sent == [[Plain("视频超过大小限制")]]
+
+
+@pytest.mark.asyncio
+async def test_group_file_falls_back_to_direct_link_outside_onebot_group():
+    event = FakeEvent(platform_name="telegram")
+    result = ParseResult(
+        platform="测试平台",
+        title="测试标题",
+        video_url="https://example.com/video.mp4",
+    )
+
+    await DeliveryService(
+        {"video_over_limit_action": "group_file"}
+    ).send_video_over_limit(event, result, "视频超过大小限制")
+
+    assert len(event.sent) == 1
+    assert event.sent[0][0].text.endswith("视频链接: https://example.com/video.mp4")
+
+
+@pytest.mark.asyncio
+async def test_group_file_upload_failure_falls_back_to_direct_link():
+    class UploadFailBot(FakeBot):
+        async def call_action(self, action, **params):
+            self.actions.append((action, params))
+            if action == "upload_group_file":
+                raise RuntimeError("upload failed")
+
+    bot = UploadFailBot()
+    event = FakeEvent(
+        bot=bot,
+        raw_message={"group_id": 456, "sender": {}},
+    )
+    result = ParseResult(
+        platform="测试平台",
+        title="测试标题",
+        video_url="https://example.com/video.mp4",
+    )
+    delivery = DeliveryService({"video_over_limit_action": "group_file"})
+
+    await delivery.send_video_over_limit(
+        event,
+        result,
+        "视频超过大小限制",
+    )
+
+    assert bot.actions[0][0] == "upload_group_file"
+    assert bot.actions[0][1]["file"] == result.video_url
+    assert bot.actions[1][0] == "send_group_forward_msg"
+    assert "https://example.com/video.mp4" in str(bot.actions[1][1]["messages"])
+
+
+@pytest.mark.asyncio
+async def test_group_file_upload_uses_remote_url_without_local_download():
+    bot = FakeBot()
+    event = FakeEvent(
+        bot=bot,
+        raw_message={"group_id": 456, "sender": {}},
+    )
+    result = ParseResult(
+        platform="测试平台",
+        title="测试/标题",
+        video_url="https://example.com/video.mp4",
+    )
+    delivery = DeliveryService({"video_over_limit_action": "group_file"})
+
+    await delivery.send_video_over_limit(
+        event,
+        result,
+        "视频超过大小限制",
+    )
+
+    assert bot.actions == [
+        (
+            "upload_group_file",
+            {
+                "group_id": 456,
+                "file": result.video_url,
+                "name": "测试_标题.mp4",
+            },
+        )
+    ]
+    assert event.sent == []
+
+
+@pytest.mark.asyncio
+async def test_main_uses_notice_action_for_over_limit_video(monkeypatch):
+    result = ParseResult(
+        platform="test",
+        title="摘要",
+        video_url="https://example.com/video.mp4",
+    )
+    plugin = make_plugin(result, video_over_limit_action="notice")
+    monkeypatch.setattr(
+        main, "extract_context", lambda event: SimpleNamespace(combined_text="url")
+    )
+
+    async def fake_probe(url):
+        return VideoSizeInfo(size_bytes=51 * 1024 * 1024)
+
+    monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
+
+    messages = await collect_plugin_results(
+        plugin,
+        FakeEvent(platform_name="telegram"),
+    )
+
+    texts = [message[0].text for message in messages]
+    assert len(texts) == 2
+    assert "摘要" in texts
+    notice = next(text for text in texts if text != "摘要")
+    assert "超过限制 50.00 MB" in notice
+    assert "https://example.com/video.mp4" not in notice
+
+
+@pytest.mark.asyncio
+async def test_notice_delivery_failure_still_hides_video_url():
+    class SendFailEvent(FakeEvent):
+        async def send(self, message):
+            raise RuntimeError("send failed")
+
+    plugin = make_plugin(
+        ParseResult(platform="test"),
+        video_over_limit_action="notice",
+    )
+    result = ParseResult(
+        platform="test",
+        video_url="https://example.com/video.mp4",
+    )
+
+    messages = [
+        item
+        async for item in plugin._forward_with_fallback(
+            SendFailEvent(platform_name="telegram"),
+            result,
+            "视频超过大小限制",
+        )
+    ]
+
+    assert len(messages) == 1
+    assert "视频超过大小限制" in messages[0][0].text
+    assert "https://example.com/video.mp4" not in messages[0][0].text
 
 
 @pytest.mark.asyncio

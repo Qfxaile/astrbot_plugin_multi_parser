@@ -6,45 +6,65 @@
     "items": {
       "bilibili": {
         "description": "B站",
+        "hint": "解析视频、动态、专栏、图文和直播间。",
         "type": "bool",
         "default": true
       },
       "douyin": {
         "description": "抖音",
+        "hint": "解析视频、图文、Slides、直播间和汽水音乐。",
         "type": "bool",
         "default": true
       },
       "redbook": {
         "description": "小红书",
+        "hint": "解析视频笔记、图文笔记。",
         "type": "bool",
         "default": true
       },
       "tieba": {
         "description": "贴吧",
+        "hint": "解析帖子正文、图片和首帖视频。",
         "type": "bool",
         "default": true
       },
       "weibo": {
         "description": "微博",
+        "hint": "解析微博正文、转发、长文章和视频。",
         "type": "bool",
         "default": true
       },
       "wechat": {
         "description": "微信",
+        "hint": "解析公众号文章和视频号视频。",
         "type": "bool",
         "default": true
       },
       "xiaoheihe": {
         "description": "小黑盒",
+        "hint": "解析社区帖子、帖子视频、游戏详情。",
         "type": "bool",
         "default": true
       },
       "zhihu": {
         "description": "知乎",
+        "hint": "解析问题、回答、专栏文章、想法和正文内视频。",
         "type": "bool",
         "default": true
       }
     }
+  },
+  "filter_output_links": {
+    "description": "过滤解析结果链接",
+    "type": "bool",
+    "default": false,
+    "hint": "替换插件解析结果正文中的网页链接，不修改用户发送的原消息，也不影响视频超限策略主动发送的直链。"
+  },
+  "filtered_link_text": {
+    "description": "链接替换文案",
+    "type": "text",
+    "default": "[详细内容请打开原链接查看]",
+    "hint": "开启过滤解析结果链接后，用该文案替换标题、简介、正文和附加说明中的网页链接。"
   },
   "forward_mode": {
     "description": "内容发送方式",
@@ -88,7 +108,15 @@
     "description": "视频大小上限",
     "type": "float",
     "default": 50,
-    "hint": "直接发送视频的最大体积，单位 MB；小于等于 0 表示不限制。超过后按消息平台能力发送解析链接。"
+    "hint": "直接发送视频的最大体积，单位 MB；小于等于 0 表示不限制。超过后按视频超限处理方式执行。"
+  },
+  "video_over_limit_action": {
+    "description": "视频超限处理",
+    "type": "string",
+    "default": "direct_link",
+    "options": ["notice", "direct_link", "group_file"],
+    "labels": ["仅发送提示", "发送直链", "发送群文件"],
+    "hint": "视频超过大小上限或大小未知且不允许直接发送时的处理方式。群文件仅支持 OneBot 群聊，其他场景或上传失败时自动降级为发送直链。"
   },
   "allow_unknown_video_size": {
     "description": "允许未知大小",

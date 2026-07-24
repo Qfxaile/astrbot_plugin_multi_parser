@@ -1,10 +1,14 @@
+import re
 from collections.abc import Mapping
+from pathlib import PurePosixPath
+from urllib.parse import urlparse
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, MessageChain
 from astrbot.api.message_components import Image, Node, Nodes, Plain
 
 from ..core.contracts import ParseResult
+from ..core.utils import replace_links
 
 
 class DeliveryService:
@@ -17,6 +21,9 @@ class DeliveryService:
     DEFAULT_IMAGE_THRESHOLD = 2
     DEFAULT_TEXT_THRESHOLD = 200
     FORWARD_NODE_LIMIT = 100
+    VIDEO_OVER_LIMIT_ACTIONS = {"notice", "direct_link", "group_file"}
+    DEFAULT_VIDEO_OVER_LIMIT_ACTION = "direct_link"
+    DEFAULT_FILTERED_LINK_TEXT = "[详细内容请打开原链接查看]"
 
     def __init__(self, config: Mapping[str, object]) -> None:
         self.config = config
@@ -85,7 +92,9 @@ class DeliveryService:
         include_video_url: bool,
         include_video: bool = False,
     ) -> tuple[list, bool]:
-        info_chain = result.info_chain(include_video_url=include_video_url)
+        info_chain = self._filter_output_links(
+            result.info_chain(include_video_url=include_video_url)
+        )
         if not info_chain:
             return [], False
         if not self._should_forward_content(event, result, info_chain):
@@ -371,6 +380,89 @@ class DeliveryService:
             user_id=int(user_id),
             messages=nodes,
         )
+
+    async def send_video_over_limit(
+        self,
+        event: AstrMessageEvent,
+        result: ParseResult,
+        reason: str,
+    ) -> None:
+        """按配置处理超限视频，并让群文件失败稳定降级为直链。"""
+        action = self.video_over_limit_action()
+        if action == "notice":
+            await event.send(MessageChain([Plain(reason or "视频未直接发送。")]))
+            return
+
+        if action == "group_file" and self._onebot_group_id(event):
+            try:
+                group_id = self._onebot_group_id(event)
+                await self.call_onebot(
+                    event,
+                    "upload_group_file",
+                    group_id=group_id,
+                    file=result.video_url,
+                    name=self._video_file_name(result),
+                )
+                return
+            except Exception as exc:
+                # 协议端远程下载、文件限制和平台配额都可能失败，直链是最可靠的回退。
+                logger.warning(
+                    f"视频群文件发送失败，已降级为直链: {type(exc).__name__}"
+                )
+
+        await self.send_forward_links(event, result, reason)
+
+    def video_over_limit_action(self) -> str:
+        """读取视频超限处理方式，无效值按发送直链处理。"""
+        value = (
+            str(
+                self.config.get(
+                    "video_over_limit_action",
+                    self.DEFAULT_VIDEO_OVER_LIMIT_ACTION,
+                )
+            )
+            .strip()
+            .lower()
+        )
+        if value in self.VIDEO_OVER_LIMIT_ACTIONS:
+            return value
+        return self.DEFAULT_VIDEO_OVER_LIMIT_ACTION
+
+    def _onebot_group_id(self, event: AstrMessageEvent) -> int | None:
+        if self._platform_name(event) != self.ONEBOT_PLATFORM:
+            return None
+        raw = self.raw_message(event)
+        raw_group_id = raw.get("group_id") if isinstance(raw, dict) else None
+        try:
+            group_id = raw_group_id or event.get_group_id()
+            return int(group_id) if group_id else None
+        except (AttributeError, TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _video_file_name(result: ParseResult) -> str:
+        base_name = (result.title or f"{result.platform}视频").strip()
+        base_name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", base_name)
+        base_name = base_name.strip(" ._")[:80] or "video"
+        suffix = PurePosixPath(urlparse(result.video_url).path).suffix.lower()
+        if suffix not in {".mp4", ".mov", ".mkv", ".webm", ".flv", ".avi"}:
+            suffix = ".mp4"
+        return f"{base_name}{suffix}"
+
+    def _filter_output_links(self, components: list) -> list:
+        """仅过滤插件生成的可见文本，不改写媒体组件和主动发送的直链。"""
+        if not bool(self.config.get("filter_output_links", False)):
+            return components
+        replacement = str(
+            self.config.get("filtered_link_text", self.DEFAULT_FILTERED_LINK_TEXT)
+            or self.DEFAULT_FILTERED_LINK_TEXT
+        )
+        return [
+            Plain(replace_links(component.text, replacement))
+            if isinstance(component, Plain)
+            else component
+            for component in components
+        ]
 
     def sender_identity(
         self,
