@@ -4,4 +4,4 @@ desc: B站、抖音、小红书、贴吧、微博、微信、小黑盒、知乎�
 short_desc: 自动解析八大内容平台的分享链接。
 version: v1.0.1
 author: Qfxaile
-repo: "https://github.com/Qfxaile/astrbot_multi_parser"
+repo: "https://github.com/Qfxaile/astrbot_plugin_multi_parser"
