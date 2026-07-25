@@ -133,17 +133,20 @@ class AuthenticationService:
 
                 poll_result = await provider.poll_qr_status(challenge.session_key)
                 if poll_result.state == LoginPollState.SUCCESS:
+                    user = await self._get_current_user(
+                        provider,
+                        poll_result.cookie_header,
+                    )
                     async with self._lock:
-                        if attempt.cancel_event.is_set():
+                        if (
+                            attempt.cancel_event.is_set()
+                            or self._active_logins.get(platform_name) is not attempt
+                        ):
                             return None
                         self._save_cookie(
                             provider.cookie_config_key,
                             poll_result.cookie_header,
                         )
-                    user = await self._get_current_user(
-                        provider,
-                        poll_result.cookie_header,
-                    )
                     if user is None:
                         return (
                             f"{platform_name}登录成功，Cookies 已保存。"

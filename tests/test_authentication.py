@@ -153,6 +153,41 @@ async def test_login_sends_qr_and_saves_cookie_without_echoing_secret():
 
 
 @pytest.mark.asyncio
+async def test_logout_during_user_lookup_prevents_login_success_and_cookie_restore():
+    lookup_started = asyncio.Event()
+    finish_lookup = asyncio.Event()
+
+    class SlowUserProvider(FakeLoginProvider):
+        async def get_current_user(self, cookie_header):
+            self.user_cookie_headers.append(cookie_header)
+            lookup_started.set()
+            await finish_lookup.wait()
+            return self.user
+
+    config = SavingConfig(cookies={"bilibili_cookies": "SESSDATA=previous-secret"})
+    provider = SlowUserProvider(
+        [LoginPollResult(LoginPollState.SUCCESS, "SESSDATA=new-secret")],
+        user=PlatformUser(user_id="12345", display_name="测试用户"),
+    )
+    service = AuthenticationService(
+        config,
+        provider_factories={"B站": lambda: provider},
+    )
+    login_task = asyncio.create_task(
+        service.login(FakeEvent("adapter:private:owner"), "B站")
+    )
+    await lookup_started.wait()
+
+    assert await service.logout("B站") == "B站已退出登录，Cookies 已清除。"
+    finish_lookup.set()
+
+    assert await login_task is None
+    assert config["cookies"]["bilibili_cookies"] == ""
+    assert config.save_calls == 1
+    assert provider.closed is True
+
+
+@pytest.mark.asyncio
 async def test_cancel_only_stops_login_from_same_private_session():
     started = asyncio.Event()
 
