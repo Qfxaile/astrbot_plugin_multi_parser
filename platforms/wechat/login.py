@@ -16,9 +16,10 @@ from ...core.authentication import (
     LoginPollState,
     PlatformLoginError,
     PlatformLoginProvider,
+    PlatformUser,
     QRLoginChallenge,
 )
-from ...core.http import request_timeout
+from ...core.http import parse_cookie_header, request_timeout
 
 
 @dataclass
@@ -214,6 +215,13 @@ class WeChatLoginProvider(PlatformLoginProvider):
         raise PlatformLoginError(
             "微信返回了无法识别的登录状态，请重新发起登录。"
         )
+
+    async def get_current_user(self, cookie_header: str) -> PlatformUser | None:
+        credentials = dict(parse_cookie_header(cookie_header))
+        user_id = self._safe_credential_value(credentials.get("yb_user_id"))
+        if not user_id:
+            return None
+        return PlatformUser(user_id=user_id)
 
     async def close(self) -> None:
         """清理二维码会话并关闭由适配器创建的 HTTP 客户端。"""

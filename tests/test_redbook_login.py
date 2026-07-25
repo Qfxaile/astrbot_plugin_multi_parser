@@ -143,6 +143,32 @@ async def test_redbook_qr_create_reuses_configured_official_a1_cookie():
 
 
 @pytest.mark.asyncio
+async def test_redbook_qr_create_does_not_reuse_configured_account_session():
+    request_cookie = ""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal request_cookie
+        request_cookie = request.headers.get("Cookie", "")
+        return httpx.Response(200, json=qr_create_response(), request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = RedBookLoginProvider(
+            {
+                "redbook_cookies": "a1=official-config-cookie; "
+                "web_session=previous-account-secret"
+            },
+            client=client,
+            signer=FakeSigner(),
+        )
+
+        await provider.create_qr_challenge()
+
+    assert "a1=official-config-cookie" in request_cookie
+    assert "web_session" not in request_cookie
+    assert "previous-account-secret" not in request_cookie
+
+
+@pytest.mark.asyncio
 async def test_redbook_qr_create_explains_missing_official_a1_cookie():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, text="<html>official page</html>", request=request)

@@ -13,6 +13,7 @@ from ...core.authentication import (
     LoginPollState,
     PlatformLoginError,
     PlatformLoginProvider,
+    PlatformUser,
     QRLoginChallenge,
 )
 from ...core.http import request_timeout
@@ -26,6 +27,7 @@ class ZhihuLoginProvider(PlatformLoginProvider):
     BOOTSTRAP_URL = "https://www.zhihu.com/signin"
     QR_GENERATE_URL = "https://www.zhihu.com/api/v3/account/api/login/qrcode"
     QR_POLL_URL_PREFIX = "https://www.zhihu.com/api/v3/account/api/login/qrcode"
+    CURRENT_USER_URL = "https://www.zhihu.com/api/v4/me?include=is_realname"
     QR_EXPIRES_IN_SECONDS = 180
     MAX_RESPONSE_BYTES = 64 * 1024
     MAX_BOOTSTRAP_RESPONSE_BYTES = 2 * 1024 * 1024
@@ -109,6 +111,18 @@ class ZhihuLoginProvider(PlatformLoginProvider):
             # 官方网页会把新令牌渲染为新二维码；私聊无法替换已发送图片。
             return LoginPollResult(LoginPollState.EXPIRED)
         raise PlatformLoginError("知乎返回了无法识别的登录状态，请重新发起登录。")
+
+    async def get_current_user(self, cookie_header: str) -> PlatformUser | None:
+        payload = await self._request_payload(
+            "GET",
+            self.CURRENT_USER_URL,
+            headers={"Cookie": cookie_header},
+        )
+        user_id = str(payload.get("id") or payload.get("url_token") or "").strip()
+        display_name = str(payload.get("name") or "").strip()
+        if not user_id and not display_name:
+            return None
+        return PlatformUser(user_id=user_id, display_name=display_name)
 
     async def close(self) -> None:
         """关闭由适配器创建的 HTTP 客户端。"""

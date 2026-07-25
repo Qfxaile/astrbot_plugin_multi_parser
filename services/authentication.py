@@ -12,6 +12,7 @@ from ..core.authentication import (
     LoginPollState,
     PlatformLoginError,
     PlatformLoginProvider,
+    PlatformUser,
 )
 from ..core.http import (
     cookie_config_value,
@@ -132,14 +133,29 @@ class AuthenticationService:
 
                 poll_result = await provider.poll_qr_status(challenge.session_key)
                 if poll_result.state == LoginPollState.SUCCESS:
+                    user = await self._get_current_user(
+                        provider,
+                        poll_result.cookie_header,
+                    )
                     async with self._lock:
-                        if attempt.cancel_event.is_set():
+                        if (
+                            attempt.cancel_event.is_set()
+                            or self._active_logins.get(platform_name) is not attempt
+                        ):
                             return None
                         self._save_cookie(
                             provider.cookie_config_key,
                             poll_result.cookie_header,
                         )
-                    return f"{platform_name}登录成功，Cookies 已保存。"
+                    if user is None:
+                        return (
+                            f"{platform_name}登录成功，Cookies 已保存。"
+                            "当前用户信息获取失败。"
+                        )
+                    return (
+                        f"{platform_name}登录成功，Cookies 已保存。"
+                        f"当前用户：{self._format_user(user)}。"
+                    )
                 if poll_result.state == LoginPollState.EXPIRED:
                     return self._expired_message(provider)
                 if poll_result.state == LoginPollState.SCANNED and not scanned_notified:
@@ -206,18 +222,54 @@ class AuthenticationService:
                 return str(exc)
         return f"{platform_name}已退出登录，Cookies 已清除。"
 
-    def status(self) -> str:
-        """返回所有已支持平台的本地 Cookie 配置状态。"""
-        lines = ["平台登录状态："]
-        for platform_name in self.supported_platforms:
-            cookie_key = self._cookie_keys[platform_name]
-            configured = bool(
-                parse_cookie_header(cookie_config_value(self.config, cookie_key))
+    async def status(self) -> str:
+        """并发查询所有平台的本地配置状态与当前账号。"""
+        async with self._lock:
+            active_platforms = frozenset(self._active_logins)
+        states = await asyncio.gather(
+            *(
+                self._platform_status(platform_name, active_platforms)
+                for platform_name in self.supported_platforms
             )
-            active = platform_name in self._active_logins
-            state = "登录中" if active else "已配置" if configured else "未配置"
-            lines.append(f"- {platform_name}：{state}")
+        )
+        lines = ["平台登录状态："]
+        lines.extend(
+            f"- {platform_name}：{state}"
+            for platform_name, state in zip(
+                self.supported_platforms,
+                states,
+                strict=True,
+            )
+        )
         return "\n".join(lines)
+
+    async def _platform_status(
+        self,
+        platform_name: str,
+        active_platforms: frozenset[str],
+    ) -> str:
+        if platform_name in active_platforms:
+            return "登录中"
+        cookie_key = self._cookie_keys[platform_name]
+        cookie_header = str(cookie_config_value(self.config, cookie_key) or "")
+        if not parse_cookie_header(cookie_header):
+            return "未配置"
+
+        provider = None
+        try:
+            provider = self._provider_factories[platform_name]()
+            user = await self._get_current_user(provider, cookie_header)
+        except Exception:
+            user = None
+        finally:
+            if provider is not None:
+                try:
+                    await provider.close()
+                except Exception:
+                    pass
+        if user is None:
+            return "已配置｜用户信息获取失败"
+        return f"已配置｜当前用户：{self._format_user(user)}"
 
     async def close(self) -> None:
         """取消并释放插件卸载时仍在进行的登录流程。"""
@@ -240,6 +292,35 @@ class AuthenticationService:
         except Exception as exc:
             set_cookie_config_value(self.config, cookie_key, str(previous_value or ""))
             raise PlatformLoginError("Cookies 保存失败，原配置未被修改。") from exc
+
+    @staticmethod
+    async def _get_current_user(
+        provider: PlatformLoginProvider,
+        cookie_header: str,
+    ) -> PlatformUser | None:
+        try:
+            user = await provider.get_current_user(cookie_header)
+        except Exception:
+            return None
+        if not isinstance(user, PlatformUser):
+            return None
+        if not user.user_id.strip() and not user.display_name.strip():
+            return None
+        return user
+
+    @classmethod
+    def _format_user(cls, user: PlatformUser) -> str:
+        display_name = cls._clean_user_field(user.display_name)
+        user_id = cls._clean_user_field(user.user_id)
+        if display_name and user_id:
+            return f"{display_name}（UID：{user_id}）"
+        if display_name:
+            return display_name
+        return f"UID：{user_id}"
+
+    @staticmethod
+    def _clean_user_field(value: object) -> str:
+        return " ".join(str(value or "").split())[:100]
 
     def _unsupported_platform_message(self, platform_name: str) -> str:
         supported = "、".join(self.supported_platforms)

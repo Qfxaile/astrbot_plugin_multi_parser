@@ -8,6 +8,7 @@ from astrbot_multi_parser.core.authentication import (
     LoginPollState,
     PlatformLoginError,
     PlatformLoginProvider,
+    PlatformUser,
     QRLoginChallenge,
 )
 from astrbot_multi_parser.services.authentication import AuthenticationService
@@ -41,8 +42,11 @@ class FakeLoginProvider(PlatformLoginProvider):
     display_name = "B站"
     cookie_config_key = "bilibili_cookies"
 
-    def __init__(self, results):
+    def __init__(self, results, user=None, user_error=None):
         self.results = list(results)
+        self.user = user
+        self.user_error = user_error
+        self.user_cookie_headers = []
         self.closed = False
 
     async def create_qr_challenge(self):
@@ -51,6 +55,12 @@ class FakeLoginProvider(PlatformLoginProvider):
     async def poll_qr_status(self, session_key):
         assert session_key == "secret-key"
         return self.results.pop(0)
+
+    async def get_current_user(self, cookie_header):
+        self.user_cookie_headers.append(cookie_header)
+        if self.user_error is not None:
+            raise self.user_error
+        return self.user
 
     async def close(self):
         self.closed = True
@@ -109,7 +119,8 @@ async def test_login_sends_qr_and_saves_cookie_without_echoing_secret():
                 LoginPollState.SUCCESS,
                 "SESSDATA=session-secret; bili_jct=csrf-secret",
             ),
-        ]
+        ],
+        user=PlatformUser(user_id="12345", display_name="测试用户"),
     )
     service = AuthenticationService(
         config,
@@ -120,10 +131,13 @@ async def test_login_sends_qr_and_saves_cookie_without_echoing_secret():
 
     message = await service.login(event, "B站")
 
-    assert message == "B站登录成功，Cookies 已保存。"
+    assert message == "B站登录成功，Cookies 已保存。当前用户：测试用户（UID：12345）。"
     assert config["cookies"]["bilibili_cookies"].startswith("SESSDATA=")
     assert config.save_calls == 1
     assert provider.closed is True
+    assert provider.user_cookie_headers == [
+        "SESSDATA=session-secret; bili_jct=csrf-secret"
+    ]
     assert isinstance(event.sent[0][0], Plain)
     assert isinstance(event.sent[0][1], Image)
     assert event.sent[0][1].file == "base64://cG5nLWRhdGE="
@@ -135,6 +149,42 @@ async def test_login_sends_qr_and_saves_cookie_without_echoing_secret():
     )
     assert "secret-key" not in visible_text
     assert "session-secret" not in visible_text
+    assert "session-secret" not in message
+
+
+@pytest.mark.asyncio
+async def test_logout_during_user_lookup_prevents_login_success_and_cookie_restore():
+    lookup_started = asyncio.Event()
+    finish_lookup = asyncio.Event()
+
+    class SlowUserProvider(FakeLoginProvider):
+        async def get_current_user(self, cookie_header):
+            self.user_cookie_headers.append(cookie_header)
+            lookup_started.set()
+            await finish_lookup.wait()
+            return self.user
+
+    config = SavingConfig(cookies={"bilibili_cookies": "SESSDATA=previous-secret"})
+    provider = SlowUserProvider(
+        [LoginPollResult(LoginPollState.SUCCESS, "SESSDATA=new-secret")],
+        user=PlatformUser(user_id="12345", display_name="测试用户"),
+    )
+    service = AuthenticationService(
+        config,
+        provider_factories={"B站": lambda: provider},
+    )
+    login_task = asyncio.create_task(
+        service.login(FakeEvent("adapter:private:owner"), "B站")
+    )
+    await lookup_started.wait()
+
+    assert await service.logout("B站") == "B站已退出登录，Cookies 已清除。"
+    finish_lookup.set()
+
+    assert await login_task is None
+    assert config["cookies"]["bilibili_cookies"] == ""
+    assert config.save_calls == 1
+    assert provider.closed is True
 
 
 @pytest.mark.asyncio
@@ -524,7 +574,7 @@ async def test_xiaoheihe_login_uses_native_scanner_label_and_saves_cookie():
 
     message = await service.login(event, "小黑盒")
 
-    assert message == "小黑盒登录成功，Cookies 已保存。"
+    assert message == "小黑盒登录成功，Cookies 已保存。当前用户信息获取失败。"
     assert config["xiaoheihe_cookies"].startswith("pkey=")
     assert event.sent[0][0].text.startswith("请使用小黑盒客户端扫描二维码")
     visible_text = "".join(
@@ -662,10 +712,11 @@ async def test_close_cleans_xiaoheihe_login_session():
 
     assert await login_task is None
     assert provider.closed is True
-    assert service.status() == "平台登录状态：\n- 小黑盒：未配置"
+    assert await service.status() == "平台登录状态：\n- 小黑盒：未配置"
 
 
-def test_default_authentication_service_supports_all_login_providers():
+@pytest.mark.asyncio
+async def test_default_authentication_service_supports_all_login_providers():
     service = AuthenticationService(
         {
             "cookies": {
@@ -691,7 +742,7 @@ def test_default_authentication_service_supports_all_login_providers():
         "小黑盒",
         "知乎",
     )
-    assert service.status() == (
+    assert await service.status() == (
         "平台登录状态：\n- B站：未配置\n- 抖音：未配置\n"
         "- 小红书：未配置\n- 贴吧：未配置\n- 微博：未配置\n"
         "- 微信：未配置\n"
@@ -913,11 +964,62 @@ async def test_redbook_login_restores_cookie_when_save_fails():
     assert provider.closed is True
 
 
-def test_status_and_platform_names_only_accept_chinese():
+@pytest.mark.asyncio
+async def test_status_and_platform_names_only_accept_chinese():
     service = AuthenticationService(
         {"bilibili_cookies": ""},
         provider_factories={"B站": lambda: SimpleNamespace()},
     )
 
-    assert service.status() == "平台登录状态：\n- B站：未配置"
+    assert await service.status() == "平台登录状态：\n- B站：未配置"
     assert "暂不支持“bilibili”" in service._unsupported_platform_message("bilibili")
+
+
+@pytest.mark.asyncio
+async def test_status_outputs_current_users_without_exposing_cookies():
+    bilibili = FakeLoginProvider(
+        [],
+        user=PlatformUser(user_id="12345", display_name="测试用户"),
+    )
+    weibo = FakeWeiboLoginProvider([], user_error=RuntimeError("network failure"))
+    config = {
+        "cookies": {
+            "bilibili_cookies": "SESSDATA=bilibili-secret",
+            "weibo_cookies": "SUB=weibo-secret",
+        }
+    }
+    service = AuthenticationService(
+        config,
+        provider_factories={"B站": lambda: bilibili, "微博": lambda: weibo},
+    )
+
+    message = await service.status()
+
+    assert message == (
+        "平台登录状态：\n"
+        "- B站：已配置｜当前用户：测试用户（UID：12345）\n"
+        "- 微博：已配置｜用户信息获取失败"
+    )
+    assert bilibili.user_cookie_headers == ["SESSDATA=bilibili-secret"]
+    assert weibo.user_cookie_headers == ["SUB=weibo-secret"]
+    assert bilibili.closed is True
+    assert weibo.closed is True
+    assert "bilibili-secret" not in message
+    assert "weibo-secret" not in message
+
+
+@pytest.mark.asyncio
+async def test_login_succeeds_when_user_lookup_fails():
+    provider = FakeLoginProvider(
+        [LoginPollResult(LoginPollState.SUCCESS, "SESSDATA=session-secret")],
+        user_error=RuntimeError("network failure"),
+    )
+    service = AuthenticationService(
+        {"cookies": {"bilibili_cookies": ""}},
+        provider_factories={"B站": lambda: provider},
+    )
+
+    message = await service.login(FakeEvent(), "B站")
+
+    assert message == "B站登录成功，Cookies 已保存。当前用户信息获取失败。"
+    assert "session-secret" not in message

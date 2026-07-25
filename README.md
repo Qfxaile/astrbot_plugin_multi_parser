@@ -127,7 +127,8 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 
 ## 登录管理
 
-登录命令仅允许 AstrBot 管理员在私聊中使用，平台名必须使用中文。
+登录、退出和取消命令仅允许 AstrBot 管理员在私聊中使用，平台名必须使用中文。
+登录状态命令允许管理员在私聊或群聊中使用。
 
 ```text
 /平台登录 <平台名>
@@ -149,7 +150,7 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 | 小黑盒 | 小黑盒 App | 可用，使用官网原生二维码接口 |
 | 知乎 | 知乎 App | 获取 Cookie 暂未实现，请手工配置 |
 
-登录成功后，凭据会写入对应配置项。二维码过期、取消登录或插件卸载时会清理临时会话；同一平台同一时间只允许一个登录流程。
+登录成功后，凭据会写入对应配置项，并返回当前账号的昵称和 UID；仅能可靠取得 UID 的平台只显示 UID。登录状态会实时查询已配置凭据对应的账号，平台接口或网络异常时显示“用户信息获取失败”，不会输出 Cookie。二维码过期、取消登录或插件卸载时会清理临时会话；同一平台同一时间只允许一个登录流程。
 
 微信登录仅保存 `yb_user_id` 和 `yb_token`，并只在请求 `yuanbao.tencent.com` 换取视频号预览令牌时映射为认证头。公众号文章和已携带 `token/eid` 的视频号长链不依赖腾讯元宝登录态。
 

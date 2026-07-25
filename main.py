@@ -96,11 +96,8 @@ class MultiParserPlugin(Star):
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("平台登录状态")
     async def platform_login_status(self, event: AstrMessageEvent):
-        """在管理员私聊中查看平台登录配置状态。"""
-        if not event.is_private_chat():
-            yield event.plain_result("平台登录状态仅允许管理员在私聊中查看。")
-            return
-        yield event.plain_result(self._authentication_service().status())
+        """查看平台登录配置状态与当前账号。"""
+        yield event.plain_result(await self._authentication_service().status())
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("平台退出")

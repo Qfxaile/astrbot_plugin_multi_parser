@@ -19,6 +19,14 @@ class LoginPollState(str, Enum):
 
 
 @dataclass(frozen=True)
+class PlatformUser:
+    """包含可安全展示的最小平台账号信息。"""
+
+    user_id: str = ""
+    display_name: str = ""
+
+
+@dataclass(frozen=True)
 class QRLoginChallenge:
     """包含待发送二维码和平台侧会话标识。"""
 
@@ -50,6 +58,10 @@ class PlatformLoginProvider(ABC):
     @abstractmethod
     async def poll_qr_status(self, session_key: str) -> LoginPollResult:
         """轮询二维码状态。"""
+
+    async def get_current_user(self, cookie_header: str) -> PlatformUser | None:
+        """使用指定登录凭据查询当前账号；不可用时返回 ``None``。"""
+        return None
 
     @abstractmethod
     async def close(self) -> None:

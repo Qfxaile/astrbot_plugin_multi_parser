@@ -11,6 +11,7 @@ from ...core.authentication import (
     LoginPollState,
     PlatformLoginError,
     PlatformLoginProvider,
+    PlatformUser,
     QRLoginChallenge,
 )
 from ...core.http import cookie_config_value, parse_cookie_header, request_timeout
@@ -25,6 +26,7 @@ class DouyinLoginProvider(PlatformLoginProvider):
     QR_POLL_URL = "https://sso.douyin.com/check_qrconnect/"
     TTWID_REGISTER_URL = "https://ttwid.bytedance.com/ttwid/union/register/"
     LOGIN_SERVICE_URL = "https://www.douyin.com/"
+    CURRENT_USER_URL = "https://www.douyin.com/aweme/v1/web/user/profile/self/"
     QR_EXPIRES_IN_SECONDS = 180
     MAX_RESPONSE_BYTES = 64 * 1024
     MAX_QR_IMAGE_BYTES = 512 * 1024
@@ -173,6 +175,23 @@ class DouyinLoginProvider(PlatformLoginProvider):
                 raise PlatformLoginError("抖音登录成功，但响应中缺少有效登录凭据。")
             return LoginPollResult(LoginPollState.SUCCESS, cookie_header)
         raise PlatformLoginError("抖音返回了无法识别的登录状态，请重新发起登录。")
+
+    async def get_current_user(self, cookie_header: str) -> PlatformUser | None:
+        payload = await self._get_payload(
+            self.CURRENT_USER_URL,
+            headers={**self.API_HEADERS, "Cookie": cookie_header},
+            params=self.COMMON_PARAMS,
+        )
+        if payload.get("status_code") != 0:
+            return None
+        user = payload.get("user")
+        if not isinstance(user, dict):
+            return None
+        user_id = str(user.get("uid") or user.get("short_id") or "").strip()
+        display_name = str(user.get("nickname") or "").strip()
+        if not user_id and not display_name:
+            return None
+        return PlatformUser(user_id=user_id, display_name=display_name)
 
     async def close(self) -> None:
         """关闭由适配器创建的 HTTP 客户端。"""
