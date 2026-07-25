@@ -79,15 +79,15 @@ class RedBookLoginProvider(PlatformLoginProvider):
         configured_cookies = dict(
             parse_cookie_header(cookie_config_value(config, self.cookie_config_key))
         )
-        for name in self.COOKIE_NAMES:
-            value = configured_cookies.get(name, "")
-            if self._valid_cookie_value(value):
-                self._client.cookies.set(
-                    name,
-                    value,
-                    domain=".xiaohongshu.com",
-                    path="/",
-                )
+        configured_a1 = configured_cookies.get("a1", "")
+        if not self._a1_cookie() and self._valid_cookie_value(configured_a1):
+            # 配置中的 a1 来自用户自己的官方浏览器会话，只绑定到小红书域。
+            self._client.cookies.set(
+                "a1",
+                configured_a1,
+                domain=".xiaohongshu.com",
+                path="/",
+            )
 
     async def create_qr_challenge(self) -> QRLoginChallenge:
         """创建二维码会话，并只把本地随机会话键交给公共编排层。"""
