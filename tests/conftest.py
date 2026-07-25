@@ -1,11 +1,17 @@
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
-PLUGIN_PARENT = Path(__file__).resolve().parents[2]
-if str(PLUGIN_PARENT) not in sys.path:
-    sys.path.insert(0, str(PLUGIN_PARENT))
+PLUGIN_NAME = "astrbot_multi_parser"
+PLUGIN_ROOT = Path(__file__).resolve().parents[1]
+
+# AstrBot 按 metadata.yaml 中的名称加载插件；测试不应依赖克隆目录同名。
+if PLUGIN_NAME not in sys.modules:
+    plugin_package = ModuleType(PLUGIN_NAME)
+    plugin_package.__path__ = [str(PLUGIN_ROOT)]
+    sys.modules[PLUGIN_NAME] = plugin_package
 
 
 @pytest.fixture

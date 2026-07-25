@@ -1,3 +1,26 @@
+[project]
+name = "astrbot-plugin-multi-parser"
+# 仅供 uv 解析开发环境；插件发布版本以 metadata.yaml 为准。
+version = "0"
+requires-python = ">=3.10"
+dependencies = [
+    "httpx",
+    "qrcode[pil]",
+    "xhshow>=0.2.0,<0.3.0",
+]
+
+[dependency-groups]
+dev = [
+    "astrbot",
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+package = false
+
 [tool.ruff]
 target-version = "py310"
 line-length = 88
