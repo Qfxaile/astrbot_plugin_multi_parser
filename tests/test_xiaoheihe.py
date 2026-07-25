@@ -35,12 +35,6 @@ async def test_rejects_lookalike_xiaoheihe_urls():
     )
 
 
-def test_extracts_token_from_cookie_header():
-    parser = XiaoheiheParser({"xiaoheihe_cookies": "foo=bar; x_xhh_tokenid=Bdevice123"})
-
-    assert parser._extract_xhh_tokenid_from_cookies() == "Bdevice123"
-
-
 def test_extracts_only_xiaoheihe_auth_cookie_whitelist():
     parser = XiaoheiheParser(
         {
@@ -54,45 +48,22 @@ def test_extracts_only_xiaoheihe_auth_cookie_whitelist():
     assert parser._configured_cookie_values() == {
         "pkey": "session-secret",
         "x_xhh_tokenid": "Bdevice123",
-        "heybox_id": "123456",
     }
 
 
-@pytest.mark.asyncio
-async def test_build_request_context_fetches_device_when_cookie_missing(monkeypatch):
-    parser = XiaoheiheParser({})
+def test_builds_optional_cookie_headers_for_game_requests():
+    parser = XiaoheiheParser(
+        {
+            "xiaoheihe_cookies": (
+                "pkey=session-secret; x_xhh_tokenid=Bdevice123; foreign=ignore"
+            )
+        }
+    )
 
-    async def fetch_device_id():
-        return "anonymous-device"
-
-    monkeypatch.setattr(parser, "_fetch_device_id", fetch_device_id, raising=False)
-
-    assert await parser._build_request_context() == {
-        "cookie_header": "x_xhh_tokenid=Banonymous-device",
-        "device_id": "anonymous-device",
-        "heybox_id": "",
+    assert parser._request_cookie_headers() == {
+        "Cookie": "pkey=session-secret; x_xhh_tokenid=Bdevice123"
     }
-
-
-@pytest.mark.asyncio
-async def test_fetch_device_id_posts_reference_profile_payload(monkeypatch):
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.method == "POST"
-        assert request.url.host == "fp-it.portal101.cn"
-        payload = json.loads(request.content)
-        assert payload["appId"] == "heybox_website"
-        assert payload["organization"] == "0yD85BjYvGFAvHaSQ1mc"
-        assert len(payload["ep"]) > 100
-        assert len(payload["data"]) > 1000
-        return httpx.Response(
-            200,
-            json={"detail": {"deviceId": "profile-device"}},
-            request=request,
-        )
-
-    install_mock_client(monkeypatch, handler)
-
-    assert await XiaoheiheParser({})._fetch_device_id() == "profile-device"
+    assert XiaoheiheParser({})._request_cookie_headers() == {}
 
 
 def test_signing_algorithm_matches_reference_golden_value(monkeypatch):
@@ -190,9 +161,18 @@ async def test_parse_post_requests_signed_tree_and_materializes_images(
         requests.append(request)
         if request.url.host == "api.xiaoheihe.cn":
             assert request.url.path == "/bbs/app/link/tree"
-            assert request.url.params["link_id"] == "abc123"
+            assert request.url.params["link_id"] == "4e0f72248cb0"
             assert request.url.params["hkey"]
-            assert request.url.params["heybox_id"] == "123456"
+            assert request.url.params["web_version"] == "3.0"
+            assert request.url.params["is_first"] == "1"
+            assert request.url.params["page"] == "1"
+            assert request.url.params["index"] == "1"
+            assert request.url.params["limit"] == "20"
+            assert request.url.params["owner_only"] == "0"
+            assert request.url.params["x_client_version"] == ""
+            assert "heybox_id" not in request.url.params
+            assert "device_info" not in request.url.params
+            assert "device_id" not in request.url.params
             assert request.headers.get("cookie") == (
                 "pkey=session-secret; x_xhh_tokenid=Bdevice123"
             )
@@ -225,14 +205,18 @@ async def test_parse_post_requests_signed_tree_and_materializes_images(
     parser = XiaoheiheParser(
         {
             "xiaoheihe_cookies": (
-                "pkey=session-secret; x_xhh_tokenid=Bdevice123; "
-                "heybox_id=123456; foreign=must-not-send"
+                "pkey=session-secret; x_xhh_tokenid=Bdevice123; foreign=must-not-send"
             )
         }
     )
 
     result = await parser.parse(
-        ParseContext(text="https://www.xiaoheihe.cn/app/bbs/link/abc123")
+        ParseContext(
+            text=(
+                "https://api.xiaoheihe.cn/v3/bbs/app/api/web/share?"
+                "h_camp=link&h_src=YXBwX3NoYXJl&link_id=4e0f72248cb0"
+            )
+        )
     )
 
     assert result.title == "接口帖子"
@@ -259,6 +243,29 @@ async def test_parse_post_reports_api_error_without_token_leak(monkeypatch):
         )
 
     assert "Bsecret" not in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_parse_post_reports_captcha_response(monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"status": "show_captcha", "result": {}},
+            request=request,
+        )
+
+    install_mock_client(monkeypatch, handler)
+    parser = XiaoheiheParser({})
+
+    with pytest.raises(ValueError, match="人机验证"):
+        await parser.parse(
+            ParseContext(
+                text=(
+                    "https://api.xiaoheihe.cn/v3/bbs/app/api/web/share?"
+                    "h_camp=link&h_src=YXBwX3NoYXJl&link_id=4e0f72248cb0"
+                )
+            )
+        )
 
 
 GAME_HTML = """

@@ -5,7 +5,6 @@ import httpx
 from ...core.contracts import ParseContext, ParseResult
 from ...core.http import cookie_config_value, parse_cookie_header
 from ...core.parser import BaseParser
-from .fingerprint import V4_DATA, V4_EP
 from .game import (
     build_game_desc,
     build_game_result,
@@ -34,7 +33,7 @@ class XiaoheiheParser(BaseParser):
     display_name = "小黑盒"
     cookie_config_key = "xiaoheihe_cookies"
     image_host_suffixes = ("max-c.com", "xiaoheihe.cn")
-    AUTH_COOKIE_NAMES = ("pkey", "x_xhh_tokenid", "heybox_id")
+    AUTH_COOKIE_NAMES = ("pkey", "x_xhh_tokenid")
     CHAR_TABLE = RequestSigner.CHAR_TABLE
     BBS_WEB_PATTERN = (
         r"https?://(?:www\.)?xiaoheihe\.cn/app/bbs/link/"
@@ -100,9 +99,6 @@ class XiaoheiheParser(BaseParser):
     def _timeout(self) -> float:
         return self.request_timeout
 
-    def _extract_xhh_tokenid_from_cookies(self) -> str | None:
-        return self._configured_cookie_values().get("x_xhh_tokenid")
-
     def _configured_cookie_values(self) -> dict[str, str]:
         """提取小黑盒请求实际使用的白名单配置字段。"""
         allowed = set(self.AUTH_COOKIE_NAMES)
@@ -114,70 +110,33 @@ class XiaoheiheParser(BaseParser):
             if name in allowed and value
         }
 
-    async def _build_request_context(self) -> dict[str, str]:
+    def _request_cookie_headers(self) -> dict[str, str]:
+        """仅在已配置登录凭据时构造小黑盒请求 Cookie。"""
         configured = self._configured_cookie_values()
-        token = configured.get("x_xhh_tokenid")
-        if not token:
-            device_id = await self._fetch_device_id()
-            if not device_id:
-                raise ValueError("小黑盒 deviceprofile 未返回 deviceId")
-            token = f"B{device_id}"
-        else:
-            device_id = token[1:] if token.startswith("B") else ""
-        cookie_values = {
-            "pkey": configured.get("pkey", ""),
-            "x_xhh_tokenid": token,
-        }
-        return {
-            "cookie_header": "; ".join(
-                f"{name}={value}" for name, value in cookie_values.items() if value
-            ),
-            "device_id": device_id,
-            "heybox_id": configured.get("heybox_id", ""),
-        }
-
-    async def _fetch_device_id(self) -> str:
-        payload = {
-            "appId": "heybox_website",
-            "organization": "0yD85BjYvGFAvHaSQ1mc",
-            "ep": V4_EP,
-            "data": V4_DATA,
-            "os": "web",
-            "encode": 5,
-            "compress": 2,
-        }
-        async with httpx.AsyncClient(
-            timeout=self._timeout(),
-            follow_redirects=False,
-            headers={"Accept": "application/json, text/plain, */*"},
-        ) as client:
-            response = await client.post(
-                "https://fp-it.portal101.cn/deviceprofile/v4", json=payload
-            )
-            self.raise_for_response_status(response)
-            body = response.json()
-        detail = body.get("detail") if isinstance(body, dict) else None
-        device_id = detail.get("deviceId") if isinstance(detail, dict) else None
-        if not device_id:
-            raise self.cookie_access_error()
-        return str(device_id)
+        cookie_header = "; ".join(
+            f"{name}={configured[name]}"
+            for name in self.AUTH_COOKIE_NAMES
+            if configured.get(name)
+        )
+        return {"Cookie": cookie_header} if cookie_header else {}
 
     async def _parse_post_by_id(self, link_id: str) -> ParseResult:
-        request_context = await self._build_request_context()
         params = {
-            "os_type": "web",
             "app": "heybox",
-            "client_type": "web",
-            "version": "999.0.4",
-            "web_version": "2.5",
-            "x_client_type": "web",
+            "os_type": "web",
             "x_app": "heybox_website",
-            "heybox_id": request_context["heybox_id"],
+            "x_client_type": "web",
             "x_os_type": "Windows",
-            "device_info": "Chrome",
-            "device_id": request_context["device_id"],
+            "x_client_version": "",
+            "client_type": "web",
+            "web_version": "3.0",
+            "version": "999.0.4",
             "link_id": link_id,
-            "owner_only": "1",
+            "is_first": "1",
+            "page": "1",
+            "index": "1",
+            "limit": "20",
+            "owner_only": "0",
             **self._sign_path("/bbs/app/link/tree"),
         }
         referer = f"https://www.xiaoheihe.cn/app/bbs/link/{link_id}"
@@ -189,12 +148,12 @@ class XiaoheiheParser(BaseParser):
             response = await client.get(
                 "https://api.xiaoheihe.cn/bbs/app/link/tree",
                 params=params,
-                headers={"Cookie": request_context["cookie_header"]},
+                headers=self._request_cookie_headers(),
             )
             self.raise_for_response_status(response)
             payload = response.json()
             if not isinstance(payload, dict) or payload.get("status") != "ok":
-                self._raise_for_payload_cookie_error(payload)
+                self._raise_for_payload_error(payload)
                 raise ValueError("小黑盒 link/tree 请求失败")
             result_root = payload.get("result")
             if not isinstance(result_root, dict):
@@ -206,7 +165,7 @@ class XiaoheiheParser(BaseParser):
         appid = appid.strip()
         if not appid:
             raise ValueError("无效的小黑盒游戏 appid")
-        request_context = await self._build_request_context()
+        cookie_headers = self._request_cookie_headers()
         web_url = canonical_game_web_url(appid, game_type)
         async with httpx.AsyncClient(
             timeout=self._timeout(),
@@ -228,7 +187,7 @@ class XiaoheiheParser(BaseParser):
                     "steam_appid": appid,
                     **self._sign_path("/game/get_game_detail/"),
                 },
-                headers={"Cookie": request_context["cookie_header"]},
+                headers=cookie_headers,
             )
             self.raise_for_response_status(detail_response)
             detail_payload = detail_response.json()
@@ -237,7 +196,7 @@ class XiaoheiheParser(BaseParser):
                 or detail_payload.get("status") != "ok"
                 or not isinstance(detail_payload.get("result"), dict)
             ):
-                self._raise_for_payload_cookie_error(detail_payload)
+                self._raise_for_payload_error(detail_payload)
                 raise ValueError("小黑盒 get_game_detail 请求失败")
             game = detail_payload["result"]
             steam_appid = pick_steam_appid(game, appid)
@@ -246,7 +205,7 @@ class XiaoheiheParser(BaseParser):
                 intro_response = await client.get(
                     "https://api.xiaoheihe.cn/game/game_introduction/",
                     params={"steam_appid": steam_appid, "return_json": 1},
-                    headers={"Cookie": request_context["cookie_header"]},
+                    headers=cookie_headers,
                 )
                 intro_response.raise_for_status()
                 intro_payload = intro_response.json()
@@ -262,10 +221,15 @@ class XiaoheiheParser(BaseParser):
     def _sign_path(self, path: str) -> dict[str, str | int]:
         return self._signer.sign_path(path)
 
-    def _raise_for_payload_cookie_error(self, payload: object) -> None:
-        """识别小黑盒业务载荷中的登录、令牌和权限错误。"""
+    def _raise_for_payload_error(self, payload: object) -> None:
+        """识别小黑盒业务载荷中的验证码、登录、令牌和权限错误。"""
         if not isinstance(payload, dict):
             return
+        status = str(payload.get("status") or "").lower()
+        if status in {"show_captcha", "captcha"}:
+            raise ValueError(
+                "小黑盒请求触发了人机验证，请稍后重试或配置有效 Cookies。"
+            )
         message = str(payload.get("msg") or payload.get("message") or "").lower()
         markers = (
             "denied",

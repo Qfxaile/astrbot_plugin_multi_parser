@@ -117,7 +117,7 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 | `cookies.tieba_cookies` | 否 | 降低安全验证导致的解析失败 |
 | `cookies.weibo_cookies` | 否 | 用于需要登录态的微博页面 |
 | `cookies.wechat_yuanbao_cookies` | 视频号短链需要 | 保存 `yb_user_id` 和 `yb_token` |
-| `cookies.xiaoheihe_cookies` | 否 | 未配置时自动申请匿名设备令牌 |
+| `cookies.xiaoheihe_cookies` | 否 | 配置后用于游戏详情请求，未配置时使用公开接口 |
 | `cookies.zhihu_cookies` | 否 | 二维码登录暂不可用，可手工填写 |
 
 > [!WARNING]
@@ -231,7 +231,6 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 - 图片重定向最多跟随 5 次，每次跳转前都会重新校验目标地址。
 - 图片错误日志只记录主机名和错误摘要，不输出带令牌的完整 URL。
 - 图片使用临时文件并在发送后清理；视频和群文件使用远程 URL，不创建本地视频缓存。
-- 小黑盒匿名设备流程不会上传聊天内容或用户凭据。
 - 平台接口、CDN 地址和登录流程可能随第三方服务调整而失效。
 - 音频、视频、消息长度和媒体数量仍受目标适配器及聊天平台限制。
 
@@ -261,7 +260,7 @@ astrbot_plugin_multi_parser/
 - [Zhalslar/astrbot_plugin_parser](https://github.com/Zhalslar/astrbot_plugin_parser)：微博、视频号、小黑盒和知乎解析实现的参考来源；相关实现基于其 MIT 许可代码重新设计。
 - [Cloxl/xhshow](https://github.com/Cloxl/xhshow)：小红书实验性 Web 登录签名的参考实现，采用 MIT License；本插件不使用其设备指纹生成能力。
 
-小黑盒签名与匿名设备参数、视频号“元宝换取令牌后请求官方预览接口”等流程均在上述参考项目基础上重新实现。第三方项目版权归原作者所有，许可证信息见项目 [LICENSE](LICENSE)。
+小黑盒请求签名、视频号“元宝换取令牌后请求官方预览接口”等流程均在上述参考项目基础上重新实现。第三方项目版权归原作者所有，许可证信息见项目 [LICENSE](LICENSE)。
 
 ## 免责声明
 
