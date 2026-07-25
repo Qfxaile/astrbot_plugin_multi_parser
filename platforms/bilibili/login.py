@@ -13,6 +13,7 @@ from ...core.authentication import (
     LoginPollState,
     PlatformLoginError,
     PlatformLoginProvider,
+    PlatformUser,
     QRLoginChallenge,
 )
 from ...core.http import request_timeout
@@ -27,6 +28,7 @@ class BilibiliLoginProvider(PlatformLoginProvider):
         "https://passport.bilibili.com/x/passport-login/web/qrcode/generate"
     )
     QR_POLL_URL = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll"
+    CURRENT_USER_URL = "https://api.bilibili.com/x/web-interface/nav"
     QR_EXPIRES_IN_SECONDS = 180
     MAX_RESPONSE_BYTES = 64 * 1024
     COOKIE_NAMES = (
@@ -104,6 +106,22 @@ class BilibiliLoginProvider(PlatformLoginProvider):
                 raise PlatformLoginError("B站登录成功，但响应中缺少有效登录凭据。")
             return LoginPollResult(LoginPollState.SUCCESS, cookie_header)
         raise PlatformLoginError("B站返回了无法识别的登录状态，请重新发起登录。")
+
+    async def get_current_user(self, cookie_header: str) -> PlatformUser | None:
+        payload = await self._get_payload(
+            self.CURRENT_USER_URL,
+            headers={"Cookie": cookie_header},
+        )
+        data = payload.get("data")
+        if payload.get("code") != 0 or not isinstance(data, dict):
+            return None
+        if data.get("isLogin") is False:
+            return None
+        user_id = str(data.get("mid") or "").strip()
+        display_name = str(data.get("uname") or "").strip()
+        if not user_id and not display_name:
+            return None
+        return PlatformUser(user_id=user_id, display_name=display_name)
 
     async def close(self) -> None:
         """关闭由适配器创建的 HTTP 客户端。"""

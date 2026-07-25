@@ -14,6 +14,7 @@ from ...core.authentication import (
     LoginPollState,
     PlatformLoginError,
     PlatformLoginProvider,
+    PlatformUser,
     QRLoginChallenge,
 )
 from ...core.http import request_timeout
@@ -29,6 +30,7 @@ class TiebaLoginProvider(PlatformLoginProvider):
     LOGIN_CONFIRM_URL = "https://passport.baidu.com/v3/login/main/qrbdusslogin"
     TIEBA_AUTH_URL = "https://passport.baidu.com/v3/login/api/auth/"
     LOGIN_RETURN_URL = "https://tieba.baidu.com/index.html"
+    CURRENT_USER_URL = "https://tieba.baidu.com/f/user/json_userinfo"
     QR_EXPIRES_IN_SECONDS = 180
     MAX_RESPONSE_BYTES = 64 * 1024
     MAX_QR_IMAGE_BYTES = 512 * 1024
@@ -188,6 +190,32 @@ class TiebaLoginProvider(PlatformLoginProvider):
         if not has_baidu_session or "STOKEN=" not in cookie_header:
             raise PlatformLoginError("贴吧登录成功，但响应中缺少有效登录凭据。")
         return LoginPollResult(LoginPollState.SUCCESS, cookie_header)
+
+    async def get_current_user(self, cookie_header: str) -> PlatformUser | None:
+        status_code, _, content = await self._read_limited_response(
+            self.CURRENT_USER_URL,
+            limit=self.MAX_RESPONSE_BYTES,
+            headers={"Cookie": cookie_header},
+        )
+        if status_code != 200:
+            return None
+        try:
+            payload = json.loads(content)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return None
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, dict):
+            return None
+        user_id = str(data.get("user_id") or data.get("id") or "").strip()
+        display_name = str(
+            data.get("user_name_show")
+            or data.get("user_name_weak")
+            or data.get("user_name")
+            or ""
+        ).strip()
+        if not user_id and not display_name:
+            return None
+        return PlatformUser(user_id=user_id, display_name=display_name)
 
     async def close(self) -> None:
         """清除会话标识并关闭由适配器创建的 HTTP 客户端。"""

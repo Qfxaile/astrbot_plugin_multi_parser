@@ -15,6 +15,7 @@ from ...core.authentication import (
     LoginPollState,
     PlatformLoginError,
     PlatformLoginProvider,
+    PlatformUser,
     QRLoginChallenge,
 )
 from ...core.http import request_timeout
@@ -29,6 +30,7 @@ class WeiboLoginProvider(PlatformLoginProvider):
     QR_POLL_URL = "https://login.sina.com.cn/sso/qrcode/check"
     SSO_LOGIN_URL = "https://login.sina.com.cn/sso/login.php"
     LOGIN_PAGE_URL = "https://weibo.com/"
+    CURRENT_USER_URL = "https://weibo.com/ajax/config/get_config"
     QR_EXPIRES_IN_SECONDS = 180
     MAX_RESPONSE_BYTES = 64 * 1024
     MAX_QR_IMAGE_BYTES = 512 * 1024
@@ -131,6 +133,44 @@ class WeiboLoginProvider(PlatformLoginProvider):
         if "SUB=" not in cookie_header:
             raise PlatformLoginError("微博登录成功，但响应中缺少有效登录凭据。")
         return LoginPollResult(LoginPollState.SUCCESS, cookie_header)
+
+    async def get_current_user(self, cookie_header: str) -> PlatformUser | None:
+        content, _ = await self._read_limited_response(
+            self.CURRENT_USER_URL,
+            limit=self.MAX_RESPONSE_BYTES,
+            headers={
+                "Cookie": cookie_header,
+                "Client-Version": "3.0.0",
+                "Referer": self.LOGIN_PAGE_URL,
+            },
+        )
+        try:
+            payload = json.loads(content)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return None
+        if not isinstance(payload, dict) or payload.get("ok") not in {1, "1"}:
+            return None
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            return None
+        user = data.get("user")
+        if not isinstance(user, dict):
+            user = data.get("userInfo")
+        if not isinstance(user, dict):
+            user = {}
+        user_id = str(
+            user.get("idstr")
+            or user.get("id")
+            or user.get("uid")
+            or data.get("uid")
+            or ""
+        ).strip()
+        display_name = str(
+            user.get("screen_name") or user.get("name") or data.get("screen_name") or ""
+        ).strip()
+        if not user_id and not display_name:
+            return None
+        return PlatformUser(user_id=user_id, display_name=display_name)
 
     async def close(self) -> None:
         """关闭由适配器创建的 HTTP 客户端。"""

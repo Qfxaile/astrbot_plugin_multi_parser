@@ -210,6 +210,28 @@ async def test_platform_login_rejects_group_chat_before_starting_login(platform_
 
 
 @pytest.mark.asyncio
+async def test_platform_login_status_allows_admin_group_query():
+    class FakeAuthentication:
+        def __init__(self):
+            self.calls = 0
+
+        async def status(self):
+            self.calls += 1
+            return "平台登录状态：\n- B站：已配置｜当前用户：测试用户（UID：12345）"
+
+    plugin = make_plugin(ParseResult(platform="fake"))
+    authentication = FakeAuthentication()
+    plugin._authentication = authentication
+    event = FakeEvent()
+    event.private = False
+
+    messages = [item async for item in plugin.platform_login_status(event)]
+
+    assert messages[0][0].text.endswith("测试用户（UID：12345）")
+    assert authentication.calls == 1
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("platform_name", ["小红书", "知乎", "微信"])
 async def test_platform_login_delegates_chinese_platform_name_in_private_chat(
     platform_name,

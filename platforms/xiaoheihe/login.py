@@ -14,9 +14,10 @@ from ...core.authentication import (
     LoginPollState,
     PlatformLoginError,
     PlatformLoginProvider,
+    PlatformUser,
     QRLoginChallenge,
 )
-from ...core.http import request_timeout
+from ...core.http import parse_cookie_header, request_timeout
 from .signing import RequestSigner
 
 
@@ -142,6 +143,13 @@ class XiaoheiheLoginProvider(PlatformLoginProvider):
                 )
             return LoginPollResult(LoginPollState.SUCCESS, cookie_header)
         return LoginPollResult(LoginPollState.EXPIRED)
+
+    async def get_current_user(self, cookie_header: str) -> PlatformUser | None:
+        credentials = dict(parse_cookie_header(cookie_header))
+        user_id = str(credentials.get("heybox_id") or "").strip()
+        if not self._is_safe_cookie_value(user_id):
+            return None
+        return PlatformUser(user_id=user_id)
 
     async def close(self) -> None:
         """关闭由适配器创建的 HTTP 客户端。"""

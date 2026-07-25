@@ -15,6 +15,7 @@ from ...core.authentication import (
     LoginPollState,
     PlatformLoginError,
     PlatformLoginProvider,
+    PlatformUser,
     QRLoginChallenge,
 )
 from ...core.http import cookie_config_value, parse_cookie_header, request_timeout
@@ -40,6 +41,8 @@ class RedBookLoginProvider(PlatformLoginProvider):
     QR_STATUS_URI = "/api/sns/web/v1/login/qrcode/status"
     QR_CREATE_URL = f"{API_ORIGIN}{QR_CREATE_URI}"
     QR_STATUS_URL = f"{API_ORIGIN}{QR_STATUS_URI}"
+    CURRENT_USER_URI = "/api/sns/web/v1/user/selfinfo"
+    CURRENT_USER_URL = f"{API_ORIGIN}{CURRENT_USER_URI}"
     QR_EXPIRES_IN_SECONDS = 60
     MAX_RESPONSE_BYTES = 64 * 1024
     MAX_BOOTSTRAP_PREFIX_BYTES = 64 * 1024
@@ -76,15 +79,15 @@ class RedBookLoginProvider(PlatformLoginProvider):
         configured_cookies = dict(
             parse_cookie_header(cookie_config_value(config, self.cookie_config_key))
         )
-        configured_a1 = configured_cookies.get("a1", "")
-        if not self._a1_cookie() and self._valid_cookie_value(configured_a1):
-            # 配置中的 a1 来自用户自己的官方浏览器会话，只绑定到小红书域。
-            self._client.cookies.set(
-                "a1",
-                configured_a1,
-                domain=".xiaohongshu.com",
-                path="/",
-            )
+        for name in self.COOKIE_NAMES:
+            value = configured_cookies.get(name, "")
+            if self._valid_cookie_value(value):
+                self._client.cookies.set(
+                    name,
+                    value,
+                    domain=".xiaohongshu.com",
+                    path="/",
+                )
 
     async def create_qr_challenge(self) -> QRLoginChallenge:
         """创建二维码会话，并只把本地随机会话键交给公共编排层。"""
@@ -161,6 +164,60 @@ class RedBookLoginProvider(PlatformLoginProvider):
                 raise PlatformLoginError("小红书登录成功，但响应中缺少有效登录凭据。")
             return LoginPollResult(LoginPollState.SUCCESS, cookie_header)
         raise PlatformLoginError("小红书返回了无法识别的登录状态，请重新发起登录。")
+
+    async def get_current_user(self, cookie_header: str) -> PlatformUser | None:
+        configured = dict(parse_cookie_header(cookie_header))
+        for name in self.COOKIE_NAMES:
+            value = configured.get(name, "")
+            if self._valid_cookie_value(value):
+                self._client.cookies.set(
+                    name,
+                    value,
+                    domain=".xiaohongshu.com",
+                    path="/",
+                )
+        a1_value = self._a1_cookie()
+        if not a1_value:
+            return None
+        payload = await self._signed_payload(
+            "GET",
+            self.CURRENT_USER_URL,
+            self.CURRENT_USER_URI,
+            a1_value,
+            {},
+        )
+        if payload.get("code") != 0:
+            return None
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            return None
+        nested = tuple(
+            value
+            for value in (data.get("basic_info"), data.get("user"))
+            if isinstance(value, dict)
+        )
+        candidates = (data, *nested)
+        user_id = next(
+            (
+                str(item[key]).strip()
+                for item in candidates
+                for key in ("user_id", "userId", "id", "red_id", "redId")
+                if item.get(key)
+            ),
+            "",
+        )
+        display_name = next(
+            (
+                str(item[key]).strip()
+                for item in candidates
+                for key in ("nickname", "nick_name", "nickName", "name")
+                if item.get(key)
+            ),
+            "",
+        )
+        if not user_id and not display_name:
+            return None
+        return PlatformUser(user_id=user_id, display_name=display_name)
 
     async def close(self) -> None:
         """清除临时二维码会话并关闭由适配器创建的 HTTP 客户端。"""
