@@ -11,15 +11,16 @@ from urllib.parse import urlencode, urljoin, urlsplit
 
 import httpx
 
-from ...core.authentication import (
+from ...core.http import is_safe_cookie_value, is_trusted_https_url, parse_cookie_header
+from ...core.platform_login import (
+    HTTPPlatformLoginProvider,
     LoginPollResult,
     LoginPollState,
     PlatformLoginError,
-    PlatformLoginProvider,
     PlatformUser,
     QRLoginChallenge,
+    read_login_response_body,
 )
-from ...core.http import parse_cookie_header, request_timeout
 
 
 @dataclass
@@ -53,7 +54,7 @@ class _QRImageParser(HTMLParser):
             self.image_urls.append(image_url)
 
 
-class WeChatLoginProvider(PlatformLoginProvider):
+class WeChatLoginProvider(HTTPPlatformLoginProvider):
     """通过微信开放平台扫码建立腾讯元宝解析登录态。"""
 
     display_name = "微信"
@@ -97,9 +98,9 @@ class WeChatLoginProvider(PlatformLoginProvider):
         *,
         client: httpx.AsyncClient | None = None,
     ) -> None:
-        self._owns_client = client is None
-        self._client = client or httpx.AsyncClient(
-            timeout=request_timeout(config),
+        super().__init__(
+            config,
+            client=client,
             follow_redirects=False,
             headers={
                 "Accept-Language": "zh-CN,zh;q=0.9",
@@ -226,8 +227,7 @@ class WeChatLoginProvider(PlatformLoginProvider):
     async def close(self) -> None:
         """清理二维码会话并关闭由适配器创建的 HTTP 客户端。"""
         self._sessions.clear()
-        if self._owns_client:
-            await self._client.aclose()
+        await super().close()
 
     async def _download_qr_image(self, url: str) -> bytes:
         try:
@@ -280,12 +280,11 @@ class WeChatLoginProvider(PlatformLoginProvider):
                     "X-Source": "web",
                 },
             ) as response:
-                content = bytearray()
-                async for chunk in response.aiter_bytes():
-                    if len(content) + len(chunk) > self.MAX_LOGIN_RESPONSE_BYTES:
-                        raise PlatformLoginError("微信登录服务响应超过安全限制。")
-                    content.extend(chunk)
-                response_content = bytes(content)
+                response_content = await read_login_response_body(
+                    response,
+                    limit=self.MAX_LOGIN_RESPONSE_BYTES,
+                    platform=self.display_name,
+                )
                 status_code = response.status_code
         except PlatformLoginError:
             raise
@@ -330,13 +329,13 @@ class WeChatLoginProvider(PlatformLoginProvider):
             follow_redirects=False,
             **kwargs,
         ) as response:
-            content = bytearray()
-            async for chunk in response.aiter_bytes():
-                if len(content) + len(chunk) > limit:
-                    raise PlatformLoginError("微信登录服务响应超过安全限制。")
-                content.extend(chunk)
+            content = await read_login_response_body(
+                response,
+                limit=limit,
+                platform=self.display_name,
+            )
             return (
-                bytes(content),
+                content,
                 response.headers.get("Content-Type", "").lower(),
                 response.status_code,
                 response.headers.get("Location", ""),
@@ -352,18 +351,15 @@ class WeChatLoginProvider(PlatformLoginProvider):
             return "", ""
         for image_url in parser.image_urls:
             image_url = urljoin(cls.OAUTH_URL, image_url)
+            if not is_trusted_https_url(image_url, (cls.QR_IMAGE_HOST,)):
+                continue
             try:
                 parsed = urlsplit(image_url)
-                port = parsed.port
             except ValueError:
                 continue
             path_match = re.fullmatch(r"/connect/qrcode/([^/]+)", parsed.path)
             if (
-                parsed.scheme != "https"
-                or (parsed.hostname or "").lower() != cls.QR_IMAGE_HOST
-                or parsed.username is not None
-                or parsed.password is not None
-                or port not in {None, 443}
+                (parsed.hostname or "").lower() != cls.QR_IMAGE_HOST
                 or path_match is None
             ):
                 continue
@@ -374,12 +370,7 @@ class WeChatLoginProvider(PlatformLoginProvider):
 
     @staticmethod
     def _safe_credential_value(value: object) -> str:
-        text = str(value or "")
-        if not text or len(text) > 4096 or ";" in text:
-            return ""
-        if not all(character.isprintable() for character in text):
-            return ""
-        return text
+        return str(value) if is_safe_cookie_value(value) else ""
 
     @classmethod
     def _contains_risk_marker(cls, content: bytes) -> bool:

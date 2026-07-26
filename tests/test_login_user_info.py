@@ -1,6 +1,6 @@
 import httpx
 import pytest
-from astrbot_multi_parser.core.authentication import PlatformUser
+from astrbot_multi_parser.core.platform_login import PlatformUser
 from astrbot_multi_parser.platforms.bilibili.login import BilibiliLoginProvider
 from astrbot_multi_parser.platforms.douyin.login import DouyinLoginProvider
 from astrbot_multi_parser.platforms.redbook.login import RedBookLoginProvider

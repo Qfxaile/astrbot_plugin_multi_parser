@@ -1,6 +1,6 @@
 import httpx
 import pytest
-from astrbot_multi_parser.core.authentication import (
+from astrbot_multi_parser.core.platform_login import (
     LoginPollState,
     PlatformLoginError,
 )
@@ -54,6 +54,16 @@ async def test_bilibili_qr_login_collects_only_expected_domain_cookies():
     assert "SESSDATA=session-secret" in result.cookie_header
     assert "bili_jct=csrf-secret" in result.cookie_header
     assert "foreign" not in result.cookie_header
+
+
+@pytest.mark.asyncio
+async def test_bilibili_cookie_header_rejects_unsafe_values():
+    async with httpx.AsyncClient() as client:
+        client.cookies.set("SESSDATA", "unsafe;value", domain=".bilibili.com")
+        client.cookies.set("bili_jct", "safe-value", domain=".bilibili.com")
+        provider = BilibiliLoginProvider({}, client=client)
+
+        assert provider._cookie_header() == "bili_jct=safe-value"
 
 
 @pytest.mark.asyncio

@@ -1,7 +1,7 @@
+import astrbot_multi_parser.platforms.tieba as tieba
 import httpx
 import pytest
 from astrbot_multi_parser.core.contracts import ParseContext
-from astrbot_multi_parser.platforms import tieba
 from astrbot_multi_parser.platforms.tieba import parser as tieba_parser
 
 

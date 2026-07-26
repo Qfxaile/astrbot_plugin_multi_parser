@@ -9,18 +9,19 @@ from urllib.parse import urljoin, urlsplit
 
 import httpx
 
-from ...core.authentication import (
+from ...core.http import cookie_header_from_jar, is_trusted_https_url
+from ...core.platform_login import (
+    HTTPPlatformLoginProvider,
     LoginPollResult,
     LoginPollState,
     PlatformLoginError,
-    PlatformLoginProvider,
     PlatformUser,
     QRLoginChallenge,
+    read_login_response_body,
 )
-from ...core.http import request_timeout
 
 
-class TiebaLoginProvider(PlatformLoginProvider):
+class TiebaLoginProvider(HTTPPlatformLoginProvider):
     """通过百度官方 Web 二维码流程建立贴吧解析登录态。"""
 
     display_name = "贴吧"
@@ -71,9 +72,9 @@ class TiebaLoginProvider(PlatformLoginProvider):
         *,
         client: httpx.AsyncClient | None = None,
     ) -> None:
-        self._owns_client = client is None
-        self._client = client or httpx.AsyncClient(
-            timeout=request_timeout(config),
+        super().__init__(
+            config,
+            client=client,
             follow_redirects=False,
             headers={
                 "User-Agent": self.USER_AGENT,
@@ -220,8 +221,7 @@ class TiebaLoginProvider(PlatformLoginProvider):
     async def close(self) -> None:
         """清除会话标识并关闭由适配器创建的 HTTP 客户端。"""
         self._gid = ""
-        if self._owns_client:
-            await self._client.aclose()
+        await super().close()
 
     async def _get_payload(
         self,
@@ -356,25 +356,20 @@ class TiebaLoginProvider(PlatformLoginProvider):
             follow_redirects=False,
             **kwargs,
         ) as response:
-            content = bytearray()
-            async for chunk in response.aiter_bytes():
-                if len(content) + len(chunk) > limit:
-                    raise PlatformLoginError("贴吧登录服务响应超过安全限制。")
-                content.extend(chunk)
-            return response.status_code, response.headers, bytes(content)
+            content = await read_login_response_body(
+                response,
+                limit=limit,
+                platform=self.display_name,
+            )
+            return response.status_code, response.headers, content
 
     def _cookie_header(self) -> str:
-        cookies: dict[str, str] = {}
-        for cookie in self._client.cookies.jar:
-            domain = str(cookie.domain or "").lstrip(".").lower()
-            # 配置字符串不保留 Domain，因此只能持久化浏览器本来就会发往贴吧的
-            # 条目，避免把 Passport 专用 Cookie 扁平化后扩大到贴吧请求。
-            if not self._cookie_applies_to_tieba(domain):
-                continue
-            if cookie.name in self.COOKIE_NAMES and cookie.value:
-                cookies[cookie.name] = cookie.value
-        return "; ".join(
-            f"{name}={cookies[name]}" for name in self.COOKIE_NAMES if name in cookies
+        # 配置字符串不保留 Domain，因此只能持久化浏览器本来就会发往贴吧的
+        # 条目，避免把 Passport 专用 Cookie 扁平化后扩大到贴吧请求。
+        return cookie_header_from_jar(
+            self._client.cookies.jar,
+            self.COOKIE_NAMES,
+            domain_allowed=self._cookie_applies_to_tieba,
         )
 
     @classmethod
@@ -470,16 +465,6 @@ class TiebaLoginProvider(PlatformLoginProvider):
         url: str,
         allowed_hosts: Collection[str],
     ) -> bool:
-        try:
-            parsed = urlsplit(url)
-            port = parsed.port
-        except ValueError:
+        if not is_trusted_https_url(url, allowed_hosts):
             return False
-        hostname = (parsed.hostname or "").lower()
-        return (
-            parsed.scheme == "https"
-            and parsed.username is None
-            and parsed.password is None
-            and port in {None, 443}
-            and hostname in allowed_hosts
-        )
+        return (urlsplit(url).hostname or "").lower() in allowed_hosts

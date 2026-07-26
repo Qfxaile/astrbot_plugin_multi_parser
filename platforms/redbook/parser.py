@@ -1,6 +1,8 @@
+"""识别小红书链接并获取图集或视频笔记。"""
+
 import json
 import re
-from urllib.parse import quote, urlparse, urlsplit, urlunsplit
+from urllib.parse import urlparse, urlsplit, urlunsplit
 
 import httpx
 
@@ -8,9 +10,19 @@ from ...core.contracts import ParseContext, ParseResult
 from ...core.http import build_cookies, cookie_config_value
 from ...core.media import mark_invalid_legacy_images
 from ...core.parser import BaseParser
+from .gallery import RedBookGalleryContent
+from .note import RedBookNoteContent
+from .video import RedBookVideoContent
 
 
-class RedBookParser(BaseParser):
+class RedBookParser(
+    RedBookNoteContent,
+    RedBookGalleryContent,
+    RedBookVideoContent,
+    BaseParser,
+):
+    """路由小红书笔记并维持受控的页面回退流程。"""
+
     name = "redbook"
     display_name = "小红书"
     cookie_config_key = "redbook_cookies"
@@ -56,7 +68,6 @@ class RedBookParser(BaseParser):
             cookie_config_value(self.config, "redbook_cookies"),
             (".xiaohongshu.com",),
         )
-
         async with httpx.AsyncClient(
             timeout=self.request_timeout,
             follow_redirects=True,
@@ -86,7 +97,6 @@ class RedBookParser(BaseParser):
                 f"https://www.xiaohongshu.com/discovery/item/{note_id}{query}"
             )
 
-            # Explore 页面为首选数据源，访问失败或状态缺失时回退到 Discovery 页面。
             try:
                 original_headers = client.headers.copy()
                 client.headers.clear()
@@ -98,23 +108,23 @@ class RedBookParser(BaseParser):
                     client.headers.update(original_headers)
                 self.raise_for_response_status(response)
                 self._raise_for_auth_page(response)
-                state = self._extract_initial_state(response.text)
-                result = self._parse_explore_state(state, note_id)
+                result = self._parse_explore_state(
+                    self._extract_initial_state(response.text), note_id
+                )
                 content_url = explore_url
             except (httpx.HTTPError, ValueError, KeyError):
                 response = await client.get(discovery_url)
                 self.raise_for_response_status(response)
                 self._raise_for_auth_page(response)
-                state = self._extract_initial_state(response.text)
-                result = self._parse_discovery_state(state)
+                result = self._parse_discovery_state(
+                    self._extract_initial_state(response.text)
+                )
                 content_url = discovery_url
             parsed_content_url = urlsplit(content_url)
             image_referer = urlunsplit(
                 parsed_content_url._replace(query="", fragment="")
             )
             mark_invalid_legacy_images(result, self.INVALID_IMAGE_URL)
-            # 页面解析结束后不再需要登录态；清空 Cookie，避免图片下载把
-            # ``web_session`` 带到图片域或后续重定向目标。
             client.cookies.clear()
             return await self.materialize_images(result, client, image_referer)
 
@@ -138,224 +148,3 @@ class RedBookParser(BaseParser):
         if not matched:
             raise ValueError("小红书分享链接失效或内容已删除")
         return json.loads(matched.group(1).strip().replace("undefined", "null"))
-
-    def _parse_explore_state(self, state: dict, note_id: str) -> ParseResult:
-        """将小红书 Explore 页面状态转换为统一解析结果。
-
-        参数:
-            state: 解码后的 ``window.__INITIAL_STATE__`` 对象。
-            note_id: 用作映射键的笔记标识。
-
-        返回:
-            解析后的笔记元数据和媒体 URL。
-
-        异常:
-            ValueError: 页面状态中不存在目标笔记时抛出。
-        """
-        note_root = state.get("note") if isinstance(state, dict) else None
-        note_map = (
-            note_root.get("noteDetailMap") if isinstance(note_root, dict) else None
-        )
-        note_entry = note_map.get(note_id) if isinstance(note_map, dict) else None
-        note = note_entry.get("note") if isinstance(note_entry, dict) else None
-        if not isinstance(note, dict) or not note:
-            raise ValueError("小红书 Explore 页面中未找到笔记数据")
-        image_urls = []
-        image_list = note.get("imageList")
-        if not isinstance(image_list, list):
-            image_list = []
-        for image in image_list:
-            image_url = self._select_original_image_url(image, ("urlDefault", "url"))
-            if image_url:
-                image_urls.append(image_url)
-        video_url = (
-            self._select_video_url(note.get("video"))
-            if note.get("type") == "video"
-            else ""
-        )
-        return ParseResult(
-            platform=self.name,
-            title=str(note.get("title") or "无标题"),
-            author=str(
-                note["user"].get("nickname") or "未知作者"
-                if isinstance(note.get("user"), dict)
-                else "未知作者"
-            ),
-            description=str(note.get("desc") or ""),
-            cover_urls=image_urls[:1] if video_url else [],
-            image_urls=[] if video_url else image_urls,
-            video_url=video_url,
-            extra_lines=[] if video_url or image_urls else ["未找到可发送的媒体。"],
-        )
-
-    def _parse_discovery_state(self, state: dict) -> ParseResult:
-        """将小红书 Discovery 页面状态转换为统一解析结果。
-
-        参数:
-            state: 解码后的 ``window.__INITIAL_STATE__`` 对象。
-
-        返回:
-            解析后的笔记元数据和媒体 URL。
-
-        异常:
-            ValueError: 回退页面中不存在笔记数据时抛出。
-        """
-        note_data = state.get("noteData") if isinstance(state, dict) else None
-        if not isinstance(note_data, dict):
-            note_data = {}
-        preload = note_data.get("normalNotePreloadData")
-        if not isinstance(preload, dict):
-            preload = {}
-        data = note_data.get("data")
-        note = data.get("noteData") if isinstance(data, dict) else None
-        if not isinstance(note, dict) or not note:
-            raise ValueError("小红书 Discovery 页面中未找到笔记数据")
-        image_urls = []
-        image_list = note.get("imageList")
-        if not isinstance(image_list, list):
-            image_list = []
-        for image in image_list:
-            image_url = self._select_original_image_url(image, ("urlDefault", "url"))
-            if image_url:
-                image_urls.append(image_url)
-        video_url = (
-            self._select_video_url(note.get("video"))
-            if note.get("type") == "video"
-            else ""
-        )
-        cover_urls = []
-        if video_url:
-            preload_images = preload.get("imagesList")
-            if not isinstance(preload_images, list):
-                preload_images = []
-            for image in preload_images:
-                image_url = self._select_original_image_url(
-                    image, ("urlSizeLarge", "url")
-                )
-                if image_url:
-                    cover_urls.append(image_url)
-            cover_urls = cover_urls[:1] or image_urls[:1]
-        return ParseResult(
-            platform=self.name,
-            title=str(note.get("title") or "无标题"),
-            author=str(
-                note["user"].get("nickName") or "未知作者"
-                if isinstance(note.get("user"), dict)
-                else "未知作者"
-            ),
-            description=str(note.get("desc") or ""),
-            cover_urls=cover_urls,
-            image_urls=[] if video_url else image_urls,
-            video_url=video_url,
-            extra_lines=[] if video_url or image_urls else ["未找到可发送的媒体。"],
-        )
-
-    @staticmethod
-    def _select_video_url(video: object) -> str:
-        """从经过类型检查的外部数据中选择首选视频流。
-
-        参数:
-            video: 可能包含异常容器的外部视频元数据。
-
-        返回:
-            按编码优先级找到的第一个非空主 URL；没有有效变体时返回空字符串。
-        """
-        if not isinstance(video, dict):
-            return ""
-        media = video.get("media")
-        if not isinstance(media, dict):
-            return ""
-        stream = media.get("stream")
-        if not isinstance(stream, dict):
-            return ""
-        # 优先选择兼顾清晰度与常见客户端支持的视频编码。
-        for codec in ("h265", "h264", "av1", "h266"):
-            variants = stream.get(codec) or []
-            if not isinstance(variants, list):
-                continue
-            for variant in variants:
-                if not isinstance(variant, dict):
-                    continue
-                if isinstance(variant.get("masterUrl"), str) and variant["masterUrl"]:
-                    return variant["masterUrl"]
-        return ""
-
-    @classmethod
-    def _select_original_image_url(
-        cls,
-        image: object,
-        fallback_fields: tuple[str, ...],
-    ) -> str:
-        """按优先级选择第一个安全的原图候选地址。
-
-        参数:
-            image: 可能包含异常值的外部图片元数据。
-            fallback_fields: 在文件标识和链路标识之后依次检查的 URL 字段。
-
-        返回:
-            由固定 CDN 和图片标识组成的 URL、首个安全回退 URL、所有候选均不安全时
-            可供本地拒绝的失败候选，或没有字符串候选时的空字符串。
-        """
-        if not isinstance(image, dict):
-            return ""
-        # 图片标识只作为路径并进行转义，网络位置部分固定为可信的小红书 CDN。
-        for field_name in ("fileId", "traceId"):
-            image_id = image.get(field_name)
-            if isinstance(image_id, str) and image_id:
-                path = f"/{quote(image_id.lstrip('/'), safe='/')}"
-                return urlunsplit(("https", "sns-img-qc.xhscdn.com", path, "", ""))
-
-        # 回退 URL 不改写网络位置部分；无效值保留为失败槽位，由统一下载流程生成提示。
-        failure_candidate = ""
-        for field_name in fallback_fields:
-            candidate = image.get(field_name)
-            if not isinstance(candidate, str) or not candidate:
-                continue
-            try:
-                parsed = urlsplit(candidate)
-                port = parsed.port
-            except ValueError:
-                failure_candidate = failure_candidate or candidate
-                continue
-            if (
-                parsed.scheme not in {"http", "https"}
-                or not parsed.hostname
-                or parsed.username is not None
-                or parsed.password is not None
-                or port not in {None, 80, 443}
-            ):
-                failure_candidate = failure_candidate or cls.INVALID_IMAGE_URL
-                continue
-            return cls._strip_image_transform(candidate)
-        return failure_candidate
-
-    @staticmethod
-    def _strip_image_transform(url: str) -> str:
-        """在不改写网络位置部分的情况下规范化安全图片 URL。
-
-        参数:
-            url: 路径末尾可能包含 ``!<transform>`` 转换后缀的图片 URL。
-
-        返回:
-            仅移除转换后缀的 URL；可由 httpx 在本地拒绝的异常值保持原样；协议、凭据、
-            主机或端口不安全时返回无效标记。
-        """
-        try:
-            parsed = urlsplit(url)
-        except ValueError:
-            return url
-        if (
-            parsed.scheme not in {"http", "https"}
-            or not parsed.hostname
-            or parsed.username is not None
-            or parsed.password is not None
-        ):
-            return RedBookParser.INVALID_IMAGE_URL
-        try:
-            port = parsed.port
-        except ValueError:
-            return url
-        if port not in {None, 80, 443}:
-            return RedBookParser.INVALID_IMAGE_URL
-        path = re.sub(r"![^/]*$", "", parsed.path)
-        return urlunsplit(parsed._replace(path=path))

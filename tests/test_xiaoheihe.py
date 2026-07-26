@@ -4,14 +4,21 @@ import re
 import httpx
 import pytest
 from astrbot_multi_parser.core.contracts import ParseContext
-from astrbot_multi_parser.platforms import xiaoheihe
-from astrbot_multi_parser.platforms.xiaoheihe import XiaoheiheParser
+from astrbot_multi_parser.platforms.xiaoheihe import XiaoheiheParser, signing
+from astrbot_multi_parser.platforms.xiaoheihe import game as xiaoheihe_game
+from astrbot_multi_parser.platforms.xiaoheihe import post as xiaoheihe_post
+from astrbot_multi_parser.platforms.xiaoheihe.game import (
+    build_game_desc,
+    extract_game_images,
+    format_yuan_from_coin,
+    parse_game_state,
+)
+from astrbot_multi_parser.platforms.xiaoheihe.post import parse_post_payload
+from astrbot_multi_parser.platforms.xiaoheihe.signing import RequestSigner
 
 
 def test_signing_algorithm_is_exposed_by_dedicated_module():
-    from astrbot_multi_parser.platforms.xiaoheihe.signing import RequestSigner
-
-    assert RequestSigner.CHAR_TABLE == XiaoheiheParser.CHAR_TABLE
+    assert RequestSigner.CHAR_TABLE == "AB45STUVWZEFGJ6CH01D237IXYPQRKLMN89"
 
 
 @pytest.mark.asyncio
@@ -67,10 +74,10 @@ def test_builds_optional_cookie_headers_for_game_requests():
 
 
 def test_signing_algorithm_matches_reference_golden_value(monkeypatch):
-    parser = XiaoheiheParser({})
+    signer = RequestSigner()
 
     assert (
-        parser._ov(
+        signer.ov(
             "/bbs/app/link/tree",
             1700000001,
             "ABCDEF0123456789ABCDEF0123456789",
@@ -78,13 +85,13 @@ def test_signing_algorithm_matches_reference_golden_value(monkeypatch):
         == "V2V1Z67"
     )
 
-    monkeypatch.setattr(xiaoheihe.time, "time", lambda: 1700000000)
-    monkeypatch.setattr(xiaoheihe.random, "random", lambda: 0.5)
-    result = parser._sign_path("/bbs/app/link/tree")
+    monkeypatch.setattr(signing.time, "time", lambda: 1700000000)
+    monkeypatch.setattr(signing.random, "random", lambda: 0.5)
+    result = signer.sign_path("/bbs/app/link/tree")
 
     assert result["_time"] == 1700000000
     assert re.fullmatch(r"[0-9A-F]{32}", str(result["nonce"]))
-    assert result["hkey"] == parser._ov(
+    assert result["hkey"] == signer.ov(
         "/bbs/app/link/tree", 1700000001, str(result["nonce"])
     )
 
@@ -119,7 +126,7 @@ def test_post_payload_keeps_text_and_images_in_source_order():
         }
     }
 
-    result = XiaoheiheParser({})._parse_post_payload(payload)
+    result = parse_post_payload(payload)
 
     assert result.title == "帖子标题"
     assert result.author == "盒友"
@@ -134,20 +141,48 @@ def test_post_payload_keeps_text_and_images_in_source_order():
     ]
 
 
+def test_video_post_keeps_description():
+    result = parse_post_payload(
+        {
+            "link": {
+                "description": "视频简介",
+                "has_video": True,
+                "video_url": "https://video.max-c.com/bbs/video.mp4",
+            }
+        }
+    )
+
+    assert result.description == "视频简介"
+
+
+def test_regular_post_removes_description():
+    result = parse_post_payload(
+        {
+            "link": {
+                "description": "帖子简介不应展示",
+                "has_video": False,
+                "video_url": "https://video.max-c.com/bbs/ignored.mp4",
+            }
+        }
+    )
+
+    assert result.description == ""
+    assert result.video_url == ""
+
+
 def test_post_payload_rejects_missing_link():
     with pytest.raises(ValueError, match="缺少 link 节点"):
-        XiaoheiheParser({})._parse_post_payload({"status": "ok"})
+        parse_post_payload({"status": "ok"})
 
 
 def install_mock_client(monkeypatch, handler):
     real_async_client = httpx.AsyncClient
-    monkeypatch.setattr(
-        xiaoheihe.parser.httpx,
-        "AsyncClient",
-        lambda **kwargs: real_async_client(
-            transport=httpx.MockTransport(handler), **kwargs
-        ),
-    )
+
+    def mocked_client(**kwargs):
+        return real_async_client(transport=httpx.MockTransport(handler), **kwargs)
+
+    monkeypatch.setattr(xiaoheihe_post.httpx, "AsyncClient", mocked_client)
+    monkeypatch.setattr(xiaoheihe_game.httpx, "AsyncClient", mocked_client)
 
 
 @pytest.mark.asyncio
@@ -282,9 +317,7 @@ GAME_HTML = """
 
 
 def test_nuxt_state_resolves_game_and_extracts_metadata():
-    parser = XiaoheiheParser({})
-
-    result = parser._parse_game_state(
+    result = parse_game_state(
         GAME_HTML,
         "730",
         "pc",
@@ -306,7 +339,7 @@ def test_nuxt_state_resolves_game_and_extracts_metadata():
 
 def test_nuxt_state_rejects_missing_game():
     with pytest.raises(ValueError, match="未找到游戏详情数据"):
-        XiaoheiheParser({})._parse_game_state(
+        parse_game_state(
             '<script id="__NUXT_DATA__">[{"not_game":1},{"name":"其他"}]</script>',
             "730",
             "pc",
@@ -315,7 +348,6 @@ def test_nuxt_state_rejects_missing_game():
 
 
 def test_game_helpers_deduplicate_images_and_format_prices():
-    parser = XiaoheiheParser({})
     game = {
         "appid": "730",
         "name": "游戏",
@@ -327,13 +359,13 @@ def test_game_helpers_deduplicate_images_and_format_prices():
         "heybox_price": {"cost_coin": 1250},
     }
 
-    assert parser._extract_game_images(game, "") == [
+    assert extract_game_images(game, "") == [
         "https://gameimg.max-c.com/a.jpg?x=1"
     ]
-    assert parser._format_yuan_from_coin(1250) == "1.25"
-    assert "价格：¥ 100" in parser._build_game_desc("", game, {})
-    assert "史低价格：¥ 80" in parser._build_game_desc("", game, {})
-    assert "当前价格：¥ 1.25" in parser._build_game_desc("", game, {})
+    assert format_yuan_from_coin(1250) == "1.25"
+    assert "价格：¥ 100" in build_game_desc("", game, {})
+    assert "史低价格：¥ 80" in build_game_desc("", game, {})
+    assert "当前价格：¥ 1.25" in build_game_desc("", game, {})
 
 
 @pytest.mark.asyncio

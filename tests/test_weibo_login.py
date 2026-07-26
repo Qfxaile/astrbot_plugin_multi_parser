@@ -2,7 +2,7 @@ import json
 
 import httpx
 import pytest
-from astrbot_multi_parser.core.authentication import (
+from astrbot_multi_parser.core.platform_login import (
     LoginPollState,
     PlatformLoginError,
 )

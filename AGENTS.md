@@ -43,10 +43,11 @@ uv run ruff check .
 | 需求 | 首选位置 |
 | --- | --- |
 | 插件注册、事件入口、依赖装配 | `main.py` |
-| 解析结果、上下文和登录公共契约 | `core/contracts.py`、`core/authentication.py` |
-| 安全 HTTP、Cookie、媒体和渲染 | `core/http.py`、`core/media.py`、`core/rendering.py` |
+| 解析结果、上下文、登录契约和登录 HTTP 基类 | `core/contracts.py`、`core/authentication.py` |
+| 安全 HTTP、可信 URL、Cookie、媒体和渲染 | `core/http.py`、`core/media.py`、`core/rendering.py` |
 | 解析器公共流程 | `core/parser.py` |
-| 配置读取和解析器注册 | `services/configuration.py` |
+| 平台清单及解析器、登录适配器对应关系 | `services/platform_registry.py` |
+| 配置读取和解析器创建 | `services/configuration.py` |
 | 登录编排、取消和凭据持久化 | `services/authentication.py` |
 | 消息上下文、文本处理和投递 | `services/message_context.py`、`services/text_processing.py`、`services/delivery.py` |
 | 视频大小探测与发送策略 | `services/video.py` |
@@ -76,6 +77,8 @@ uv run ruff check .
 - 优先复用现有契约、服务和平台模式，只修改完成任务必需的文件。
 - 解析器统一返回 `core/contracts.py` 中的契约，保持图文顺序和可读的失败信息。
 - 外部请求复用 `core/http.py` 的安全能力；新增网络路径时检查 URL、重定向、超时和响应大小边界。
+- 登录适配器复用 `HTTPPlatformLoginProvider`、`read_login_response_body` 和公共二维码渲染；可信域、Cookie 值及 CookieJar 白名单序列化复用 `core/http.py`。
+- 平台解析器或登录适配器的增删与顺序只在 `services/platform_registry.py` 声明，配置和认证服务从注册表装配，不维护平行清单。
 - 公开 API 和关键异步入口使用准确的中文文档字符串。注释解释边界、顺序、并发和降级原因，不逐行复述代码。
 - 配置变化同步 `_conf_schema.json`、`services/configuration.py`、README 和测试。
 - 不为单次需求增加兼容层、重复入口或无调用方的扩展点。

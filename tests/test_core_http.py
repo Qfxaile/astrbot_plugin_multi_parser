@@ -4,6 +4,9 @@ from astrbot_multi_parser.core.http import (
     CookieAccessError,
     build_cookie_access_error,
     build_cookies,
+    cookie_header_from_jar,
+    host_matches,
+    is_trusted_https_url,
     parse_cookie_header,
     raise_for_cookie_access,
     request_timeout,
@@ -28,6 +31,58 @@ def test_build_cookies_scopes_each_pair_to_all_domains():
         ("b", "2", ".a.test"),
         ("b", "2", ".b.test"),
     }
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://login.example.com/path", True),
+        ("https://example.com/path", True),
+        ("https://example.com.evil.test/path", False),
+        ("https://user@example.com/path", False),
+        ("https://example.com:444/path", False),
+        ("http://example.com/path", False),
+        ("https://[invalid/path", False),
+    ],
+)
+def test_is_trusted_https_url_enforces_origin_boundary(url, expected):
+    assert is_trusted_https_url(url, ("example.com",)) is expected
+
+
+def test_host_matches_requires_full_label_boundary():
+    assert host_matches("sub.example.com", ("example.com",)) is True
+    assert host_matches("notexample.com", ("example.com",)) is False
+
+
+def test_cookie_header_from_jar_filters_name_domain_and_unsafe_value():
+    cookies = httpx.Cookies()
+    cookies.set("session", "valid", domain=".example.com", path="/")
+    cookies.set("ignored", "value", domain=".example.com", path="/")
+    cookies.set("session", "other", domain=".evil.test", path="/")
+    cookies.set("csrf", "bad;value", domain=".example.com", path="/")
+
+    header = cookie_header_from_jar(
+        cookies.jar,
+        ("session", "csrf"),
+        domain_allowed=lambda domain: host_matches(domain, ("example.com",)),
+    )
+
+    assert header == "session=valid"
+
+
+def test_cookie_header_from_jar_requires_declared_credentials():
+    cookies = httpx.Cookies()
+    cookies.set("session", "valid", domain=".example.com", path="/")
+
+    assert (
+        cookie_header_from_jar(
+            cookies.jar,
+            ("session", "csrf"),
+            required_names=("session", "csrf"),
+            domain_allowed=lambda domain: host_matches(domain, ("example.com",)),
+        )
+        == ""
+    )
 
 
 def test_request_timeout_accepts_numeric_config():

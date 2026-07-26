@@ -4,21 +4,28 @@ import json
 import re
 import secrets
 from dataclasses import dataclass
-from io import BytesIO
 from urllib.parse import urlsplit
 
 import httpx
-import qrcode
 
-from ...core.authentication import (
+from ...core.http import (
+    cookie_config_value,
+    cookie_header_from_jar,
+    host_matches,
+    is_safe_cookie_value,
+    is_trusted_https_url,
+    parse_cookie_header,
+)
+from ...core.platform_login import (
+    HTTPPlatformLoginProvider,
     LoginPollResult,
     LoginPollState,
     PlatformLoginError,
-    PlatformLoginProvider,
     PlatformUser,
     QRLoginChallenge,
+    read_login_response_body,
+    render_login_qr_png,
 )
-from ...core.http import cookie_config_value, parse_cookie_header, request_timeout
 from .signing import RedBookRequestSigner, XhshowRequestSigner
 
 
@@ -30,7 +37,7 @@ class _QRSession:
     code: str
 
 
-class RedBookLoginProvider(PlatformLoginProvider):
+class RedBookLoginProvider(HTTPPlatformLoginProvider):
     """通过小红书官方 Web 二维码接口建立管理员登录态。"""
 
     display_name = "小红书"
@@ -64,9 +71,9 @@ class RedBookLoginProvider(PlatformLoginProvider):
         client: httpx.AsyncClient | None = None,
         signer: RedBookRequestSigner | None = None,
     ) -> None:
-        self._owns_client = client is None
-        self._client = client or httpx.AsyncClient(
-            timeout=request_timeout(config),
+        super().__init__(
+            config,
+            client=client,
             follow_redirects=False,
             headers={
                 "User-Agent": self.USER_AGENT,
@@ -120,7 +127,7 @@ class RedBookLoginProvider(PlatformLoginProvider):
         expires_in = self._expires_in_seconds(data)
         return QRLoginChallenge(
             session_key=session_key,
-            image_bytes=self._render_qr_code(login_url),
+            image_bytes=render_login_qr_png(login_url),
             expires_in_seconds=expires_in,
         )
 
@@ -222,8 +229,7 @@ class RedBookLoginProvider(PlatformLoginProvider):
     async def close(self) -> None:
         """清除临时二维码会话并关闭由适配器创建的 HTTP 客户端。"""
         self._sessions.clear()
-        if self._owns_client:
-            await self._client.aclose()
+        await super().close()
 
     async def _ensure_a1_cookie(self) -> str:
         a1_value = self._a1_cookie()
@@ -328,12 +334,12 @@ class RedBookLoginProvider(PlatformLoginProvider):
             if response.status_code in self.RISK_HTTP_STATUS_CODES:
                 raise self._verification_error()
             response.raise_for_status()
-            content = bytearray()
-            async for chunk in response.aiter_bytes():
-                if len(content) + len(chunk) > self.MAX_RESPONSE_BYTES:
-                    raise PlatformLoginError("小红书登录服务响应超过安全限制。")
-                content.extend(chunk)
-            return bytes(content), response.headers.get("Content-Type", "").lower()
+            content = await read_login_response_body(
+                response,
+                limit=self.MAX_RESPONSE_BYTES,
+                platform=self.display_name,
+            )
+            return content, response.headers.get("Content-Type", "").lower()
 
     def _a1_cookie(self) -> str:
         for cookie in self._client.cookies.jar:
@@ -348,18 +354,12 @@ class RedBookLoginProvider(PlatformLoginProvider):
 
     def _cookie_header(self) -> str:
         """返回后续重新登录所需的 ``a1`` 与账号 ``web_session``。"""
-        values: dict[str, str] = {}
-        for cookie in self._client.cookies.jar:
-            domain = str(cookie.domain or "").lstrip(".").lower()
-            if (
-                cookie.name in self.COOKIE_NAMES
-                and self._is_trusted_cookie_domain(domain)
-                and self._valid_cookie_value(cookie.value)
-            ):
-                values[cookie.name] = str(cookie.value)
-        if any(name not in values for name in self.COOKIE_NAMES):
-            return ""
-        return "; ".join(f"{name}={values[name]}" for name in self.COOKIE_NAMES)
+        return cookie_header_from_jar(
+            self._client.cookies.jar,
+            self.COOKIE_NAMES,
+            domain_allowed=self._is_trusted_cookie_domain,
+            required_names=self.COOKIE_NAMES,
+        )
 
     @classmethod
     def _validate_success_url(cls, data: dict) -> None:
@@ -430,35 +430,15 @@ class RedBookLoginProvider(PlatformLoginProvider):
 
     @classmethod
     def _is_trusted_https_url(cls, url: str) -> bool:
-        try:
-            parsed = urlsplit(url)
-            port = parsed.port
-        except ValueError:
-            return False
-        hostname = (parsed.hostname or "").lower()
-        return (
-            parsed.scheme == "https"
-            and parsed.username is None
-            and parsed.password is None
-            and port in {None, 443}
-            and cls._is_trusted_cookie_domain(hostname)
-        )
+        return is_trusted_https_url(url, cls.LOGIN_HOST_SUFFIXES)
 
     @classmethod
     def _is_trusted_cookie_domain(cls, domain: str) -> bool:
-        return any(
-            domain == suffix or domain.endswith(f".{suffix}")
-            for suffix in cls.LOGIN_HOST_SUFFIXES
-        )
+        return host_matches(domain, cls.LOGIN_HOST_SUFFIXES)
 
     @staticmethod
     def _valid_cookie_value(value: object) -> bool:
-        text = str(value or "")
-        return (
-            bool(text)
-            and len(text) <= 4096
-            and not any(character in text for character in ("\r", "\n", ";"))
-        )
+        return is_safe_cookie_value(value)
 
     @classmethod
     def _expires_in_seconds(cls, data: dict) -> int:
@@ -468,20 +448,6 @@ class RedBookLoginProvider(PlatformLoginProvider):
         except (TypeError, ValueError):
             return cls.QR_EXPIRES_IN_SECONDS
         return min(max(value, 15), cls.QR_EXPIRES_IN_SECONDS)
-
-    @staticmethod
-    def _render_qr_code(value: str) -> bytes:
-        qr_code = qrcode.QRCode(
-            error_correction=qrcode.constants.ERROR_CORRECT_M,
-            box_size=8,
-            border=4,
-        )
-        qr_code.add_data(value)
-        qr_code.make(fit=True)
-        image = qr_code.make_image(fill_color="black", back_color="white")
-        output = BytesIO()
-        image.save(output, format="PNG")
-        return output.getvalue()
 
     @staticmethod
     def _verification_error() -> PlatformLoginError:

@@ -7,9 +7,10 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
+from httpx import Cookies
 
 from ...core.contracts import ParseResult
-from ...core.http import CookieAccessError
+from ...core.http import CookieAccessError, cookie_config_value, parse_cookie_header
 
 YUANBAO_PARSE_URL = "https://yuanbao.tencent.com/api/weixin/get_parse_result"
 CHANNELS_FEED_INFO_URL = (
@@ -177,14 +178,12 @@ def parse_channels_payload(payload: Mapping[str, Any]) -> ParseResult:
     video_url = _validate_video_url(video_url)
 
     cover_url = str(feed_info.get("coverUrl") or "").strip()
-    stats = _format_stats(feed_info)
     return ParseResult(
         platform="wechat",
         title=str(feed_info.get("description") or "微信视频号"),
         author=str(author_info.get("nickname") or "视频号用户"),
         cover_urls=[cover_url] if cover_url else [],
         video_url=video_url,
-        extra_lines=[stats] if stats else [],
     )
 
 
@@ -224,12 +223,32 @@ def _validate_video_url(url: str) -> str:
     return url
 
 
-def _format_stats(feed_info: Mapping[str, Any]) -> str:
-    pairs = (
-        ("赞", feed_info.get("likeCountFmt")),
-        ("收藏", feed_info.get("favCountFmt")),
-        ("评论", feed_info.get("commentCountFmt")),
-        ("转发", feed_info.get("forwardCountFmt")),
-    )
-    tokens = [f"{label}: {value}" for label, value in pairs if value]
-    return " · ".join(tokens)
+class WeChatChannelsContent:
+    """请求并解析微信视频号分享内容。"""
+
+    async def _parse_channels(self, url: str) -> ParseResult:
+        cookie_value = cookie_config_value(self.config, self.cookie_config_key)
+        configured_values = dict(parse_cookie_header(cookie_value))
+        user_id = configured_values.pop("yb_user_id", "")
+        token = configured_values.pop("yb_token", "")
+        yuanbao_credentials = (user_id, token) if user_id and token else None
+        cookies = Cookies()
+        for name, value in configured_values.items():
+            cookies.set(name, value, domain="yuanbao.tencent.com", path="/")
+        async with httpx.AsyncClient(
+            timeout=self.request_timeout,
+            cookies=cookies,
+        ) as client:
+            result = await resolve_channels_share(
+                client,
+                url,
+                credentials_configured=(
+                    yuanbao_credentials is not None or bool(configured_values)
+                ),
+                yuanbao_credentials=yuanbao_credentials,
+            )
+            return await self.materialize_images(
+                result,
+                client,
+                "https://channels.weixin.qq.com/",
+            )

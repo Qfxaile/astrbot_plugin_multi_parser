@@ -1,6 +1,15 @@
 """提供 HTTP 配置、Cookie 构造和鉴权失败识别能力。"""
 
-from collections.abc import Collection, Mapping, MutableMapping, Sequence
+from collections.abc import (
+    Callable,
+    Collection,
+    Iterable,
+    Mapping,
+    MutableMapping,
+    Sequence,
+)
+from http.cookiejar import Cookie
+from urllib.parse import urlsplit
 
 from httpx import Cookies, Response
 
@@ -24,6 +33,73 @@ class CookieAccessError(ValueError):
                 "请在插件配置中填写后重试。"
             )
         super().__init__(message)
+
+
+def host_matches(hostname: str, suffixes: Collection[str]) -> bool:
+    """判断主机是否等于可信域或位于其点分隔子域下。"""
+    normalized = hostname.lstrip(".").lower()
+    return bool(normalized) and any(
+        normalized == suffix or normalized.endswith(f".{suffix}")
+        for raw_suffix in suffixes
+        if (suffix := str(raw_suffix).lstrip(".").lower())
+    )
+
+
+def is_trusted_https_url(
+    url: str,
+    host_suffixes: Collection[str],
+    *,
+    allow_fragment: bool = True,
+) -> bool:
+    """校验 URL 是否为指定可信域下不含凭据的标准 HTTPS 地址。"""
+    try:
+        parsed = urlsplit(url)
+        port = parsed.port
+    except ValueError:
+        return False
+    return (
+        parsed.scheme == "https"
+        and parsed.username is None
+        and parsed.password is None
+        and port in {None, 443}
+        and (allow_fragment or not parsed.fragment)
+        and host_matches(parsed.hostname or "", host_suffixes)
+    )
+
+
+def is_safe_cookie_value(value: object, *, max_length: int = 4096) -> bool:
+    """判断 Cookie 值能否安全拼入请求头。"""
+    text = str(value or "")
+    return (
+        bool(text)
+        and len(text) <= max_length
+        and not any(character in text for character in ";\r\n")
+        and all(character.isprintable() for character in text)
+    )
+
+
+def cookie_header_from_jar(
+    jar: Iterable[Cookie],
+    names: Sequence[str],
+    *,
+    domain_allowed: Callable[[str], bool],
+    required_names: Collection[str] = (),
+    value_allowed: Callable[[object], bool] = is_safe_cookie_value,
+) -> str:
+    """从 CookieJar 提取名称和域均受限的稳定请求头。"""
+    allowed_names = set(names)
+    values: dict[str, str] = {}
+    for cookie in jar:
+        domain = str(cookie.domain or "").lstrip(".").lower()
+        if (
+            cookie.name in allowed_names
+            and domain_allowed(domain)
+            and value_allowed(cookie.value)
+        ):
+            values[cookie.name] = str(cookie.value)
+    if any(name not in values for name in required_names):
+        return ""
+    return "; ".join(f"{name}={values[name]}" for name in names if name in values)
 
 
 def parse_cookie_header(value: object) -> list[tuple[str, str]]:

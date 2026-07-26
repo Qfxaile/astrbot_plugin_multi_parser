@@ -5,7 +5,10 @@ import pytest
 from astrbot_multi_parser.core.contracts import ParseContext
 from astrbot_multi_parser.core.http import CookieAccessError
 from astrbot_multi_parser.platforms.weibo import WeiboParser
+from astrbot_multi_parser.platforms.weibo import article as weibo_article
 from astrbot_multi_parser.platforms.weibo import parser as weibo
+from astrbot_multi_parser.platforms.weibo import post as weibo_post
+from astrbot_multi_parser.platforms.weibo import video as weibo_video
 
 
 def test_weibo_cookie_api_forbidden_reports_stale_cookie_without_leak():
@@ -136,16 +139,13 @@ def test_status_payload_rejects_missing_user_data():
 
 def install_mock_client(monkeypatch, handler):
     real_async_client = httpx.AsyncClient
-    monkeypatch.setattr(
-        weibo,
-        "httpx",
-        SimpleNamespace(
-            AsyncClient=lambda **kwargs: real_async_client(
-                transport=httpx.MockTransport(handler), **kwargs
-            )
-        ),
-        raising=False,
+    mocked_httpx = SimpleNamespace(
+        AsyncClient=lambda **kwargs: real_async_client(
+            transport=httpx.MockTransport(handler), **kwargs
+        )
     )
+    for module in (weibo, weibo_article, weibo_post, weibo_video):
+        monkeypatch.setattr(module, "httpx", mocked_httpx, raising=False)
 
 
 @pytest.mark.asyncio

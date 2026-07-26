@@ -1,8 +1,15 @@
 """定义平台登录流程使用的公共契约。"""
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
+from io import BytesIO
+
+import httpx
+import qrcode
+
+from .http import request_timeout
 
 
 class PlatformLoginError(ValueError):
@@ -66,3 +73,55 @@ class PlatformLoginProvider(ABC):
     @abstractmethod
     async def close(self) -> None:
         """释放登录期间持有的网络资源。"""
+
+
+class HTTPPlatformLoginProvider(PlatformLoginProvider):
+    """管理登录适配器使用的 HTTP 客户端所有权。"""
+
+    def __init__(
+        self,
+        config: Mapping[str, object],
+        *,
+        client: httpx.AsyncClient | None = None,
+        **client_options,
+    ) -> None:
+        self._owns_client = client is None
+        self._client = client or httpx.AsyncClient(
+            timeout=request_timeout(config),
+            **client_options,
+        )
+
+    async def close(self) -> None:
+        """关闭由登录适配器创建的 HTTP 客户端。"""
+        if self._owns_client:
+            await self._client.aclose()
+
+
+async def read_login_response_body(
+    response: httpx.Response,
+    *,
+    limit: int,
+    platform: str,
+) -> bytes:
+    """限长读取登录响应，且不在异常中保留响应正文。"""
+    content = bytearray()
+    async for chunk in response.aiter_bytes():
+        if len(content) + len(chunk) > limit:
+            raise PlatformLoginError(f"{platform}登录服务响应超过安全限制。")
+        content.extend(chunk)
+    return bytes(content)
+
+
+def render_login_qr_png(value: str) -> bytes:
+    """在内存中将登录地址渲染为 PNG 二维码。"""
+    qr_code = qrcode.QRCode(
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=8,
+        border=4,
+    )
+    qr_code.add_data(value)
+    qr_code.make(fit=True)
+    image = qr_code.make_image(fill_color="black", back_color="white")
+    output = BytesIO()
+    image.save(output, format="PNG")
+    return output.getvalue()

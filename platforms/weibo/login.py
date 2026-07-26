@@ -10,18 +10,19 @@ from urllib.parse import parse_qsl, urljoin, urlsplit
 
 import httpx
 
-from ...core.authentication import (
+from ...core.http import cookie_header_from_jar, host_matches, is_trusted_https_url
+from ...core.platform_login import (
+    HTTPPlatformLoginProvider,
     LoginPollResult,
     LoginPollState,
     PlatformLoginError,
-    PlatformLoginProvider,
     PlatformUser,
     QRLoginChallenge,
+    read_login_response_body,
 )
-from ...core.http import request_timeout
 
 
-class WeiboLoginProvider(PlatformLoginProvider):
+class WeiboLoginProvider(HTTPPlatformLoginProvider):
     """通过微博官方 Web 二维码接口建立管理员登录态。"""
 
     display_name = "微博"
@@ -56,9 +57,9 @@ class WeiboLoginProvider(PlatformLoginProvider):
         *,
         client: httpx.AsyncClient | None = None,
     ) -> None:
-        self._owns_client = client is None
-        self._client = client or httpx.AsyncClient(
-            timeout=request_timeout(config),
+        super().__init__(
+            config,
+            client=client,
             follow_redirects=False,
             headers={
                 "User-Agent": self.USER_AGENT,
@@ -172,11 +173,6 @@ class WeiboLoginProvider(PlatformLoginProvider):
             return None
         return PlatformUser(user_id=user_id, display_name=display_name)
 
-    async def close(self) -> None:
-        """关闭由适配器创建的 HTTP 客户端。"""
-        if self._owns_client:
-            await self._client.aclose()
-
     async def _complete_sso_login(self, alt: str) -> None:
         callback = self._callback_name()
         payload = await self._get_jsonp_payload(
@@ -229,8 +225,10 @@ class WeiboLoginProvider(PlatformLoginProvider):
                         location = response.headers.get("Location", "")
                     else:
                         response.raise_for_status()
-                        content = await self._read_response_body(
-                            response, self.MAX_RESPONSE_BYTES
+                        content = await read_login_response_body(
+                            response,
+                            limit=self.MAX_RESPONSE_BYTES,
+                            platform=self.display_name,
                         )
                         if self._contains_verification_markers(content):
                             raise self._verification_error()
@@ -299,82 +297,45 @@ class WeiboLoginProvider(PlatformLoginProvider):
                 if response.status_code in self._REDIRECT_STATUS_CODES:
                     raise PlatformLoginError("微博登录服务返回了不安全的重定向。")
                 response.raise_for_status()
-                content = await self._read_response_body(response, limit)
+                content = await read_login_response_body(
+                    response,
+                    limit=limit,
+                    platform=self.display_name,
+                )
                 return content, response.headers.get("Content-Type", "").lower()
         except PlatformLoginError:
             raise
         except httpx.HTTPError as exc:
             raise PlatformLoginError("微博登录服务请求失败，请稍后重试。") from exc
 
-    @staticmethod
-    async def _read_response_body(
-        response: httpx.Response,
-        limit: int,
-    ) -> bytes:
-        content = bytearray()
-        async for chunk in response.aiter_bytes():
-            if len(content) + len(chunk) > limit:
-                raise PlatformLoginError("微博登录服务响应超过安全限制。")
-            content.extend(chunk)
-        return bytes(content)
-
     def _cookie_header(self) -> str:
-        cookies: dict[str, str] = {}
-        for cookie in self._client.cookies.jar:
-            domain = str(cookie.domain or "").lstrip(".").lower()
-            if not self._is_trusted_cookie_domain(domain):
-                continue
-            if cookie.name in self.COOKIE_NAMES and cookie.value:
-                cookies[cookie.name] = cookie.value
-        return "; ".join(
-            f"{name}={cookies[name]}" for name in self.COOKIE_NAMES if name in cookies
+        return cookie_header_from_jar(
+            self._client.cookies.jar,
+            self.COOKIE_NAMES,
+            domain_allowed=self._is_trusted_cookie_domain,
         )
 
     @classmethod
     def _is_trusted_cookie_domain(cls, domain: str) -> bool:
-        return any(
-            domain == suffix or domain.endswith(f".{suffix}")
-            for suffix in cls.SUCCESS_HOST_SUFFIXES
-        )
+        return host_matches(domain, cls.SUCCESS_HOST_SUFFIXES)
 
     @classmethod
     def _is_trusted_success_url(cls, url: str) -> bool:
-        if cls._is_trusted_https_url(url, cls.SUCCESS_HOST_SUFFIXES):
+        if is_trusted_https_url(
+            url,
+            cls.SUCCESS_HOST_SUFFIXES,
+            allow_fragment=False,
+        ):
             return True
-        try:
-            parsed = urlsplit(url)
-            port = parsed.port
-        except ValueError:
-            return False
-        return (
-            parsed.scheme == "https"
-            and parsed.username is None
-            and parsed.password is None
-            and port in {None, 443}
-            and not parsed.fragment
-            and (parsed.hostname or "").lower()
-            in {"login.sina.com.cn", "passport.sina.com.cn"}
+        return is_trusted_https_url(
+            url,
+            ("login.sina.com.cn", "passport.sina.com.cn"),
+            allow_fragment=False,
         )
 
     @staticmethod
     def _is_trusted_https_url(url: str, host_suffixes: tuple[str, ...]) -> bool:
-        try:
-            parsed = urlsplit(url)
-            port = parsed.port
-        except ValueError:
-            return False
-        hostname = (parsed.hostname or "").lower()
-        return (
-            parsed.scheme == "https"
-            and parsed.username is None
-            and parsed.password is None
-            and port in {None, 443}
-            and not parsed.fragment
-            and any(
-                hostname == suffix or hostname.endswith(f".{suffix}")
-                for suffix in host_suffixes
-            )
-        )
+        return is_trusted_https_url(url, host_suffixes, allow_fragment=False)
 
     @classmethod
     def _parse_jsonp(cls, content: bytes, callback: str) -> object:

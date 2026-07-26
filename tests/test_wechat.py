@@ -6,23 +6,22 @@ import pytest
 from astrbot_multi_parser.core.contracts import ParseContext
 from astrbot_multi_parser.core.http import CookieAccessError
 from astrbot_multi_parser.platforms.wechat import WeChatParser
-from astrbot_multi_parser.platforms.wechat import parser as wechat_parser
+from astrbot_multi_parser.platforms.wechat import article as wechat_article
+from astrbot_multi_parser.platforms.wechat import channels as wechat_channels
 from astrbot_multi_parser.platforms.wechat.article import parse_article_html
 from astrbot_multi_parser.platforms.wechat.channels import parse_channels_payload
 
 
 def install_mock_client(monkeypatch, handler):
     real_async_client = httpx.AsyncClient
-    monkeypatch.setattr(
-        wechat_parser,
-        "httpx",
-        SimpleNamespace(
-            AsyncClient=lambda **kwargs: real_async_client(
-                transport=httpx.MockTransport(handler),
-                **kwargs,
-            )
-        ),
+    mocked_httpx = SimpleNamespace(
+        AsyncClient=lambda **kwargs: real_async_client(
+            transport=httpx.MockTransport(handler),
+            **kwargs,
+        )
     )
+    for module in (wechat_article, wechat_channels):
+        monkeypatch.setattr(module, "httpx", mocked_httpx)
 
 
 @pytest.mark.asyncio
@@ -218,7 +217,7 @@ async def test_short_channels_url_uses_yuanbao_headers_without_leaking_them(
     assert result.title == "视频号标题"
     assert result.author == "视频号作者"
     assert result.video_url == "https://finder.video.qq.com/video.mp4"
-    assert result.extra_lines == ["赞: 9257"]
+    assert result.extra_lines == []
 
 
 @pytest.mark.asyncio

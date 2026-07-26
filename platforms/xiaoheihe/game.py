@@ -2,8 +2,10 @@ import html
 import json
 import re
 
+import httpx
+
 from ...core.contracts import ParseResult
-from .post import (
+from .common import (
     clean_text,
     image_dedup_key,
     normalize_image_url,
@@ -427,3 +429,64 @@ def extract_game_videos(
 
 def is_hls_url(url: str) -> bool:
     return bool(re.search(r"\.m3u8(?:$|[?#])", url, re.IGNORECASE))
+
+
+class XiaoheiheGameContent:
+    """请求并解析小黑盒游戏详情。"""
+
+    async def _parse_game_by_appid(self, appid: str, game_type: str) -> ParseResult:
+        appid = appid.strip()
+        if not appid:
+            raise ValueError("无效的小黑盒游戏 appid")
+        cookie_headers = self._request_cookie_headers()
+        web_url = canonical_game_web_url(appid, game_type)
+        async with httpx.AsyncClient(
+            timeout=self._timeout(),
+            follow_redirects=False,
+            headers=self.HEADERS,
+        ) as client:
+            detail_response = await client.get(
+                "https://api.xiaoheihe.cn/game/get_game_detail/",
+                params={
+                    "app": "heybox",
+                    "os_type": "web",
+                    "x_app": "heybox_website",
+                    "x_client_type": "web",
+                    "x_os_type": "Windows",
+                    "x_client_version": "",
+                    "client_type": "web",
+                    "web_version": "3.0",
+                    "version": "999.0.4",
+                    "steam_appid": appid,
+                    **self._sign_path("/game/get_game_detail/"),
+                },
+                headers=cookie_headers,
+            )
+            self.raise_for_response_status(detail_response)
+            detail_payload = detail_response.json()
+            if (
+                not isinstance(detail_payload, dict)
+                or detail_payload.get("status") != "ok"
+                or not isinstance(detail_payload.get("result"), dict)
+            ):
+                self._raise_for_payload_error(detail_payload)
+                raise ValueError("小黑盒 get_game_detail 请求失败")
+            game = detail_payload["result"]
+            steam_appid = pick_steam_appid(game, appid)
+            intro: dict = {}
+            if steam_appid is not None:
+                intro_response = await client.get(
+                    "https://api.xiaoheihe.cn/game/game_introduction/",
+                    params={"steam_appid": steam_appid, "return_json": 1},
+                    headers=cookie_headers,
+                )
+                intro_response.raise_for_status()
+                intro_payload = intro_response.json()
+                if (
+                    isinstance(intro_payload, dict)
+                    and intro_payload.get("status") == "ok"
+                    and isinstance(intro_payload.get("result"), dict)
+                ):
+                    intro = intro_payload["result"]
+            result = build_game_result("", game, appid, game_type, intro)
+            return await self.materialize_images(result, client, web_url)

@@ -1,40 +1,23 @@
-import re
+"""识别小黑盒链接并分派到帖子或游戏内容解析器。"""
 
-import httpx
+import re
 
 from ...core.contracts import ParseContext, ParseResult
 from ...core.http import cookie_config_value, parse_cookie_header
 from ...core.parser import BaseParser
-from .game import (
-    build_game_desc,
-    build_game_result,
-    canonical_game_web_url,
-    extract_game_images,
-    extract_game_videos,
-    format_yuan_from_coin,
-    parse_game_state,
-    pick_steam_appid,
-)
-from .post import (
-    clean_text,
-    image_dedup_key,
-    normalize_image_url,
-    normalize_media_url,
-    parse_post_contents,
-    parse_post_payload,
-)
+from .game import XiaoheiheGameContent
+from .post import XiaoheihePostContent
 from .signing import RequestSigner
 
 
-class XiaoheiheParser(BaseParser):
-    """负责小黑盒 URL 路由、会话准备与网络请求。"""
+class XiaoheiheParser(XiaoheihePostContent, XiaoheiheGameContent, BaseParser):
+    """负责小黑盒 URL 路由、凭据白名单与请求签名。"""
 
     name = "xiaoheihe"
     display_name = "小黑盒"
     cookie_config_key = "xiaoheihe_cookies"
     image_host_suffixes = ("max-c.com", "xiaoheihe.cn")
     AUTH_COOKIE_NAMES = ("pkey", "x_xhh_tokenid")
-    CHAR_TABLE = RequestSigner.CHAR_TABLE
     BBS_WEB_PATTERN = (
         r"https?://(?:www\.)?xiaoheihe\.cn/app/bbs/link/"
         r"(?P<link_id>[0-9a-z]+)"
@@ -120,104 +103,6 @@ class XiaoheiheParser(BaseParser):
         )
         return {"Cookie": cookie_header} if cookie_header else {}
 
-    async def _parse_post_by_id(self, link_id: str) -> ParseResult:
-        params = {
-            "app": "heybox",
-            "os_type": "web",
-            "x_app": "heybox_website",
-            "x_client_type": "web",
-            "x_os_type": "Windows",
-            "x_client_version": "",
-            "client_type": "web",
-            "web_version": "3.0",
-            "version": "999.0.4",
-            "link_id": link_id,
-            "is_first": "1",
-            "page": "1",
-            "index": "1",
-            "limit": "20",
-            "owner_only": "0",
-            **self._sign_path("/bbs/app/link/tree"),
-        }
-        referer = f"https://www.xiaoheihe.cn/app/bbs/link/{link_id}"
-        async with httpx.AsyncClient(
-            timeout=self._timeout(),
-            follow_redirects=False,
-            headers=self.HEADERS,
-        ) as client:
-            response = await client.get(
-                "https://api.xiaoheihe.cn/bbs/app/link/tree",
-                params=params,
-                headers=self._request_cookie_headers(),
-            )
-            self.raise_for_response_status(response)
-            payload = response.json()
-            if not isinstance(payload, dict) or payload.get("status") != "ok":
-                self._raise_for_payload_error(payload)
-                raise ValueError("小黑盒 link/tree 请求失败")
-            result_root = payload.get("result")
-            if not isinstance(result_root, dict):
-                raise ValueError("小黑盒 link/tree 结果为空")
-            result = parse_post_payload(result_root)
-            return await self.materialize_images(result, client, referer)
-
-    async def _parse_game_by_appid(self, appid: str, game_type: str) -> ParseResult:
-        appid = appid.strip()
-        if not appid:
-            raise ValueError("无效的小黑盒游戏 appid")
-        cookie_headers = self._request_cookie_headers()
-        web_url = canonical_game_web_url(appid, game_type)
-        async with httpx.AsyncClient(
-            timeout=self._timeout(),
-            follow_redirects=False,
-            headers=self.HEADERS,
-        ) as client:
-            detail_response = await client.get(
-                "https://api.xiaoheihe.cn/game/get_game_detail/",
-                params={
-                    "app": "heybox",
-                    "os_type": "web",
-                    "x_app": "heybox_website",
-                    "x_client_type": "web",
-                    "x_os_type": "Windows",
-                    "x_client_version": "",
-                    "client_type": "web",
-                    "web_version": "3.0",
-                    "version": "999.0.4",
-                    "steam_appid": appid,
-                    **self._sign_path("/game/get_game_detail/"),
-                },
-                headers=cookie_headers,
-            )
-            self.raise_for_response_status(detail_response)
-            detail_payload = detail_response.json()
-            if (
-                not isinstance(detail_payload, dict)
-                or detail_payload.get("status") != "ok"
-                or not isinstance(detail_payload.get("result"), dict)
-            ):
-                self._raise_for_payload_error(detail_payload)
-                raise ValueError("小黑盒 get_game_detail 请求失败")
-            game = detail_payload["result"]
-            steam_appid = pick_steam_appid(game, appid)
-            intro: dict = {}
-            if steam_appid is not None:
-                intro_response = await client.get(
-                    "https://api.xiaoheihe.cn/game/game_introduction/",
-                    params={"steam_appid": steam_appid, "return_json": 1},
-                    headers=cookie_headers,
-                )
-                intro_response.raise_for_status()
-                intro_payload = intro_response.json()
-                if (
-                    isinstance(intro_payload, dict)
-                    and intro_payload.get("status") == "ok"
-                    and isinstance(intro_payload.get("result"), dict)
-                ):
-                    intro = intro_payload["result"]
-            result = build_game_result("", game, appid, game_type, intro)
-            return await self.materialize_images(result, client, web_url)
-
     def _sign_path(self, path: str) -> dict[str, str | int]:
         return self._signer.sign_path(path)
 
@@ -227,9 +112,7 @@ class XiaoheiheParser(BaseParser):
             return
         status = str(payload.get("status") or "").lower()
         if status in {"show_captcha", "captcha"}:
-            raise ValueError(
-                "小黑盒请求触发了人机验证，请稍后重试或配置有效 Cookies。"
-            )
+            raise ValueError("小黑盒请求触发了人机验证，请稍后重试或配置有效 Cookies。")
         message = str(payload.get("msg") or payload.get("message") or "").lower()
         markers = (
             "denied",
@@ -242,52 +125,3 @@ class XiaoheiheParser(BaseParser):
         )
         if any(marker in message for marker in markers):
             raise self.cookie_access_error()
-
-    def _ov(self, path: str, timestamp: int, nonce: str) -> str:
-        return self._signer.ov(path, timestamp, nonce)
-
-    @classmethod
-    def _parse_post_payload(cls, payload: object) -> ParseResult:
-        return parse_post_payload(payload)
-
-    @classmethod
-    def _parse_post_contents(cls, raw_text: object):
-        return parse_post_contents(raw_text)
-
-    @staticmethod
-    def _clean_text(text: str) -> str:
-        return clean_text(text)
-
-    @staticmethod
-    def _normalize_media_url(value: object) -> str:
-        return normalize_media_url(value)
-
-    @classmethod
-    def _normalize_image_url(cls, value: object) -> str:
-        return normalize_image_url(value)
-
-    @staticmethod
-    def _image_dedup_key(url: str) -> str:
-        return image_dedup_key(url)
-
-    @staticmethod
-    def _canonical_game_web_url(appid: str, game_type: str) -> str:
-        return canonical_game_web_url(appid, game_type)
-
-    def _parse_game_state(
-        self, html_text: str, appid: str, game_type: str, intro: dict
-    ) -> ParseResult:
-        return parse_game_state(html_text, appid, game_type, intro)
-
-    def _build_game_desc(self, html_text: str, game: dict, intro: dict) -> str:
-        return build_game_desc(html_text, game, intro)
-
-    def _extract_game_images(self, game: dict, html_text: str) -> list[str]:
-        return extract_game_images(game, html_text)
-
-    def _extract_game_videos(self, game: dict, html_text: str) -> list[str]:
-        return extract_game_videos(game, html_text)
-
-    @staticmethod
-    def _format_yuan_from_coin(coin) -> str:
-        return format_yuan_from_coin(coin)

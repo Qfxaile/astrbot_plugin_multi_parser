@@ -1,10 +1,10 @@
-import html
 import json
-import re
 from html.parser import HTMLParser
-from urllib.parse import urlsplit, urlunsplit
+
+import httpx
 
 from ...core.contracts import OrderedContent, ParseResult
+from .common import clean_text, normalize_image_url, normalize_media_url
 
 
 class PostHTMLParser(HTMLParser):
@@ -74,11 +74,12 @@ def parse_post_payload(payload: object) -> ParseResult:
     video_url = normalize_media_url(link.get("video_url"))
     if not link.get("has_video"):
         video_url = ""
+    description = clean_text(str(link.get("description") or "")) if video_url else ""
     return ParseResult(
         platform="xiaoheihe",
         title=clean_text(str(link.get("title") or "")) or "小黑盒帖子",
         author=author,
-        description=clean_text(str(link.get("description") or "")),
+        description=description,
         video_url=video_url,
         ordered_contents=contents,
         extra_lines=[] if contents or video_url else ["未找到可发送的媒体。"],
@@ -127,37 +128,46 @@ def append_image(
         contents.append(OrderedContent(kind="image", value=image_url))
 
 
-def clean_text(text: str) -> str:
-    value = html.unescape(text.replace("\xa0", " "))
-    value = re.sub(r"[ \t\r\f\v]+", " ", value)
-    value = re.sub(r"\n{3,}", "\n\n", value)
-    return value.strip()
+class XiaoheihePostContent:
+    """请求并解析小黑盒社区帖子。"""
 
-
-def normalize_media_url(value: object) -> str:
-    if not isinstance(value, str) or not value:
-        return ""
-    normalized = html.unescape(value).strip()
-    if normalized.startswith("//"):
-        normalized = f"https:{normalized}"
-    return normalized if normalized.startswith(("http://", "https://")) else ""
-
-
-def normalize_image_url(value: object) -> str:
-    normalized = normalize_media_url(value)
-    if not normalized:
-        return ""
-    try:
-        parsed = urlsplit(normalized)
-    except ValueError:
-        return normalized
-    hostname = (parsed.hostname or "").lower()
-    if hostname == "imgheybox1.max-c.com":
-        parsed = parsed._replace(netloc="imgheybox.max-c.com")
-    return urlunsplit(parsed)
-
-
-def image_dedup_key(url: str) -> str:
-    if not url:
-        return ""
-    return url.split("?", 1)[0].replace("imgheybox1.max-c.com", "imgheybox.max-c.com")
+    async def _parse_post_by_id(self, link_id: str) -> ParseResult:
+        params = {
+            "app": "heybox",
+            "os_type": "web",
+            "x_app": "heybox_website",
+            "x_client_type": "web",
+            "x_os_type": "Windows",
+            "x_client_version": "",
+            "client_type": "web",
+            "web_version": "3.0",
+            "version": "999.0.4",
+            "link_id": link_id,
+            "is_first": "1",
+            "page": "1",
+            "index": "1",
+            "limit": "20",
+            "owner_only": "0",
+            **self._sign_path("/bbs/app/link/tree"),
+        }
+        referer = f"https://www.xiaoheihe.cn/app/bbs/link/{link_id}"
+        async with httpx.AsyncClient(
+            timeout=self._timeout(),
+            follow_redirects=False,
+            headers=self.HEADERS,
+        ) as client:
+            response = await client.get(
+                "https://api.xiaoheihe.cn/bbs/app/link/tree",
+                params=params,
+                headers=self._request_cookie_headers(),
+            )
+            self.raise_for_response_status(response)
+            payload = response.json()
+            if not isinstance(payload, dict) or payload.get("status") != "ok":
+                self._raise_for_payload_error(payload)
+                raise ValueError("小黑盒 link/tree 请求失败")
+            result_root = payload.get("result")
+            if not isinstance(result_root, dict):
+                raise ValueError("小黑盒 link/tree 结果为空")
+            result = parse_post_payload(result_root)
+            return await self.materialize_images(result, client, referer)

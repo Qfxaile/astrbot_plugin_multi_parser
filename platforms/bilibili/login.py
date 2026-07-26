@@ -2,24 +2,23 @@
 
 import json
 import re
-from io import BytesIO
-from urllib.parse import urlsplit
 
 import httpx
-import qrcode
 
-from ...core.authentication import (
+from ...core.http import cookie_header_from_jar, host_matches, is_trusted_https_url
+from ...core.platform_login import (
+    HTTPPlatformLoginProvider,
     LoginPollResult,
     LoginPollState,
     PlatformLoginError,
-    PlatformLoginProvider,
     PlatformUser,
     QRLoginChallenge,
+    read_login_response_body,
+    render_login_qr_png,
 )
-from ...core.http import request_timeout
 
 
-class BilibiliLoginProvider(PlatformLoginProvider):
+class BilibiliLoginProvider(HTTPPlatformLoginProvider):
     """通过 B站官方网页二维码接口建立管理员登录态。"""
 
     display_name = "B站"
@@ -52,9 +51,9 @@ class BilibiliLoginProvider(PlatformLoginProvider):
         *,
         client: httpx.AsyncClient | None = None,
     ) -> None:
-        self._owns_client = client is None
-        self._client = client or httpx.AsyncClient(
-            timeout=request_timeout(config),
+        super().__init__(
+            config,
+            client=client,
             headers={
                 "User-Agent": self.USER_AGENT,
                 "Referer": "https://www.bilibili.com/",
@@ -79,7 +78,7 @@ class BilibiliLoginProvider(PlatformLoginProvider):
 
         return QRLoginChallenge(
             session_key=session_key,
-            image_bytes=self._render_qr_code(login_url),
+            image_bytes=render_login_qr_png(login_url),
             expires_in_seconds=self.QR_EXPIRES_IN_SECONDS,
         )
 
@@ -123,20 +122,15 @@ class BilibiliLoginProvider(PlatformLoginProvider):
             return None
         return PlatformUser(user_id=user_id, display_name=display_name)
 
-    async def close(self) -> None:
-        """关闭由适配器创建的 HTTP 客户端。"""
-        if self._owns_client:
-            await self._client.aclose()
-
     async def _get_payload(self, url: str, **kwargs) -> dict:
         try:
             async with self._client.stream("GET", url, **kwargs) as response:
                 response.raise_for_status()
-                content = bytearray()
-                async for chunk in response.aiter_bytes():
-                    if len(content) + len(chunk) > self.MAX_RESPONSE_BYTES:
-                        raise PlatformLoginError("B站登录服务响应超过安全限制。")
-                    content.extend(chunk)
+                content = await read_login_response_body(
+                    response,
+                    limit=self.MAX_RESPONSE_BYTES,
+                    platform=self.display_name,
+                )
             payload = json.loads(content)
         except PlatformLoginError:
             raise
@@ -147,43 +141,12 @@ class BilibiliLoginProvider(PlatformLoginProvider):
         return payload
 
     def _cookie_header(self) -> str:
-        cookies: dict[str, str] = {}
-        for cookie in self._client.cookies.jar:
-            domain = str(cookie.domain or "").lstrip(".").lower()
-            if domain != "bilibili.com" and not domain.endswith(".bilibili.com"):
-                continue
-            if cookie.name in self.COOKIE_NAMES and cookie.value:
-                cookies[cookie.name] = cookie.value
-        return "; ".join(
-            f"{name}={cookies[name]}" for name in self.COOKIE_NAMES if name in cookies
+        return cookie_header_from_jar(
+            self._client.cookies.jar,
+            self.COOKIE_NAMES,
+            domain_allowed=lambda domain: host_matches(domain, ("bilibili.com",)),
         )
 
     @staticmethod
     def _is_trusted_login_url(url: str) -> bool:
-        try:
-            parsed = urlsplit(url)
-            _ = parsed.port
-        except ValueError:
-            return False
-        hostname = (parsed.hostname or "").lower()
-        return (
-            parsed.scheme == "https"
-            and parsed.username is None
-            and parsed.password is None
-            and parsed.port in {None, 443}
-            and (hostname == "bilibili.com" or hostname.endswith(".bilibili.com"))
-        )
-
-    @staticmethod
-    def _render_qr_code(value: str) -> bytes:
-        qr_code = qrcode.QRCode(
-            error_correction=qrcode.constants.ERROR_CORRECT_M,
-            box_size=8,
-            border=4,
-        )
-        qr_code.add_data(value)
-        qr_code.make(fit=True)
-        image = qr_code.make_image(fill_color="black", back_color="white")
-        output = BytesIO()
-        image.save(output, format="PNG")
-        return output.getvalue()
+        return is_trusted_https_url(url, ("bilibili.com",))

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 from astrbot.api.message_components import Image, Plain
-from astrbot_multi_parser.core.authentication import (
+from astrbot_multi_parser.core.platform_login import (
     LoginPollResult,
     LoginPollState,
     PlatformLoginError,

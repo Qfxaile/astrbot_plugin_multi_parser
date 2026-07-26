@@ -2,22 +2,29 @@
 
 import json
 import re
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin
 
 import httpx
 
-from ...core.authentication import (
+from ...core.http import (
+    cookie_config_value,
+    cookie_header_from_jar,
+    host_matches,
+    is_trusted_https_url,
+    parse_cookie_header,
+)
+from ...core.platform_login import (
+    HTTPPlatformLoginProvider,
     LoginPollResult,
     LoginPollState,
     PlatformLoginError,
-    PlatformLoginProvider,
     PlatformUser,
     QRLoginChallenge,
+    read_login_response_body,
 )
-from ...core.http import cookie_config_value, parse_cookie_header, request_timeout
 
 
-class DouyinLoginProvider(PlatformLoginProvider):
+class DouyinLoginProvider(HTTPPlatformLoginProvider):
     """通过抖音官方网页二维码接口建立管理员登录态。"""
 
     display_name = "抖音"
@@ -92,9 +99,9 @@ class DouyinLoginProvider(PlatformLoginProvider):
         *,
         client: httpx.AsyncClient | None = None,
     ) -> None:
-        self._owns_client = client is None
-        self._client = client or httpx.AsyncClient(
-            timeout=request_timeout(config),
+        super().__init__(
+            config,
+            client=client,
             follow_redirects=False,
             headers={
                 "User-Agent": self.USER_AGENT,
@@ -193,11 +200,6 @@ class DouyinLoginProvider(PlatformLoginProvider):
             return None
         return PlatformUser(user_id=user_id, display_name=display_name)
 
-    async def close(self) -> None:
-        """关闭由适配器创建的 HTTP 客户端。"""
-        if self._owns_client:
-            await self._client.aclose()
-
     async def _ensure_ttwid(self) -> None:
         """通过配置或官方匿名注册流程准备二维码会话所需的 ttwid。"""
         if self._has_ttwid():
@@ -239,9 +241,10 @@ class DouyinLoginProvider(PlatformLoginProvider):
                     headers=self.CALLBACK_HEADERS,
                     follow_redirects=False,
                 ) as response:
-                    content = await self._read_response_content(
+                    content = await read_login_response_body(
                         response,
                         limit=self.MAX_RESPONSE_BYTES,
+                        platform=self.display_name,
                     )
                     if response.status_code not in self._REDIRECT_STATUS_CODES:
                         response.raise_for_status()
@@ -331,21 +334,12 @@ class DouyinLoginProvider(PlatformLoginProvider):
             if response.is_redirect:
                 raise PlatformLoginError("抖音登录服务返回了不安全的重定向。")
             response.raise_for_status()
-            content = await self._read_response_content(response, limit=limit)
+            content = await read_login_response_body(
+                response,
+                limit=limit,
+                platform=self.display_name,
+            )
             return content, response.headers.get("Content-Type", "").lower()
-
-    @staticmethod
-    async def _read_response_content(
-        response: httpx.Response,
-        *,
-        limit: int,
-    ) -> bytes:
-        content = bytearray()
-        async for chunk in response.aiter_bytes():
-            if len(content) + len(chunk) > limit:
-                raise PlatformLoginError("抖音登录服务响应超过安全限制。")
-            content.extend(chunk)
-        return bytes(content)
 
     async def _complete_login_redirects(self, redirect_url: str) -> None:
         current_url = redirect_url
@@ -368,15 +362,11 @@ class DouyinLoginProvider(PlatformLoginProvider):
         raise PlatformLoginError("抖音登录确认重定向次数超过安全限制。")
 
     def _cookie_header(self) -> str:
-        cookies: dict[str, str] = {}
-        for cookie in self._client.cookies.jar:
-            domain = str(cookie.domain or "").lstrip(".").lower()
-            if not self._is_trusted_cookie_domain(domain):
-                continue
-            if cookie.name in self.COOKIE_NAMES and cookie.value:
-                cookies[cookie.name] = cookie.value
-        return "; ".join(
-            f"{name}={cookies[name]}" for name in self.COOKIE_NAMES if name in cookies
+        return cookie_header_from_jar(
+            self._client.cookies.jar,
+            self.COOKIE_NAMES,
+            domain_allowed=self._is_trusted_cookie_domain,
+            value_allowed=self._is_safe_cookie_value,
         )
 
     def _load_configured_ttwid(self, config) -> None:
@@ -412,10 +402,7 @@ class DouyinLoginProvider(PlatformLoginProvider):
 
     @classmethod
     def _is_trusted_cookie_domain(cls, domain: str) -> bool:
-        return any(
-            domain == suffix or domain.endswith(f".{suffix}")
-            for suffix in cls.LOGIN_HOST_SUFFIXES
-        )
+        return host_matches(domain, cls.LOGIN_HOST_SUFFIXES)
 
     @staticmethod
     def _requires_verification(payload: dict) -> bool:
@@ -462,19 +449,4 @@ class DouyinLoginProvider(PlatformLoginProvider):
 
     @staticmethod
     def _is_trusted_https_url(url: str, host_suffixes: tuple[str, ...]) -> bool:
-        try:
-            parsed = urlsplit(url)
-            port = parsed.port
-        except ValueError:
-            return False
-        hostname = (parsed.hostname or "").lower()
-        return (
-            parsed.scheme == "https"
-            and parsed.username is None
-            and parsed.password is None
-            and port in {None, 443}
-            and any(
-                hostname == suffix or hostname.endswith(f".{suffix}")
-                for suffix in host_suffixes
-            )
-        )
+        return is_trusted_https_url(url, host_suffixes)

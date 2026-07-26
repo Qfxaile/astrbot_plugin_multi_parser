@@ -4,6 +4,8 @@ import re
 from html.parser import HTMLParser
 from urllib.parse import urlsplit, urlunsplit
 
+import httpx
+
 from ...core.contracts import OrderedContent, ParseResult
 
 _BLOCK_TAGS = {
@@ -208,3 +210,34 @@ def parse_article_html(html: str) -> ParseResult:
         author=parser.author or "未知公众号",
         ordered_contents=parser.contents,
     )
+
+
+class WeChatArticleContent:
+    """请求并解析微信公众号文章。"""
+
+    async def _parse_article(self, url: str) -> ParseResult:
+        headers = self._article_headers(url)
+        async with httpx.AsyncClient(
+            timeout=self.request_timeout,
+            headers=headers,
+        ) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            result = parse_article_html(response.text)
+            return await self.materialize_images(result, client, url)
+
+    @staticmethod
+    def _article_headers(referer: str) -> dict[str, str]:
+        return {
+            "Accept": (
+                "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                "image/avif,image/webp,*/*;q=0.8"
+            ),
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "Referer": referer,
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36"
+            ),
+        }

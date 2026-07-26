@@ -2,24 +2,24 @@
 
 import json
 import re
-from io import BytesIO
 from urllib.parse import urljoin, urlsplit
 
 import httpx
-import qrcode
 
-from ...core.authentication import (
+from ...core.http import cookie_header_from_jar, host_matches, is_trusted_https_url
+from ...core.platform_login import (
+    HTTPPlatformLoginProvider,
     LoginPollResult,
     LoginPollState,
     PlatformLoginError,
-    PlatformLoginProvider,
     PlatformUser,
     QRLoginChallenge,
+    read_login_response_body,
+    render_login_qr_png,
 )
-from ...core.http import request_timeout
 
 
-class ZhihuLoginProvider(PlatformLoginProvider):
+class ZhihuLoginProvider(HTTPPlatformLoginProvider):
     """通过知乎官方网页二维码接口建立管理员登录态。"""
 
     display_name = "知乎"
@@ -51,9 +51,9 @@ class ZhihuLoginProvider(PlatformLoginProvider):
         *,
         client: httpx.AsyncClient | None = None,
     ) -> None:
-        self._owns_client = client is None
-        self._client = client or httpx.AsyncClient(
-            timeout=request_timeout(config),
+        super().__init__(
+            config,
+            client=client,
             follow_redirects=False,
             headers={
                 "User-Agent": self.USER_AGENT,
@@ -82,7 +82,7 @@ class ZhihuLoginProvider(PlatformLoginProvider):
 
         return QRLoginChallenge(
             session_key=session_key,
-            image_bytes=self._render_qr_code(login_url),
+            image_bytes=render_login_qr_png(login_url),
             expires_in_seconds=self.QR_EXPIRES_IN_SECONDS,
         )
 
@@ -123,11 +123,6 @@ class ZhihuLoginProvider(PlatformLoginProvider):
         if not user_id and not display_name:
             return None
         return PlatformUser(user_id=user_id, display_name=display_name)
-
-    async def close(self) -> None:
-        """关闭由适配器创建的 HTTP 客户端。"""
-        if self._owns_client:
-            await self._client.aclose()
 
     async def _bootstrap_browser_id(self) -> str:
         """从知乎官方响应取得二维码接口要求的浏览器设备标识。"""
@@ -212,11 +207,11 @@ class ZhihuLoginProvider(PlatformLoginProvider):
             ) as response:
                 if response.is_redirect:
                     raise PlatformLoginError("知乎登录服务返回了不安全的重定向。")
-                content = bytearray()
-                async for chunk in response.aiter_bytes():
-                    if len(content) + len(chunk) > self.MAX_RESPONSE_BYTES:
-                        raise PlatformLoginError("知乎登录服务响应超过安全限制。")
-                    content.extend(chunk)
+                content = await read_login_response_body(
+                    response,
+                    limit=self.MAX_RESPONSE_BYTES,
+                    platform=self.display_name,
+                )
                 content_type = response.headers.get("Content-Type", "").lower()
                 if response.status_code in {401, 403, 429}:
                     raise self._verification_error()
@@ -224,7 +219,7 @@ class ZhihuLoginProvider(PlatformLoginProvider):
                     response.status_code == 400
                     and method == "POST"
                     and url == self.QR_GENERATE_URL
-                    and self._requires_browser_id(bytes(content))
+                    and self._requires_browser_id(content)
                 ):
                     raise PlatformLoginError(
                         "知乎二维码登录需要有效的官方浏览器设备标识，"
@@ -232,7 +227,7 @@ class ZhihuLoginProvider(PlatformLoginProvider):
                     )
                 response.raise_for_status()
 
-            stripped = bytes(content).lstrip()
+            stripped = content.lstrip()
             if "text/html" in content_type or stripped.startswith(b"<"):
                 raise self._verification_error()
             payload = json.loads(content)
@@ -253,28 +248,15 @@ class ZhihuLoginProvider(PlatformLoginProvider):
         return data if isinstance(data, dict) else payload
 
     def _cookie_header(self) -> str:
-        cookies: dict[str, str] = {}
-        for cookie in self._client.cookies.jar:
-            domain = str(cookie.domain or "").lstrip(".").lower()
-            if not self._is_trusted_cookie_domain(domain):
-                continue
-            value = str(cookie.value or "")
-            if (
-                cookie.name in self.COOKIE_NAMES
-                and value
-                and not any(character in value for character in ";\r\n")
-            ):
-                cookies[cookie.name] = value
-        return "; ".join(
-            f"{name}={cookies[name]}" for name in self.COOKIE_NAMES if name in cookies
+        return cookie_header_from_jar(
+            self._client.cookies.jar,
+            self.COOKIE_NAMES,
+            domain_allowed=self._is_trusted_cookie_domain,
         )
 
     @classmethod
     def _is_trusted_cookie_domain(cls, domain: str) -> bool:
-        return any(
-            domain == suffix or domain.endswith(f".{suffix}")
-            for suffix in cls.LOGIN_HOST_SUFFIXES
-        )
+        return host_matches(domain, cls.LOGIN_HOST_SUFFIXES)
 
     @classmethod
     def _browser_id_from_response(cls, response: httpx.Response) -> str:
@@ -419,33 +401,4 @@ class ZhihuLoginProvider(PlatformLoginProvider):
 
     @classmethod
     def _is_trusted_https_url(cls, url: str) -> bool:
-        try:
-            parsed = urlsplit(url)
-            port = parsed.port
-        except ValueError:
-            return False
-        hostname = (parsed.hostname or "").lower()
-        return (
-            parsed.scheme == "https"
-            and parsed.username is None
-            and parsed.password is None
-            and port in {None, 443}
-            and any(
-                hostname == suffix or hostname.endswith(f".{suffix}")
-                for suffix in cls.LOGIN_HOST_SUFFIXES
-            )
-        )
-
-    @staticmethod
-    def _render_qr_code(value: str) -> bytes:
-        qr_code = qrcode.QRCode(
-            error_correction=qrcode.constants.ERROR_CORRECT_M,
-            box_size=8,
-            border=4,
-        )
-        qr_code.add_data(value)
-        qr_code.make(fit=True)
-        image = qr_code.make_image(fill_color="black", back_color="white")
-        output = BytesIO()
-        image.save(output, format="PNG")
-        return output.getvalue()
+        return is_trusted_https_url(url, cls.LOGIN_HOST_SUFFIXES)

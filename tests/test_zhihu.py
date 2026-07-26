@@ -148,7 +148,7 @@ def test_extract_html_video_urls_uses_source_and_link_candidates():
 
 @pytest.mark.asyncio
 async def test_placeholder_parser_still_matches_question_url():
-    from astrbot_multi_parser.platforms import ZhihuParser
+    from astrbot_multi_parser.platforms.zhihu import ZhihuParser
 
     assert await ZhihuParser({}).match(
         ParseContext(text="https://www.zhihu.com/question/123")
@@ -298,14 +298,14 @@ def test_handlers_reject_empty_payloads(handler, payload, message):
     ],
 )
 async def test_matches_supported_zhihu_urls(url):
-    from astrbot_multi_parser.platforms import ZhihuParser
+    from astrbot_multi_parser.platforms.zhihu import ZhihuParser
 
     assert await ZhihuParser({}).match(ParseContext(text=url))
 
 
 @pytest.mark.asyncio
 async def test_rejects_lookalike_zhihu_url():
-    from astrbot_multi_parser.platforms import ZhihuParser
+    from astrbot_multi_parser.platforms.zhihu import ZhihuParser
 
     assert not await ZhihuParser({}).match(
         ParseContext(text="https://zhihu.com.evil.example/question/1")
@@ -330,7 +330,7 @@ def install_zhihu_mock_client(monkeypatch, handler):
 async def test_parse_answer_uses_cookie_only_for_zhihu_and_materializes_image(
     monkeypatch, assert_temporary_image
 ):
-    from astrbot_multi_parser.platforms import ZhihuParser
+    from astrbot_multi_parser.platforms.zhihu import ZhihuParser
 
     image_bytes = b"answer-image"
 
@@ -364,7 +364,7 @@ async def test_parse_answer_uses_cookie_only_for_zhihu_and_materializes_image(
 
 @pytest.mark.asyncio
 async def test_parse_question_fetches_default_first_answer(monkeypatch):
-    from astrbot_multi_parser.platforms import ZhihuParser
+    from astrbot_multi_parser.platforms.zhihu import ZhihuParser
 
     requested_paths = []
 
@@ -427,7 +427,7 @@ async def test_parse_question_fetches_default_first_answer(monkeypatch):
 async def test_parse_routes_article_and_pin(
     monkeypatch, url, api_path, payload, expected_title
 ):
-    from astrbot_multi_parser.platforms import ZhihuParser
+    from astrbot_multi_parser.platforms.zhihu import ZhihuParser
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == api_path
@@ -442,7 +442,7 @@ async def test_parse_routes_article_and_pin(
 
 @pytest.mark.asyncio
 async def test_parse_share_follows_trusted_redirect(monkeypatch):
-    from astrbot_multi_parser.platforms import ZhihuParser
+    from astrbot_multi_parser.platforms.zhihu import ZhihuParser
 
     target = "https://www.zhihu.com/question/1/answer/2"
     share_url = f"https://link.zhihu.com/?target={quote(target, safe='')}"
@@ -470,7 +470,7 @@ async def test_parse_share_follows_trusted_redirect(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_parse_share_rejects_untrusted_redirect(monkeypatch):
-    from astrbot_multi_parser.platforms import ZhihuParser
+    from astrbot_multi_parser.platforms.zhihu import ZhihuParser
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.host == "link.zhihu.com":
@@ -491,7 +491,7 @@ async def test_parse_share_rejects_untrusted_redirect(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_answer_api_risk_control_falls_back_to_initial_state(monkeypatch):
-    from astrbot_multi_parser.platforms import ZhihuParser
+    from astrbot_multi_parser.platforms.zhihu import ZhihuParser
 
     answer = {
         "question": {"title": "页面问题"},
@@ -524,7 +524,7 @@ async def test_answer_api_risk_control_falls_back_to_initial_state(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_answer_api_without_content_falls_back_to_initial_state(monkeypatch):
-    from astrbot_multi_parser.platforms import ZhihuParser
+    from astrbot_multi_parser.platforms.zhihu import ZhihuParser
 
     answer = {
         "question": {"title": "页面问题"},

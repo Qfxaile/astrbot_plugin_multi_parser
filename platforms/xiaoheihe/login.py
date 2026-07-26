@@ -3,25 +3,25 @@
 import json
 import re
 from collections.abc import Mapping
-from io import BytesIO
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
-import qrcode
 
-from ...core.authentication import (
+from ...core.http import is_safe_cookie_value, is_trusted_https_url, parse_cookie_header
+from ...core.platform_login import (
+    HTTPPlatformLoginProvider,
     LoginPollResult,
     LoginPollState,
     PlatformLoginError,
-    PlatformLoginProvider,
     PlatformUser,
     QRLoginChallenge,
+    read_login_response_body,
+    render_login_qr_png,
 )
-from ...core.http import parse_cookie_header, request_timeout
 from .signing import RequestSigner
 
 
-class XiaoheiheLoginProvider(PlatformLoginProvider):
+class XiaoheiheLoginProvider(HTTPPlatformLoginProvider):
     """通过小黑盒官网原生二维码接口建立管理员登录态。"""
 
     display_name = "小黑盒"
@@ -73,9 +73,9 @@ class XiaoheiheLoginProvider(PlatformLoginProvider):
         client: httpx.AsyncClient | None = None,
         signer: RequestSigner | None = None,
     ) -> None:
-        self._owns_client = client is None
-        self._client = client or httpx.AsyncClient(
-            timeout=request_timeout(config),
+        super().__init__(
+            config,
+            client=client,
             follow_redirects=False,
             headers={
                 "User-Agent": self.USER_AGENT,
@@ -102,7 +102,7 @@ class XiaoheiheLoginProvider(PlatformLoginProvider):
 
         return QRLoginChallenge(
             session_key=session_key,
-            image_bytes=self._render_qr_code(qr_url),
+            image_bytes=render_login_qr_png(qr_url),
             expires_in_seconds=self._expires_in_seconds(result.get("expire")),
         )
 
@@ -151,11 +151,6 @@ class XiaoheiheLoginProvider(PlatformLoginProvider):
             return None
         return PlatformUser(user_id=user_id)
 
-    async def close(self) -> None:
-        """关闭由适配器创建的 HTTP 客户端。"""
-        if self._owns_client:
-            await self._client.aclose()
-
     async def _request_payload(
         self,
         url: str,
@@ -179,7 +174,11 @@ class XiaoheiheLoginProvider(PlatformLoginProvider):
                     raise PlatformLoginError(
                         "小黑盒登录服务返回了不安全的重定向。"
                     )
-                content = await self._read_response_bytes(response)
+                content = await read_login_response_body(
+                    response,
+                    limit=self.MAX_RESPONSE_BYTES,
+                    platform=self.display_name,
+                )
                 content_type = response.headers.get("Content-Type", "").lower()
                 if response.status_code in {401, 403, 429}:
                     raise self._verification_error()
@@ -202,14 +201,6 @@ class XiaoheiheLoginProvider(PlatformLoginProvider):
         if self._requires_verification(payload):
             raise self._verification_error()
         return payload
-
-    async def _read_response_bytes(self, response: httpx.Response) -> bytes:
-        content = bytearray()
-        async for chunk in response.aiter_bytes():
-            if len(content) + len(chunk) > self.MAX_RESPONSE_BYTES:
-                raise PlatformLoginError("小黑盒登录服务响应超过安全限制。")
-            content.extend(chunk)
-        return bytes(content)
 
     async def _restore_login(self) -> Mapping:
         """按官网流程从当前二维码会话恢复完整账号登录态。"""
@@ -234,17 +225,14 @@ class XiaoheiheLoginProvider(PlatformLoginProvider):
     def _session_key_from_qr_url(cls, qr_url: str) -> str | None:
         if len(qr_url) > 2048:
             return None
+        if not is_trusted_https_url(qr_url, ("api.xiaoheihe.cn",)):
+            return None
         try:
             parsed = urlsplit(qr_url)
-            port = parsed.port
         except ValueError:
             return None
         if (
-            parsed.scheme != "https"
-            or parsed.username is not None
-            or parsed.password is not None
-            or port not in {None, 443}
-            or (parsed.hostname or "").lower() != "api.xiaoheihe.cn"
+            (parsed.hostname or "").lower() != "api.xiaoheihe.cn"
             or parsed.path != cls.QR_LOGIN_PATH
         ):
             return None
@@ -293,13 +281,7 @@ class XiaoheiheLoginProvider(PlatformLoginProvider):
 
     @staticmethod
     def _is_safe_cookie_value(value: object) -> bool:
-        text = str(value or "")
-        return (
-            bool(text)
-            and len(text) <= 4096
-            and not any(character in text for character in ";\r\n")
-            and all(character.isprintable() for character in text)
-        )
+        return is_safe_cookie_value(value)
 
     @classmethod
     def _requires_verification(cls, payload: Mapping) -> bool:
@@ -333,22 +315,6 @@ class XiaoheiheLoginProvider(PlatformLoginProvider):
             "小黑盒登录触发了平台人机或设备验证，"
             "当前私聊流程无法继续，请稍后重试或手工配置 Cookies。"
         )
-
-    @classmethod
-    def _render_qr_code(cls, login_url: str) -> bytes:
-        """在内存中生成二维码，避免把一次性登录地址写入磁盘。"""
-        qr_code = qrcode.QRCode(
-            version=None,
-            error_correction=qrcode.constants.ERROR_CORRECT_M,
-            box_size=8,
-            border=4,
-        )
-        qr_code.add_data(login_url)
-        qr_code.make(fit=True)
-        image = qr_code.make_image(fill_color="black", back_color="white")
-        output = BytesIO()
-        image.save(output, format="PNG")
-        return output.getvalue()
 
     @classmethod
     def _expires_in_seconds(cls, value: object) -> int:

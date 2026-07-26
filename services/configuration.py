@@ -1,32 +1,15 @@
 from collections.abc import Mapping
 
 from ..core.parser import BaseParser
-from ..platforms import (
-    BilibiliParser,
-    DouyinParser,
-    RedBookParser,
-    TiebaParser,
-    WeChatParser,
-    WeiboParser,
-    XiaoheiheParser,
-    ZhihuParser,
-)
-
-PARSER_TYPES: tuple[type[BaseParser], ...] = (
-    BilibiliParser,
-    DouyinParser,
-    RedBookParser,
-    TiebaParser,
-    WeiboParser,
-    WeChatParser,
-    XiaoheiheParser,
-    ZhihuParser,
-)
+from ..platforms.registry import PLATFORM_REGISTRY
 
 
 def build_parsers(config) -> dict[str, BaseParser]:
     """按稳定优先级创建所有平台解析器。"""
-    return {parser_type.name: parser_type(config) for parser_type in PARSER_TYPES}
+    return {
+        registration.parser_type.name: registration.parser_type(config)
+        for registration in PLATFORM_REGISTRY
+    }
 
 
 def enabled_parsers(config, parsers: Mapping[str, BaseParser]) -> list[BaseParser]:

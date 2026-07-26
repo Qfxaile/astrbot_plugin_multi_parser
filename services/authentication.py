@@ -4,29 +4,23 @@ import asyncio
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from functools import partial
 
 from astrbot.api.event import AstrMessageEvent, MessageChain
 from astrbot.api.message_components import Image, Plain
 
-from ..core.authentication import (
-    LoginPollState,
-    PlatformLoginError,
-    PlatformLoginProvider,
-    PlatformUser,
-)
 from ..core.http import (
     cookie_config_value,
     parse_cookie_header,
     set_cookie_config_value,
 )
-from ..platforms.bilibili import BilibiliLoginProvider
-from ..platforms.douyin import DouyinLoginProvider
-from ..platforms.redbook import RedBookLoginProvider
-from ..platforms.tieba import TiebaLoginProvider
-from ..platforms.wechat import WeChatLoginProvider
-from ..platforms.weibo import WeiboLoginProvider
-from ..platforms.xiaoheihe import XiaoheiheLoginProvider
-from ..platforms.zhihu import ZhihuLoginProvider
+from ..core.platform_login import (
+    LoginPollState,
+    PlatformLoginError,
+    PlatformLoginProvider,
+    PlatformUser,
+)
+from ..platforms.registry import PLATFORM_REGISTRY
 
 ProviderFactory = Callable[[], PlatformLoginProvider]
 
@@ -55,25 +49,18 @@ class AuthenticationService:
         self._provider_factories = dict(
             provider_factories
             or {
-                "B站": lambda: BilibiliLoginProvider(self.config),
-                "抖音": lambda: DouyinLoginProvider(self.config),
-                "小红书": lambda: RedBookLoginProvider(self.config),
-                "贴吧": lambda: TiebaLoginProvider(self.config),
-                "微博": lambda: WeiboLoginProvider(self.config),
-                "微信": lambda: WeChatLoginProvider(self.config),
-                "小黑盒": lambda: XiaoheiheLoginProvider(self.config),
-                "知乎": lambda: ZhihuLoginProvider(self.config),
+                registration.login_provider_type.display_name: partial(
+                    registration.login_provider_type,
+                    self.config,
+                )
+                for registration in PLATFORM_REGISTRY
             }
         )
         self._cookie_keys = {
-            "B站": "bilibili_cookies",
-            "抖音": "douyin_cookies",
-            "小红书": "redbook_cookies",
-            "贴吧": "tieba_cookies",
-            "微博": "weibo_cookies",
-            "微信": "wechat_yuanbao_cookies",
-            "小黑盒": "xiaoheihe_cookies",
-            "知乎": "zhihu_cookies",
+            registration.login_provider_type.display_name: (
+                registration.login_provider_type.cookie_config_key
+            )
+            for registration in PLATFORM_REGISTRY
         }
         self._active_logins: dict[str, _ActiveLogin] = {}
         self._lock = asyncio.Lock()
