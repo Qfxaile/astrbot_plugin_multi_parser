@@ -9,6 +9,7 @@ __all__ = [
     "WeChatParser",
     "XiaoheiheParser",
     "ZhihuParser",
+    "PixivParser",
 ]
 
 

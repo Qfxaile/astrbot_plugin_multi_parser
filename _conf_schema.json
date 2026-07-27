@@ -51,6 +51,12 @@
         "hint": "解析问题、回答、专栏文章、想法和正文内视频。",
         "type": "bool",
         "default": true
+      },
+      "pixiv": {
+        "description": "Pixiv",
+        "hint": "解析匿名可访问的公开插画作品，默认关闭；暂不支持动图、小说和受限作品。",
+        "type": "bool",
+        "default": false
       }
     }
   },

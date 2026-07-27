@@ -10,6 +10,7 @@ PLATFORMS = (
     "wechat",
     "xiaoheihe",
     "zhihu",
+    "pixiv",
 )
 COOKIE_KEYS = (
     "bilibili_cookies",
@@ -34,7 +35,8 @@ def test_schema_uses_platform_switches_without_legacy_settings():
     assert tuple(platform_switches["items"]) == PLATFORMS
     for platform in PLATFORMS:
         assert platform_switches["items"][platform]["type"] == "bool"
-        assert platform_switches["items"][platform]["default"] is True
+        expected_default = platform != "pixiv"
+        assert platform_switches["items"][platform]["default"] is expected_default
 
     assert "enabled_platforms" not in schema
     assert "platform_switches_migrated" not in schema

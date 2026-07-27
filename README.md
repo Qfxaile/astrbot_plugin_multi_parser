@@ -7,7 +7,7 @@
 <p align="center">自动识别聊天消息中的内容链接，并发送作品信息、图文、视频或音频。</p>
 
 <p align="center">
-  <a href="https://github.com/Qfxaile/astrbot_multi_parser/releases"><img src="https://img.shields.io/badge/version-v1.0.1-2f6f5e" alt="Version v1.0.1"></a>
+  <a href="https://github.com/Qfxaile/astrbot_multi_parser/releases"><img src="https://img.shields.io/badge/version-v1.1.0-2f6f5e" alt="Version v1.1.0"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-%3E%3D3.10-3776ab" alt="Python 3.10+"></a>
   <a href="https://astrbot.app/"><img src="https://img.shields.io/badge/AstrBot-plugin-4c78a8" alt="AstrBot Plugin"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2f6f5e" alt="MIT License"></a>
@@ -47,6 +47,7 @@
 | 微信 | 视频号 | 公众号文章 | 视频号短链及已带令牌的预览长链 |
 | 小黑盒 | 帖子和游戏视频 | 社区帖子、游戏截图 | BBS/API 分享链接、游戏信息 |
 | 知乎 | 正文内视频 | 问题、回答、文章、想法 | `link.zhihu.com`、页面数据回退 |
+| Pixiv（默认关闭） | 不支持 | 公开插画作品 | `pixiv.net/artworks/<作品ID>`、旧版 `illust_id` 链接 |
 
 > [!IMPORTANT]
 > 当前不支持 TikTok，也不解析 Bilibili 音频、独立音轨或 `au` 号。直播仅展示直播间信息，不提取或转发持续直播流。
@@ -85,7 +86,7 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 
 | 配置项 | 默认值 | 作用 |
 | --- | --- | --- |
-| `platform_switches` | 全部启用 | 分别控制八个平台的解析器 |
+| `platform_switches` | 八个平台启用，Pixiv 关闭 | 分别控制各平台的解析器；Pixiv 需显式开启 |
 | `filter_output_links` | `false` | 替换解析结果中的网页链接，不修改用户原消息 |
 | `filtered_link_text` | `[详细内容请打开原链接查看]` | 链接过滤后的替换文案 |
 | `forward_mode` | `threshold` | `always`、`threshold` 或 `never` |
@@ -119,6 +120,8 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 | `cookies.wechat_yuanbao_cookies` | 视频号短链需要 | 保存 `yb_user_id` 和 `yb_token` |
 | `cookies.xiaoheihe_cookies` | 否 | 配置后用于游戏详情请求，未配置时使用公开接口 |
 | `cookies.zhihu_cookies` | 否 | 二维码登录暂不可用，可手工填写 |
+
+Pixiv 仅解析匿名可访问的公开插画作品，不需要 Cookie；动图、小说及登录、年龄或地区限制作品暂不支持。
 
 > [!WARNING]
 > Cookie 属于敏感凭据。请仅通过 AstrBot 配置页面或管理员私聊登录命令提供，不要写入代码、README、Issue、测试或日志。提交问题前请清理 URL 查询参数和个人信息。

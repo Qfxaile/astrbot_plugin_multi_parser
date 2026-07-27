@@ -742,6 +742,7 @@ async def test_default_authentication_service_supports_all_login_providers():
         "小黑盒",
         "知乎",
     )
+    assert "Pixiv" not in service.supported_platforms
     assert await service.status() == (
         "平台登录状态：\n- B站：未配置\n- 抖音：未配置\n"
         "- 小红书：未配置\n- 贴吧：未配置\n- 微博：未配置\n"

@@ -36,14 +36,16 @@ class FailingParser:
 
 
 class FakeBot:
-    def __init__(self, failure=None):
+    def __init__(self, failure=None, responses=None):
         self.failure = failure
+        self.responses = responses or {}
         self.actions = []
 
     async def call_action(self, action, **params):
         self.actions.append((action, params))
         if self.failure is not None:
             raise self.failure
+        return self.responses.get(action)
 
 
 class FakeEvent:
@@ -54,12 +56,14 @@ class FakeEvent:
         sender=None,
         raw_message=None,
         platform_name="aiocqhttp",
+        platform_id="测试机器人",
         forward_failure_limit=None,
         bot=None,
     ):
         self.sender_id = sender_id
         self.sender_name = sender_name
         self.platform_name = platform_name
+        self.platform_id = platform_id
         self.forward_failure_limit = forward_failure_limit
         self.bot = bot
         self.sent = []
@@ -83,6 +87,13 @@ class FakeEvent:
         if self.platform_name == "__raise__":
             raise RuntimeError("platform unavailable")
         return self.platform_name
+
+    def get_platform_id(self):
+        return self.platform_id
+
+    def get_self_id(self):
+        raw = self.message_obj.raw_message
+        return str(raw.get("self_id") or "") if isinstance(raw, dict) else ""
 
     def get_group_id(self):
         raw = self.message_obj.raw_message
@@ -134,6 +145,7 @@ def test_plugin_registers_all_supported_parsers():
         "wechat",
         "xiaoheihe",
         "zhihu",
+        "pixiv",
     }
 
 
@@ -148,6 +160,7 @@ def test_plugin_respects_platform_switches():
             "wechat": False,
             "xiaoheihe": True,
             "zhihu": False,
+            "pixiv": False,
         }
     }
 
@@ -533,8 +546,9 @@ async def test_aiocqhttp_forward_uses_remote_image_url_without_base64(
     )
 
     assert messages == []
-    assert len(bot.actions) == 1
-    action, params = bot.actions[0]
+    assert bot.actions[0] == ("get_login_info", {"self_id": 20002})
+    assert len(bot.actions) == 2
+    action, params = bot.actions[1]
     assert action == "send_group_forward_msg"
     assert params["group_id"] == 10001
     assert params["self_id"] == 20002
@@ -550,6 +564,183 @@ async def test_aiocqhttp_forward_uses_remote_image_url_without_base64(
 
 
 @pytest.mark.asyncio
+async def test_pixiv_forward_asks_napcat_to_download_images_with_headers(
+    monkeypatch, tmp_path
+):
+    image_paths = [tmp_path / f"pixiv-{index}.jpg" for index in range(2)]
+    source_urls = [
+        f"https://i.pximg.net/img-original/pixiv-{index}.jpg" for index in range(2)
+    ]
+    for image_path in image_paths:
+        image_path.write_bytes(b"pixiv-image")
+    result = ParseResult(
+        platform="pixiv",
+        title="Pixiv作品",
+        image_urls=[str(image_path) for image_path in image_paths],
+        temporary_files=image_paths,
+        image_source_urls={
+            str(image_path.resolve()): source_url
+            for image_path, source_url in zip(image_paths, source_urls, strict=True)
+        },
+        image_download_headers={
+            "Referer": "https://www.pixiv.net/",
+            "User-Agent": "PixivTestAgent/1.0",
+        },
+    )
+
+    class NapCatDownloadBot(FakeBot):
+        async def call_action(self, action, **params):
+            self.actions.append((action, params))
+            if action == "download_file":
+                return {"data": {"file": f"/app/napcat/temp/{params['name']}"}}
+            return None
+
+    bot = NapCatDownloadBot()
+    event = FakeEvent(
+        bot=bot,
+        raw_message={"group_id": 10001, "sender": {"nickname": "测试用户"}},
+    )
+
+    messages = await collect_results(
+        monkeypatch,
+        result,
+        event=event,
+        forward_mode="always",
+    )
+
+    assert messages == []
+    assert [action for action, _ in bot.actions] == [
+        "download_file",
+        "download_file",
+        "send_group_forward_msg",
+    ]
+    download_params = [
+        params for action, params in bot.actions if action == "download_file"
+    ]
+    assert [params["url"] for params in download_params] == source_urls
+    assert all(
+        params["headers"]
+        == [
+            "Referer=https://www.pixiv.net/",
+            "User-Agent=PixivTestAgent/1.0",
+        ]
+        for params in download_params
+    )
+    forward_params = bot.actions[-1][1]
+    assert [
+        node["data"]["content"][0]["data"]["file"]
+        for node in forward_params["messages"][:2]
+    ] == ["/app/napcat/temp/pixiv-0.jpg", "/app/napcat/temp/pixiv-1.jpg"]
+    assert not any(image_path.exists() for image_path in image_paths)
+
+
+@pytest.mark.asyncio
+async def test_pixiv_forward_falls_back_to_single_image_upload_when_url_terminates(
+    monkeypatch, tmp_path
+):
+    image_paths = [tmp_path / f"pixiv-{index}.jpg" for index in range(2)]
+    source_urls = [
+        f"https://i.pximg.net/img-original/pixiv-{index}.jpg" for index in range(2)
+    ]
+    for image_path in image_paths:
+        image_path.write_bytes(b"pixiv-image")
+    result = ParseResult(
+        platform="pixiv",
+        title="Pixiv作品",
+        image_urls=[str(image_path) for image_path in image_paths],
+        temporary_files=image_paths,
+        image_source_urls={
+            str(image_path.resolve()): source_url
+            for image_path, source_url in zip(image_paths, source_urls, strict=True)
+        },
+        image_download_headers={"Referer": "https://www.pixiv.net/"},
+    )
+
+    class TerminatedDownloadBot(FakeBot):
+        async def call_action(self, action, **params):
+            self.actions.append((action, params))
+            if action == "download_file" and "url" in params:
+                raise RuntimeError("terminated")
+            if action == "download_file":
+                return {"data": {"file": f"/app/napcat/temp/{params['name']}"}}
+            return None
+
+    bot = TerminatedDownloadBot()
+    event = FakeEvent(
+        bot=bot,
+        raw_message={"group_id": 10001, "sender": {"nickname": "测试用户"}},
+    )
+
+    messages = await collect_results(
+        monkeypatch,
+        result,
+        event=event,
+        forward_mode="always",
+    )
+
+    assert messages == []
+    download_params = [
+        params for action, params in bot.actions if action == "download_file"
+    ]
+    assert len(download_params) == 4
+    assert [params["url"] for params in download_params[::2]] == source_urls
+    assert all(params["headers"] == ["Referer=https://www.pixiv.net/"] for params in download_params[::2])
+    assert all(params["base64"] == "cGl4aXYtaW1hZ2U=" for params in download_params[1::2])
+    assert bot.actions[-1][0] == "send_group_forward_msg"
+    assert [
+        node["data"]["content"][0]["data"]["file"]
+        for node in bot.actions[-1][1]["messages"][:2]
+    ] == ["/app/napcat/temp/pixiv-0.jpg", "/app/napcat/temp/pixiv-1.jpg"]
+    assert not any(image_path.exists() for image_path in image_paths)
+
+
+@pytest.mark.asyncio
+async def test_onebot_result_can_disable_forward_without_splitting(monkeypatch):
+    result = ParseResult(
+        platform="test",
+        title="标题",
+        image_urls=["base64://1", "base64://2", "base64://3"],
+        disable_onebot_forward=True,
+    )
+
+    messages = await collect_results(
+        monkeypatch,
+        result,
+        forward_mode="always",
+    )
+
+    assert len(messages) == 1
+    assert [type(component) for component in messages[0]] == [
+        Image,
+        Image,
+        Image,
+        Plain,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_onebot_delivery_flags_do_not_change_other_adapters(monkeypatch):
+    result = ParseResult(
+        platform="test",
+        title="标题",
+        image_urls=["base64://1"],
+        disable_onebot_forward=True,
+        split_media_for_onebot=True,
+    )
+    event = FakeEvent(platform_name="satori")
+
+    messages = await collect_results(
+        monkeypatch,
+        result,
+        event=event,
+        forward_mode="always",
+    )
+
+    assert len(messages) == 1
+    assert isinstance(messages[0][0], Nodes)
+
+
+@pytest.mark.asyncio
 async def test_description_without_images_stays_in_plain_message(monkeypatch):
     result = ParseResult(platform="test", description="只有简介")
 
@@ -559,6 +750,33 @@ async def test_description_without_images_stays_in_plain_message(monkeypatch):
     assert len(messages[0]) == 1
     assert isinstance(messages[0][0], Plain)
     assert messages[0][0].text == "简介:\n只有简介"
+
+
+def test_onebot_direct_delivery_merges_summary_and_leading_text():
+    result = ParseResult(
+        platform="xiaoheihe",
+        title="新拍照功能太权威了",
+        author="Deepsucker",
+        ordered_contents=[
+            OrderedContent(
+                kind="text",
+                value="光是自定义站位和姿势就已经够爽了",
+            )
+        ],
+    )
+
+    messages = DeliveryService({"forward_mode": "never"}).build_content_results(
+        FakeEvent(),
+        result,
+        include_video_url=False,
+    )
+
+    assert len(messages) == 1
+    assert len(messages[0]) == 1
+    assert isinstance(messages[0][0], Plain)
+    assert messages[0][0].text == (
+        "新拍照功能太权威了\n作者: Deepsucker\n光是自定义站位和姿势就已经够爽了"
+    )
 
 
 @pytest.mark.asyncio
@@ -633,6 +851,7 @@ async def test_forward_nodes_use_sender_name_fallbacks(
         sender_id=sender_id,
         sender_name=sender_name,
         sender=sender,
+        platform_name="satori",
     )
 
     messages = await collect_results(monkeypatch, result, event=event)
@@ -640,6 +859,33 @@ async def test_forward_nodes_use_sender_name_fallbacks(
     for node in messages[0][0].nodes:
         assert node.name == expected_name
         assert node.uin == expected_id
+
+
+@pytest.mark.asyncio
+async def test_onebot_forward_nodes_use_qq_name_and_self_id(monkeypatch):
+    result = ParseResult(
+        platform="test",
+        image_urls=["base64://1", "base64://2", "base64://3"],
+    )
+    bot = FakeBot(
+        responses={
+            "get_login_info": {"user_id": 456, "nickname": "QQ机器人"},
+        }
+    )
+    event = FakeEvent(
+        bot=bot,
+        sender_id=123,
+        sender_name="消息发送者",
+        platform_id="default",
+        raw_message={"self_id": 456, "sender": {"nickname": "消息发送者"}},
+    )
+
+    messages = await collect_results(monkeypatch, result, event=event)
+
+    for node in messages[0][0].nodes:
+        assert node.name == "QQ机器人"
+        assert node.uin == "456"
+    assert bot.actions == [("get_login_info", {"self_id": 456})]
 
 
 @pytest.mark.asyncio

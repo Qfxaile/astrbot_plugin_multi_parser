@@ -15,7 +15,7 @@ def test_platform_login_contract_uses_explicit_core_module():
 def test_platform_registry_is_owned_by_platform_package():
     module = import_module("astrbot_multi_parser.platforms.registry")
 
-    assert len(module.PLATFORM_REGISTRY) == 8
+    assert len(module.PLATFORM_REGISTRY) == 9
 
 
 @pytest.mark.parametrize(

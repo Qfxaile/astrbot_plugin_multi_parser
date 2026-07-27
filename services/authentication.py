@@ -54,6 +54,7 @@ class AuthenticationService:
                     self.config,
                 )
                 for registration in PLATFORM_REGISTRY
+                if registration.login_provider_type is not None
             }
         )
         self._cookie_keys = {
@@ -61,6 +62,7 @@ class AuthenticationService:
                 registration.login_provider_type.cookie_config_key
             )
             for registration in PLATFORM_REGISTRY
+            if registration.login_provider_type is not None
         }
         self._active_logins: dict[str, _ActiveLogin] = {}
         self._lock = asyncio.Lock()
