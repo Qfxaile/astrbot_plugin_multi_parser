@@ -27,6 +27,7 @@ class DeliveryService:
 
     def __init__(self, config: Mapping[str, object]) -> None:
         self.config = config
+        self._onebot_names: dict[str, str] = {}
 
     @staticmethod
     async def call_onebot(event: AstrMessageEvent, action: str, **params):
@@ -108,7 +109,7 @@ class DeliveryService:
         )
         if video_embedded:
             forward_components.extend(result.video_chain())
-        sender_name, sender_id = self.sender_identity(event)
+        sender_name, sender_id = self.forward_node_identity(event)
         merged_components = self._merge_adjacent_plain_components(forward_components)
         nodes = [
             Node(content=[component], name=sender_name, uin=sender_id)
@@ -141,11 +142,15 @@ class DeliveryService:
         parse_result: ParseResult,
     ) -> None:
         """发送合并转发，只有构建阶段超过节点上限时才会分批。"""
+        sender_name, sender_id = await self.resolve_forward_node_identity(event)
         for result in results:
             chain = getattr(result, "chain", result)
             if len(chain) != 1 or not isinstance(chain[0], Nodes):
                 raise ValueError("合并转发结果结构无效")
             nodes = chain[0].nodes
+            for node in nodes:
+                node.name = sender_name
+                node.uin = sender_id
             if self._can_send_onebot_url_forward(
                 event, nodes, parse_result.image_source_urls
             ):
@@ -328,7 +333,10 @@ class DeliveryService:
         self, event: AstrMessageEvent, result: ParseResult, reason: str
     ) -> None:
         """按适配器能力发送视频链接，非转发平台降级为普通文本。"""
-        sender_name, sender_id = self.sender_identity(event, prefer_raw_nickname=True)
+        sender_name, sender_id = await self.resolve_forward_node_identity(
+            event,
+            prefer_raw_nickname=True,
+        )
         summary_lines = [
             f"{result.platform} 解析链接",
             f"标题: {result.title or '未命名内容'}",
@@ -463,6 +471,65 @@ class DeliveryService:
             else component
             for component in components
         ]
+
+    def forward_node_identity(
+        self,
+        event: AstrMessageEvent,
+        *,
+        prefer_raw_nickname: bool = False,
+    ) -> tuple[str, str]:
+        """QQ 合并转发先使用已缓存名称或账号，其他平台沿用发送者身份。"""
+        if self._platform_name(event) == self.ONEBOT_PLATFORM:
+            try:
+                bot_id = str(event.get_self_id() or "")
+            except Exception:
+                bot_id = ""
+
+            if bot_id:
+                return self._onebot_names.get(bot_id, bot_id), bot_id
+
+        return self.sender_identity(
+            event,
+            prefer_raw_nickname=prefer_raw_nickname,
+        )
+
+    async def resolve_forward_node_identity(
+        self,
+        event: AstrMessageEvent,
+        *,
+        prefer_raw_nickname: bool = False,
+    ) -> tuple[str, str]:
+        """发送前通过 OneBot 登录信息解析 QQ 昵称，并缓存到当前服务实例。"""
+        sender_name, sender_id = self.forward_node_identity(
+            event,
+            prefer_raw_nickname=prefer_raw_nickname,
+        )
+        if self._platform_name(event) != self.ONEBOT_PLATFORM:
+            return sender_name, sender_id
+        try:
+            bot_id = str(event.get_self_id() or "")
+        except Exception:
+            bot_id = ""
+        if not bot_id:
+            return sender_name, sender_id
+        if bot_id in self._onebot_names:
+            return self._onebot_names[bot_id], bot_id
+
+        try:
+            login_info = await self.call_onebot(
+                event,
+                "get_login_info",
+                self_id=int(bot_id),
+            )
+            if isinstance(login_info, Mapping):
+                bot_name = str(login_info.get("nickname") or "").strip()
+                if bot_name:
+                    self._onebot_names[bot_id] = bot_name
+                    return bot_name, bot_id
+        except Exception as exc:
+            logger.info(f"获取 QQ 机器人名称失败: {type(exc).__name__}")
+
+        return sender_name, bot_id
 
     def sender_identity(
         self,
