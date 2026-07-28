@@ -1,4 +1,4 @@
 interface:
   display_name: "AstrBot 多解析器开发指南"
-  short_description: "维护 AstrBot 多平台解析、登录、配置、测试、依赖与发布工作流"
-  default_prompt: "使用 $astrbot-multi-parser-development-guide 按仓库规范完成本次插件变更并验证结果。"
+  short_description: "维护 AstrBot 多平台解析插件并验证项目规范与 Skill 有效性"
+  default_prompt: "使用 $astrbot-multi-parser-development-guide 按仓库规范完成并验证插件变更；修改 Skill 时同步验证其自身有效性。"

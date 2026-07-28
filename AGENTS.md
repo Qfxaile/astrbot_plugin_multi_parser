@@ -43,10 +43,11 @@ uv run ruff check .
 | 需求 | 首选位置 |
 | --- | --- |
 | 插件注册、事件入口、依赖装配 | `main.py` |
-| 解析结果、上下文、登录契约和登录 HTTP 基类 | `core/contracts.py`、`core/authentication.py` |
+| 解析结果和上下文契约 | `core/contracts.py` |
+| 登录契约、登录 HTTP 基类和二维码渲染 | `core/platform_login.py` |
 | 安全 HTTP、可信 URL、Cookie、媒体和渲染 | `core/http.py`、`core/media.py`、`core/rendering.py` |
 | 解析器公共流程 | `core/parser.py` |
-| 平台清单及解析器、登录适配器对应关系 | `services/platform_registry.py` |
+| 平台清单及解析器、登录适配器对应关系 | `platforms/registry.py` |
 | 配置读取和解析器创建 | `services/configuration.py` |
 | 登录编排、取消和凭据持久化 | `services/authentication.py` |
 | 消息上下文、文本处理和投递 | `services/message_context.py`、`services/text_processing.py`、`services/delivery.py` |
@@ -55,13 +56,14 @@ uv run ruff check .
 
 跨平台规则放入 `core/` 或 `services/`；平台协议细节留在对应平台目录。Controller/命令入口只做权限与参数检查、调用服务并返回结果。
 
-每个平台只保留一个顶层入口。当前八个平台均使用 `platforms/<platform>/` 目录，并从各自 `__init__.py` 导出解析器或登录提供者。新增平台或调整导出时，同步检查：
+每个平台只保留一个顶层解析入口，当前平台清单以 `platforms/registry.py` 中的 `PLATFORM_REGISTRY` 为准。平台实现使用 `platforms/<platform>/` 目录，`parser.py` 负责顶层入口和路由，内容逻辑按职责拆入同目录模块；支持登录的平台另有 `login.py`。各平台从自己的 `__init__.py` 导出解析器或登录提供者。新增平台或调整导出时，同步检查：
 
+- `platforms/registry.py`
 - `platforms/__init__.py`
-- `services/configuration.py`
-- `services/authentication.py`（涉及登录时）
 - `_conf_schema.json`
 - README 和对应测试
+
+`services/configuration.py` 和 `services/authentication.py` 从注册表装配解析器与登录适配器，只有装配语义变化时才修改。
 
 ## 登录与安全边界
 
@@ -78,7 +80,7 @@ uv run ruff check .
 - 解析器统一返回 `core/contracts.py` 中的契约，保持图文顺序和可读的失败信息。
 - 外部请求复用 `core/http.py` 的安全能力；新增网络路径时检查 URL、重定向、超时和响应大小边界。
 - 登录适配器复用 `HTTPPlatformLoginProvider`、`read_login_response_body` 和公共二维码渲染；可信域、Cookie 值及 CookieJar 白名单序列化复用 `core/http.py`。
-- 平台解析器或登录适配器的增删与顺序只在 `services/platform_registry.py` 声明，配置和认证服务从注册表装配，不维护平行清单。
+- 平台解析器或登录适配器的增删与顺序只在 `platforms/registry.py` 声明，配置和认证服务从注册表装配，不维护平行清单。
 - 公开 API 和关键异步入口使用准确的中文文档字符串。注释解释边界、顺序、并发和降级原因，不逐行复述代码。
 - 配置变化同步 `_conf_schema.json`、`services/configuration.py`、README 和测试。
 - 不为单次需求增加兼容层、重复入口或无调用方的扩展点。
