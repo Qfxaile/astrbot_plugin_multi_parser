@@ -12,6 +12,7 @@ def test_platform_registry_has_stable_parser_and_login_order():
         "xiaoheihe",
         "zhihu",
         "github",
+        "qzone",
         "pixiv",
     ]
     assert [
@@ -44,3 +45,11 @@ def test_pixiv_registration_is_parser_only_and_disabled_by_default():
     assert registration.parser_type.name == "pixiv"
     assert registration.login_provider_type is None
     assert registration.enabled_by_default is False
+
+
+def test_qzone_registration_is_parser_only_and_enabled_by_default():
+    registration = PLATFORM_REGISTRY[-2]
+
+    assert registration.parser_type.name == "qzone"
+    assert registration.login_provider_type is None
+    assert registration.enabled_by_default is True

@@ -147,6 +147,7 @@ def test_plugin_registers_all_supported_parsers():
         "xiaoheihe",
         "zhihu",
         "github",
+        "qzone",
         "pixiv",
     }
 
@@ -163,6 +164,7 @@ def test_plugin_respects_platform_switches():
             "xiaoheihe": True,
             "zhihu": False,
             "github": False,
+            "qzone": False,
             "pixiv": False,
         }
     }

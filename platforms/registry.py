@@ -8,6 +8,7 @@ from .bilibili import BilibiliLoginProvider, BilibiliParser
 from .douyin import DouyinLoginProvider, DouyinParser
 from .github import GitHubParser
 from .pixiv import PixivParser
+from .qzone import QzoneParser
 from .redbook import RedBookLoginProvider, RedBookParser
 from .tieba import TiebaLoginProvider, TiebaParser
 from .wechat import WeChatLoginProvider, WeChatParser
@@ -35,5 +36,6 @@ PLATFORM_REGISTRY: tuple[PlatformRegistration, ...] = (
     PlatformRegistration(XiaoheiheParser, XiaoheiheLoginProvider),
     PlatformRegistration(ZhihuParser, ZhihuLoginProvider),
     PlatformRegistration(GitHubParser, None),
+    PlatformRegistration(QzoneParser, None),
     PlatformRegistration(PixivParser, None, enabled_by_default=False),
 )

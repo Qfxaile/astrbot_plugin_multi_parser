@@ -48,6 +48,7 @@
 | 小黑盒 | 帖子和游戏视频 | 社区帖子、游戏截图 | BBS/API 分享链接、游戏信息 |
 | 知乎 | 正文内视频 | 问题、回答、文章、想法 | `link.zhihu.com`、页面数据回退 |
 | GitHub | 不支持 | 公开仓库 OpenGraph 卡片 | 仅仓库主页，不解析 Issue、PR、文件等子路径 |
+| QQ空间 | 公开说说视频 | 公开说说正文与图片 | `h5.qzone.qq.com/ugc/share/`，无需登录 |
 | Pixiv（默认关闭） | 不支持 | 公开插画作品 | `pixiv.net/artworks/<作品ID>`、旧版 `illust_id` 链接 |
 
 > [!IMPORTANT]
@@ -87,7 +88,7 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 
 | 配置项 | 默认值 | 作用 |
 | --- | --- | --- |
-| `platform_switches` | 九个平台启用，Pixiv 关闭 | 分别控制各平台的解析器；Pixiv 需显式开启 |
+| `platform_switches` | 九个平台启用，GitHub/Pixiv 关闭 | 分别控制各平台的解析器；GitHub 和 Pixiv 需显式开启 |
 | `filter_output_links` | `false` | 替换解析结果中的网页链接，不修改用户原消息 |
 | `filtered_link_text` | `[详细内容请打开原链接查看]` | 链接过滤后的替换文案 |
 | `forward_mode` | `threshold` | `always`、`threshold` 或 `never` |
@@ -123,6 +124,8 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 | `cookies.zhihu_cookies` | 否 | 二维码登录暂不可用，可手工填写 |
 
 GitHub 仅解析公开仓库主页，不需要 Token；Issue、PR、文件、提交等仓库子路径不会触发解析。
+
+QQ空间仅解析匿名可访问的公开说说分享页，不读取或保存 QQ Cookie；私密说说、日志和相册暂不支持。
 
 Pixiv 仅解析匿名可访问的公开插画作品，不需要 Cookie；动图、小说及登录、年龄或地区限制作品暂不支持。
 

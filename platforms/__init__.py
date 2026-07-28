@@ -10,6 +10,7 @@ __all__ = [
     "XiaoheiheParser",
     "ZhihuParser",
     "GitHubParser",
+    "QzoneParser",
     "PixivParser",
 ]
 
