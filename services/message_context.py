@@ -60,8 +60,22 @@ def _extract_json_url_and_preview(data: str) -> tuple[str, str]:
         payload = json.loads(data)
     except json.JSONDecodeError:
         return "", ""
-    url = payload.get("meta", {}).get("detail_1", {}).get(
-        "qqdocurl", ""
-    ) or payload.get("meta", {}).get("news", {}).get("jumpUrl", "")
-    preview = payload.get("meta", {}).get("news", {}).get("preview", "")
+    if not isinstance(payload, dict):
+        return "", ""
+    meta = payload.get("meta", {})
+    if not isinstance(meta, dict):
+        return "", ""
+    detail = meta.get("detail_1", {})
+    news = meta.get("news", {})
+    miniapp = meta.get("miniapp", {})
+    detail = detail if isinstance(detail, dict) else {}
+    news = news if isinstance(news, dict) else {}
+    miniapp = miniapp if isinstance(miniapp, dict) else {}
+    url = (
+        detail.get("qqdocurl", "")
+        or news.get("jumpUrl", "")
+        or miniapp.get("pcJumpUrl", "")
+        or miniapp.get("legacyUrl", "")
+    )
+    preview = news.get("preview", "") or miniapp.get("preview", "")
     return str(url or ""), str(preview or "")

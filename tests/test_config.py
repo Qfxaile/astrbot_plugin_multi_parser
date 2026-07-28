@@ -107,3 +107,16 @@ def test_schema_exposes_forward_delivery_modes_and_thresholds():
     ]
     assert schema["forward_image_threshold"]["default"] == 2
     assert schema["forward_text_threshold"]["default"] == 260
+
+
+def test_schema_exposes_optional_conversation_history_modes():
+    schema_path = Path(__file__).parents[1] / "_conf_schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+
+    assert schema["enable_conversation_history"]["type"] == "bool"
+    assert schema["enable_conversation_history"]["default"] is False
+    mode = schema["conversation_history_mode"]
+    assert mode["type"] == "string"
+    assert mode["default"] == "text_only"
+    assert mode["options"] == ["text_only", "text_and_images"]
+    assert mode["labels"] == ["仅保存文字", "保存文字和图片"]

@@ -7,6 +7,7 @@ from .core.contracts import ParseResult
 from .core.http import CookieAccessError
 from .services.authentication import AuthenticationService
 from .services.configuration import build_parsers, enabled_parsers
+from .services.conversation_history import ConversationHistoryService
 from .services.delivery import DeliveryService
 from .services.message_context import extract_context
 from .services.video import (
@@ -41,6 +42,13 @@ class MultiParserPlugin(Star):
             authentication = AuthenticationService(self.config)
             self._authentication = authentication
         return authentication
+
+    def _conversation_history_service(self) -> ConversationHistoryService:
+        history = getattr(self, "_conversation_history", None)
+        if history is None:
+            history = ConversationHistoryService(self.context.conversation_manager)
+            self._conversation_history = history
+        return history
 
     def _enabled_parsers(self):
         return enabled_parsers(self.config, self.parsers)
@@ -207,6 +215,16 @@ class MultiParserPlugin(Star):
                             video_reason,
                         ):
                             yield fallback
+                if bool(self.config.get("enable_conversation_history", False)):
+                    history_mode = str(
+                        self.config.get("conversation_history_mode", "text_only")
+                    ).strip()
+                    await self._conversation_history_service().record_parse_result(
+                        event,
+                        context.combined_text,
+                        result,
+                        include_images=history_mode == "text_and_images",
+                    )
                 return
             except CookieAccessError as exc:
                 logger.warning(f"{parser.name} Cookie 访问失败: {exc}")

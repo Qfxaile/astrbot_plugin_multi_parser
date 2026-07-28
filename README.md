@@ -36,6 +36,7 @@
 - 支持普通消息、阈值合并与始终合并三种图文发送策略。
 - 发送视频前探测体积，超限时可提示、发送直链或尝试上传群文件。
 - 可过滤解析结果中的网页链接，不修改用户发送的原消息。
+- 可选将解析结果写入当前 AstrBot 会话，并选择仅保留文字或同时保留图片；默认关闭。
 
 | 平台 | 视频 | 图文 | 短链与其他内容 |
 | --- | --- | --- | --- |
@@ -91,6 +92,8 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 | `platform_switches` | 九个平台启用，GitHub/Pixiv 关闭 | 分别控制各平台的解析器；GitHub 和 Pixiv 需显式开启 |
 | `filter_output_links` | `false` | 替换解析结果中的网页链接，不修改用户原消息 |
 | `filtered_link_text` | `[详细内容请打开原链接查看]` | 链接过滤后的替换文案 |
+| `enable_conversation_history` | `false` | 是否将解析结果写入当前 AstrBot LLM 会话 |
+| `conversation_history_mode` | `text_only` | `text_only` 仅保留文字，`text_and_images` 同时保留图片 |
 | `forward_mode` | `threshold` | `always`、`threshold` 或 `never` |
 | `forward_image_threshold` | `2` | 图片数严格超过该值时合并发送 |
 | `forward_text_threshold` | `260` | 可见文字严格超过该字符数时合并发送 |

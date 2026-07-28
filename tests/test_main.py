@@ -1,3 +1,4 @@
+import base64
 from types import SimpleNamespace
 
 import httpx
@@ -11,6 +12,10 @@ from astrbot_multi_parser.core.contracts import OrderedContent, ParseResult
 from astrbot_multi_parser.core.http import CookieAccessError
 from astrbot_multi_parser.main import MultiParserPlugin, VideoSizeInfo
 from astrbot_multi_parser.services.delivery import DeliveryService
+
+TEST_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
 
 
 class FakeParser:
@@ -122,7 +127,30 @@ class FakeEvent:
         self.sent.append(chain)
 
 
-def make_plugin(result: ParseResult, **config):
+class FakeConversationManager:
+    def __init__(self, current_conversation_id="conversation-id", failure=None):
+        self.current_conversation_id = current_conversation_id
+        self.failure = failure
+        self.created = []
+        self.add_calls = 0
+        self.message_pairs = []
+
+    async def get_curr_conversation_id(self, unified_msg_origin):
+        return self.current_conversation_id
+
+    async def new_conversation(self, unified_msg_origin, platform_id=None):
+        self.created.append((unified_msg_origin, platform_id))
+        self.current_conversation_id = "new-conversation-id"
+        return self.current_conversation_id
+
+    async def add_message_pair(self, conversation_id, user_message, assistant_message):
+        self.add_calls += 1
+        if self.failure is not None:
+            raise self.failure
+        self.message_pairs.append((conversation_id, user_message, assistant_message))
+
+
+def make_plugin(result: ParseResult, *, conversation_manager=None, **config):
     plugin = MultiParserPlugin.__new__(MultiParserPlugin)
     plugin.config = {
         "platform_switches": {"fake": True},
@@ -131,6 +159,9 @@ def make_plugin(result: ParseResult, **config):
         **config,
     }
     plugin.parsers = {"fake": FakeParser(result)}
+    plugin.context = SimpleNamespace(
+        conversation_manager=conversation_manager or FakeConversationManager()
+    )
     return plugin
 
 
@@ -210,6 +241,215 @@ async def collect_results(monkeypatch, result, event=None, **config):
 async def collect_plugin_results(plugin, event):
     yielded = [item async for item in plugin.handle_parse(event)]
     return [*event.sent, *yielded]
+
+
+@pytest.mark.asyncio
+async def test_conversation_history_is_disabled_by_default(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda event: SimpleNamespace(combined_text="https://example.com/post"),
+    )
+    conversation_manager = FakeConversationManager()
+    plugin = make_plugin(
+        ParseResult(platform="测试平台", title="测试标题"),
+        conversation_manager=conversation_manager,
+    )
+
+    await collect_plugin_results(plugin, FakeEvent())
+
+    assert conversation_manager.created == []
+    assert conversation_manager.message_pairs == []
+
+
+@pytest.mark.asyncio
+async def test_conversation_history_defaults_to_text_only(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda event: SimpleNamespace(combined_text="https://example.com/post"),
+    )
+    image_path = tmp_path / "cover.png"
+    image_path.write_bytes(TEST_PNG)
+    conversation_manager = FakeConversationManager()
+    plugin = make_plugin(
+        ParseResult(
+            platform="测试平台",
+            ordered_contents=[
+                OrderedContent("text", "正文内容"),
+                OrderedContent("image", str(image_path)),
+            ],
+            temporary_files=[image_path],
+        ),
+        conversation_manager=conversation_manager,
+        enable_conversation_history=True,
+    )
+
+    await collect_plugin_results(plugin, FakeEvent())
+
+    content = conversation_manager.message_pairs[0][2]["content"]
+    assert isinstance(content, str)
+    assert "正文内容" in content
+    assert "图片: 1 张" in content
+    assert "data:image/" not in content
+    assert str(image_path) not in content
+
+
+@pytest.mark.asyncio
+async def test_successful_parse_is_added_to_current_conversation(monkeypatch, tmp_path):
+    parse_context = SimpleNamespace(combined_text="帮我看看 https://example.com/post")
+    monkeypatch.setattr(main, "extract_context", lambda event: parse_context)
+    conversation_manager = FakeConversationManager()
+    image_path = tmp_path / "cover.png"
+    image_path.write_bytes(TEST_PNG)
+    result = ParseResult(
+        platform="测试平台",
+        title="测试标题",
+        author="测试作者",
+        description="测试简介",
+        video_url="https://video.example/play.mp4?token=secret",
+        audio_url="https://audio.example/play.m4a?token=secret",
+        extra_lines=["附加信息"],
+        ordered_contents=[
+            OrderedContent("text", "正文内容"),
+            OrderedContent("image", str(image_path)),
+        ],
+        temporary_files=[image_path],
+    )
+    plugin = make_plugin(
+        result,
+        conversation_manager=conversation_manager,
+        send_video_by_url=False,
+        enable_conversation_history=True,
+        conversation_history_mode="text_and_images",
+    )
+
+    await collect_plugin_results(plugin, FakeEvent())
+
+    assert len(conversation_manager.message_pairs) == 1
+    conversation_id, user_message, assistant_message = (
+        conversation_manager.message_pairs[0]
+    )
+    assert conversation_id == "conversation-id"
+    assert user_message == {
+        "role": "user",
+        "content": parse_context.combined_text,
+    }
+    assistant_content = assistant_message["content"]
+    assert assistant_message["role"] == "assistant"
+    assert [part["type"] for part in assistant_content] == [
+        "text",
+        "text",
+        "image_url",
+        "text",
+    ]
+    summary = assistant_content[0]["text"]
+    assert "[由多平台内容解析插件发送]" in summary
+    assert "平台: 测试平台" in summary
+    assert "标题: 测试标题" in summary
+    assert "作者: 测试作者" in summary
+    assert "测试简介" in summary
+    assert "附加信息" in summary
+    assert assistant_content[1] == {"type": "text", "text": "正文内容"}
+    assert assistant_content[2]["image_url"]["url"].startswith("data:image/png;base64,")
+    assert (
+        base64.b64decode(assistant_content[2]["image_url"]["url"].split(",", 1)[1])
+        == TEST_PNG
+    )
+    assert "视频: 已发送" in assistant_content[3]["text"]
+    assert "音频: 已发送" in assistant_content[3]["text"]
+    assert "token=secret" not in str(assistant_content)
+    assert not image_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_conversation_history_preserves_ordered_text_and_images(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda event: SimpleNamespace(combined_text="https://example.com/post"),
+    )
+    first_image = tmp_path / "first.png"
+    second_image = tmp_path / "second.png"
+    first_image.write_bytes(TEST_PNG)
+    second_image.write_bytes(TEST_PNG)
+    conversation_manager = FakeConversationManager()
+    plugin = make_plugin(
+        ParseResult(
+            platform="测试平台",
+            ordered_contents=[
+                OrderedContent("text", "第一段"),
+                OrderedContent("image", str(first_image)),
+                OrderedContent("text", "第二段"),
+                OrderedContent("image", str(second_image)),
+            ],
+            temporary_files=[first_image, second_image],
+        ),
+        conversation_manager=conversation_manager,
+        enable_conversation_history=True,
+        conversation_history_mode="text_and_images",
+    )
+
+    await collect_plugin_results(plugin, FakeEvent())
+
+    content = conversation_manager.message_pairs[0][2]["content"]
+    assert [part["type"] for part in content] == [
+        "text",
+        "text",
+        "image_url",
+        "text",
+        "image_url",
+    ]
+    assert content[1] == {"type": "text", "text": "第一段"}
+    assert content[3] == {"type": "text", "text": "第二段"}
+
+
+@pytest.mark.asyncio
+async def test_successful_parse_creates_conversation_when_missing(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda event: SimpleNamespace(combined_text="https://example.com/post"),
+    )
+    conversation_manager = FakeConversationManager(current_conversation_id=None)
+    plugin = make_plugin(
+        ParseResult(platform="测试平台", title="测试标题"),
+        conversation_manager=conversation_manager,
+        enable_conversation_history=True,
+    )
+    event = FakeEvent(platform_id="platform-instance")
+
+    await collect_plugin_results(plugin, event)
+
+    assert conversation_manager.created == [
+        (event.unified_msg_origin, "platform-instance")
+    ]
+    assert conversation_manager.message_pairs[0][0] == "new-conversation-id"
+
+
+@pytest.mark.asyncio
+async def test_conversation_write_failure_does_not_break_parse_delivery(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda event: SimpleNamespace(combined_text="https://example.com/post"),
+    )
+    conversation_manager = FakeConversationManager(
+        failure=RuntimeError("database unavailable")
+    )
+    plugin = make_plugin(
+        ParseResult(platform="测试平台", title="仍应发送"),
+        conversation_manager=conversation_manager,
+        forward_mode="never",
+        enable_conversation_history=True,
+    )
+
+    messages = await collect_plugin_results(plugin, FakeEvent())
+
+    assert messages[0][0].text == "仍应发送"
+    assert conversation_manager.add_calls == 1
 
 
 @pytest.mark.asyncio

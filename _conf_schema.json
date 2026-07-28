@@ -84,6 +84,20 @@
     "default": "[详细内容请打开原链接查看]",
     "hint": "开启过滤解析结果链接后，用该文案替换标题、简介、正文和附加说明中的网页链接。"
   },
+  "enable_conversation_history": {
+    "description": "写入 LLM 会话",
+    "type": "bool",
+    "default": false,
+    "hint": "解析成功后将插件发送的内容写入当前 AstrBot 会话，供后续 LLM 对话参考。"
+  },
+  "conversation_history_mode": {
+    "description": "会话记录内容",
+    "type": "string",
+    "default": "text_only",
+    "options": ["text_only", "text_and_images"],
+    "labels": ["仅保存文字", "保存文字和图片"],
+    "hint": "仅在开启写入 LLM 会话后生效；图片模式会将图片数据写入会话，占用更多存储空间和模型上下文。"
+  },
   "forward_mode": {
     "description": "内容发送方式",
     "type": "string",
