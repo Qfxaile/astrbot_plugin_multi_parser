@@ -37,9 +37,11 @@ class DouyinParser(
         "douyincdn.com",
         "bytedance.com",
     )
+    REDIRECT_HOSTS = {"v.douyin.com", "jx.douyin.com", "qishui.douyin.com"}
     PATTERN = (
         r"https?://(?:"
         r"(?:v|jx)\.douyin\.com/[A-Za-z0-9_-]+"
+        r"|qishui\.douyin\.com/s/[A-Za-z0-9_-]+[^\s]*"
         r"|live\.douyin\.com/\d+[^\s]*"
         r"|webcast\.amemv\.com/douyin/webcast/reflow/\d+[^\s]*"
         r"|(?:www|m)\.douyin\.com/(?:video|note)/\d+[^\s]*"
@@ -78,14 +80,14 @@ class DouyinParser(
             url = match.group(0)
             hostname = urlparse(url).hostname or ""
             response = None
-            if hostname in {"v.douyin.com", "jx.douyin.com"}:
+            if hostname in self.REDIRECT_HOSTS:
                 response = await client.get(url)
                 self.raise_for_response_status(response)
                 self._raise_for_auth_page(response)
                 url = str(response.url)
 
             if is_qishui_track_url(url):
-                if hostname not in {"v.douyin.com", "jx.douyin.com"}:
+                if response is None:
                     response = await client.get(url)
                     self.raise_for_response_status(response)
                     self._raise_for_auth_page(response)
@@ -138,20 +140,19 @@ class DouyinParser(
                 result = self._parse_router_data(
                     self._extract_router_data(response.text)
                 )
-                play_token = ""
-                retained_lines = []
-                for line in result.extra_lines:
-                    if line.startswith("play_token="):
-                        play_token = line.removeprefix("play_token=")
-                    else:
-                        retained_lines.append(line)
-                result.extra_lines = retained_lines
-                if play_token:
-                    probed_url = await self._probe_video_url(
-                        client, play_token, share_url
-                    )
-                    if probed_url:
-                        result.video_url = probed_url
+
+            play_token = ""
+            retained_lines = []
+            for line in result.extra_lines:
+                if line.startswith("play_token="):
+                    play_token = line.removeprefix("play_token=")
+                else:
+                    retained_lines.append(line)
+            result.extra_lines = retained_lines
+            if play_token:
+                probed_url = await self._probe_video_url(client, play_token, share_url)
+                if probed_url:
+                    result.video_url = probed_url
 
             mark_invalid_legacy_images(result, self.INVALID_IMAGE_URL)
             return await self.materialize_images(result, client, share_url)

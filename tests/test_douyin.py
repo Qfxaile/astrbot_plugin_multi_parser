@@ -67,6 +67,9 @@ async def test_matches_only_mainland_douyin_urls():
         ParseContext(text="https://music.douyin.com/qishui/share/track?track_id=123456")
     )
     assert await parser.match(
+        ParseContext(text="https://qishui.douyin.com/s/iC4w5UsF/")
+    )
+    assert await parser.match(
         ParseContext(text="https://www.douyin.com/video/7521023890996514083")
     )
     assert not await parser.match(ParseContext(text="https://vm.tiktok.com/abc123"))
@@ -283,10 +286,16 @@ def test_qishui_track_html_parses_audio_from_router_data():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("short_url", "short_host"),
+    [
+        ("https://v.douyin.com/XwBGrQNYEYE/", "v.douyin.com"),
+        ("https://qishui.douyin.com/s/iC4w5UsF/", "qishui.douyin.com"),
+    ],
+)
 async def test_short_link_redirects_to_qishui_track(
-    monkeypatch, assert_temporary_image
+    monkeypatch, assert_temporary_image, short_url, short_host
 ):
-    short_url = "https://v.douyin.com/XwBGrQNYEYE/"
     music_url = "https://music.douyin.com/qishui/share/track?track_id=123456"
     cover_url = "https://p3-luna.douyinpic.com/cover.jpg"
     audio_url = "https://v3-luna.douyinvod.com/song.m4a"
@@ -294,7 +303,7 @@ async def test_short_link_redirects_to_qishui_track(
 
     def handler(request: httpx.Request) -> httpx.Response:
         requested_hosts.append(request.url.host)
-        if request.url.host == "v.douyin.com":
+        if request.url.host == short_host:
             return httpx.Response(
                 302,
                 headers={"Location": music_url},
@@ -334,7 +343,7 @@ async def test_short_link_redirects_to_qishui_track(
     assert result.audio_url == audio_url
     assert_temporary_image(result, result.cover_urls[0], b"cover-image")
     assert requested_hosts == [
-        "v.douyin.com",
+        short_host,
         "music.douyin.com",
         "p3-luna.douyinpic.com",
     ]
@@ -418,6 +427,45 @@ def test_router_data_falls_back_to_unwatermarked_play_addr():
     assert result.extra_lines == ["play_token=video-token"]
 
 
+def test_router_data_parses_single_animated_image_as_video():
+    payload = {
+        "loaderData": {
+            "note_(id)/page": {
+                "videoInfoRes": {
+                    "item_list": [
+                        {
+                            "desc": "动图标题",
+                            "author": {"nickname": "作者"},
+                            "images": [
+                                {
+                                    "url_list": [
+                                        "https://img.example/animated-cover.webp"
+                                    ],
+                                    "video": {
+                                        "play_addr": {
+                                            "uri": "animated-video-token",
+                                            "url_list": [
+                                                "https://video.example/animated.mp4"
+                                            ],
+                                        }
+                                    },
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        }
+    }
+
+    result = douyin.DouyinParser({})._parse_router_data(payload)
+
+    assert result.cover_urls == ["https://img.example/animated-cover.webp"]
+    assert result.image_urls == []
+    assert result.video_url == "https://video.example/animated.mp4"
+    assert result.extra_lines == ["play_token=animated-video-token"]
+
+
 def test_slides_data_keeps_static_image_order():
     payload = {
         "aweme_details": [
@@ -455,6 +503,35 @@ def test_slides_data_keeps_static_image_order():
         "https://img.example/fallback-2.webp",
     ]
     assert result.video_url == ""
+
+
+def test_slides_data_parses_single_animated_image_as_video():
+    payload = {
+        "aweme_details": [
+            {
+                "desc": "动图标题",
+                "author": {"nickname": "作者"},
+                "images": [
+                    {
+                        "url_list": ["https://img.example/animated-cover.webp"],
+                        "video": {
+                            "play_addr": {
+                                "uri": "animated-video-token",
+                                "url_list": ["https://video.example/animated.mp4"],
+                            }
+                        },
+                    }
+                ],
+            }
+        ]
+    }
+
+    result = douyin.DouyinParser({})._parse_slides_data(payload)
+
+    assert result.cover_urls == ["https://img.example/animated-cover.webp"]
+    assert result.image_urls == []
+    assert result.video_url == "https://video.example/animated.mp4"
+    assert result.extra_lines == ["play_token=animated-video-token"]
 
 
 @pytest.mark.asyncio
