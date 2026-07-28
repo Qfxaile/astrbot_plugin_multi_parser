@@ -21,24 +21,8 @@ class DouyinVideoContent:
         video = item.get("video")
         if not isinstance(video, dict):
             video = {}
-        play_addr = video.get("play_addr")
-        if not isinstance(play_addr, dict):
-            play_addr = {}
-        fallback_urls = play_addr.get("url_list") or []
-        if not isinstance(fallback_urls, list):
-            fallback_urls = []
-        fallback_urls = [url for url in fallback_urls if isinstance(url, str) and url]
-        fallback_url = (
-            fallback_urls[0].replace("playwm", "play") if fallback_urls else ""
-        )
+        fallback_url, play_token = self._extract_video_source(video)
         cover_url = self._select_image_url(video.get("cover"))
-        play_token = str(play_addr.get("uri") or "")
-        if not play_token:
-            for video_url in fallback_urls:
-                query = parse_qs(urlparse(str(video_url)).query)
-                if query.get("video_id"):
-                    play_token = query["video_id"][0]
-                    break
         extra_lines = [f"play_token={play_token}"] if play_token else []
         if not fallback_url and not play_token:
             extra_lines.append("无法获取视频直链。")
@@ -50,6 +34,30 @@ class DouyinVideoContent:
             video_url=fallback_url,
             extra_lines=extra_lines,
         )
+
+    @staticmethod
+    def _extract_video_source(video: object) -> tuple[str, str]:
+        """提取视频载荷中的播放地址和清晰度探测令牌。"""
+        if not isinstance(video, dict):
+            return "", ""
+        play_addr = video.get("play_addr")
+        if not isinstance(play_addr, dict):
+            play_addr = {}
+        fallback_urls = play_addr.get("url_list") or []
+        if not isinstance(fallback_urls, list):
+            fallback_urls = []
+        fallback_urls = [url for url in fallback_urls if isinstance(url, str) and url]
+        fallback_url = (
+            fallback_urls[0].replace("playwm", "play") if fallback_urls else ""
+        )
+        play_token = str(play_addr.get("uri") or "")
+        if not play_token:
+            for video_url in fallback_urls:
+                query = parse_qs(urlparse(str(video_url)).query)
+                if query.get("video_id"):
+                    play_token = query["video_id"][0]
+                    break
+        return fallback_url, play_token
 
     async def _probe_video_url(
         self,
