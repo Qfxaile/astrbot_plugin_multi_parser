@@ -146,6 +146,7 @@ def test_plugin_registers_all_supported_parsers():
         "wechat",
         "xiaoheihe",
         "zhihu",
+        "github",
         "pixiv",
     }
 
@@ -161,6 +162,7 @@ def test_plugin_respects_platform_switches():
             "wechat": False,
             "xiaoheihe": True,
             "zhihu": False,
+            "github": False,
             "pixiv": False,
         }
     }

@@ -10,6 +10,7 @@ PLATFORMS = (
     "wechat",
     "xiaoheihe",
     "zhihu",
+    "github",
     "pixiv",
 )
 COOKIE_KEYS = (

@@ -11,6 +11,7 @@ def test_platform_registry_has_stable_parser_and_login_order():
         "wechat",
         "xiaoheihe",
         "zhihu",
+        "github",
         "pixiv",
     ]
     assert [

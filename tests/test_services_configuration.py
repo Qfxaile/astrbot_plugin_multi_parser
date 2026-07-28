@@ -11,6 +11,7 @@ def test_registry_order_is_stable():
         "wechat",
         "xiaoheihe",
         "zhihu",
+        "github",
         "pixiv",
     ]
 

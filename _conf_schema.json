@@ -52,6 +52,12 @@
         "type": "bool",
         "default": true
       },
+      "github": {
+        "description": "GitHub",
+        "hint": "解析公开仓库主页，并发送 GitHub 官方 OpenGraph 卡片图片。",
+        "type": "bool",
+        "default": false
+      },
       "pixiv": {
         "description": "Pixiv",
         "hint": "解析匿名可访问的公开插画作品，默认关闭；暂不支持动图、小说和受限作品。",
