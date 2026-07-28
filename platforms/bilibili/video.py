@@ -13,6 +13,7 @@ class BilibiliVideoContent:
             return ParseResult(platform=self.name, error=info["error"])
 
         play_url = await self._get_play_url(str(info["cid"]), video_id)
+        referer = "https://www.bilibili.com"
         result = ParseResult(
             platform=self.name,
             title=info.get("title", "未知标题"),
@@ -21,8 +22,9 @@ class BilibiliVideoContent:
             cover_urls=[original_image_url(str(info.get("pic", "")))],
             video_url=play_url,
             extra_lines=[] if play_url else ["无法获取视频直链。"],
+            video_download_headers=self._headers(referer),
+            video_download_host_suffixes=("bilivideo.com",),
         )
-        referer = "https://www.bilibili.com"
         async with httpx.AsyncClient(
             timeout=self.request_timeout,
             headers=self._headers(referer),

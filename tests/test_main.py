@@ -6,6 +6,7 @@ from astrbot.api.message_components import Image, Node, Nodes, Plain, Record, Vi
 from astrbot.core.star.filter.permission import PermissionType, PermissionTypeFilter
 from astrbot.core.star.star_handler import star_handlers_registry
 from astrbot_multi_parser import main
+from astrbot_multi_parser.core import media
 from astrbot_multi_parser.core.contracts import OrderedContent, ParseResult
 from astrbot_multi_parser.core.http import CookieAccessError
 from astrbot_multi_parser.main import MultiParserPlugin, VideoSizeInfo
@@ -1507,6 +1508,193 @@ async def test_non_forward_content_keeps_video_as_separate_message(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_kook_materializes_remote_video_before_send(monkeypatch, tmp_path):
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"video")
+    result = ParseResult(
+        platform="test",
+        title="summary",
+        video_url="https://example.com/video.mp4",
+    )
+    plugin = make_plugin(result, forward_mode="never")
+    monkeypatch.setattr(
+        main, "extract_context", lambda event: SimpleNamespace(combined_text="url")
+    )
+    converted_urls = []
+
+    async def fake_probe(url):
+        return VideoSizeInfo(size_bytes=1024)
+
+    async def fake_convert_to_file_path(video):
+        converted_urls.append(video.file)
+        return str(video_path)
+
+    monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
+    monkeypatch.setattr(Video, "convert_to_file_path", fake_convert_to_file_path)
+
+    messages = await collect_plugin_results(
+        plugin,
+        FakeEvent(platform_name="kook"),
+    )
+
+    assert converted_urls == [result.video_url]
+    assert len(messages) == 2
+    assert isinstance(messages[1][0], Video)
+    assert messages[1][0].file == video_path.resolve().as_uri()
+    assert messages[1][0].path == str(video_path.resolve())
+    assert not video_path.exists()
+    assert result.temporary_files == []
+
+
+@pytest.mark.asyncio
+async def test_kook_materializes_video_with_platform_headers(monkeypatch):
+    requested_headers = []
+    probed_headers = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested_headers.append(request.headers)
+        return httpx.Response(
+            200,
+            content=b"video",
+            headers={"Content-Type": "video/mp4", "Content-Length": "5"},
+            request=request,
+        )
+
+    async_client = httpx.AsyncClient
+
+    def create_client(**kwargs):
+        return async_client(transport=httpx.MockTransport(handler), **kwargs)
+
+    monkeypatch.setattr(media.httpx, "AsyncClient", create_client)
+    result = ParseResult(
+        platform="bilibili",
+        title="summary",
+        video_url="https://upos-sz-estgoss.bilivideo.com/video.mp4",
+        video_download_headers={
+            "User-Agent": "BilibiliTestAgent/1.0",
+            "Referer": "https://www.bilibili.com",
+            "Cookie": "SESSDATA=must-not-leak",
+            "Authorization": "must-not-leak",
+        },
+        video_download_host_suffixes=("bilivideo.com",),
+    )
+    plugin = make_plugin(result, forward_mode="never")
+    monkeypatch.setattr(
+        main, "extract_context", lambda event: SimpleNamespace(combined_text="url")
+    )
+
+    async def fake_probe(url, headers=None):
+        probed_headers.append(headers)
+        return VideoSizeInfo(size_bytes=5)
+
+    monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
+
+    messages = await collect_plugin_results(
+        plugin,
+        FakeEvent(platform_name="kook"),
+    )
+
+    assert len(requested_headers) == 1
+    assert probed_headers == [result.video_download_headers]
+    assert requested_headers[0]["User-Agent"] == "BilibiliTestAgent/1.0"
+    assert requested_headers[0]["Referer"] == "https://www.bilibili.com"
+    assert "Cookie" not in requested_headers[0]
+    assert "Authorization" not in requested_headers[0]
+    assert isinstance(messages[1][0], Video)
+    assert messages[1][0].file.startswith("file:///")
+    assert result.temporary_files == []
+
+
+@pytest.mark.asyncio
+async def test_kook_video_rejects_untrusted_download_redirect(monkeypatch):
+    requested_urls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested_urls.append(str(request.url))
+        return httpx.Response(
+            302,
+            headers={"Location": "https://evil.example/video.mp4"},
+            request=request,
+        )
+
+    async_client = httpx.AsyncClient
+
+    def create_client(**kwargs):
+        return async_client(transport=httpx.MockTransport(handler), **kwargs)
+
+    monkeypatch.setattr(media.httpx, "AsyncClient", create_client)
+    result = ParseResult(
+        platform="bilibili",
+        title="summary",
+        video_url="https://upos-sz-estgoss.bilivideo.com/video.mp4",
+        video_download_headers={"Referer": "https://www.bilibili.com"},
+        video_download_host_suffixes=("bilivideo.com",),
+    )
+    plugin = make_plugin(result, forward_mode="never")
+    monkeypatch.setattr(
+        main, "extract_context", lambda event: SimpleNamespace(combined_text="url")
+    )
+
+    async def fake_probe(url, headers=None):
+        return VideoSizeInfo(size_bytes=5)
+
+    monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
+
+    messages = await collect_plugin_results(
+        plugin,
+        FakeEvent(platform_name="kook"),
+    )
+
+    assert requested_urls == [result.video_url]
+    assert not any(
+        isinstance(component, Video) for message in messages for component in message
+    )
+    assert any(
+        result.video_url in component.text
+        for message in messages
+        for component in message
+        if isinstance(component, Plain)
+    )
+
+
+@pytest.mark.asyncio
+async def test_kook_video_materialization_failure_falls_back_to_direct_link(
+    monkeypatch,
+):
+    result = ParseResult(
+        platform="test",
+        title="summary",
+        video_url="https://example.com/video.mp4",
+    )
+    plugin = make_plugin(result, forward_mode="never")
+    monkeypatch.setattr(
+        main, "extract_context", lambda event: SimpleNamespace(combined_text="url")
+    )
+
+    async def fake_probe(url):
+        return VideoSizeInfo(size_bytes=1024)
+
+    async def fail_convert_to_file_path(video):
+        raise httpx.ConnectError("download failed")
+
+    monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
+    monkeypatch.setattr(Video, "convert_to_file_path", fail_convert_to_file_path)
+
+    messages = await collect_plugin_results(
+        plugin,
+        FakeEvent(platform_name="kook"),
+    )
+
+    assert not any(
+        isinstance(component, Video) for message in messages for component in message
+    )
+    texts = [component.text for message in messages for component in message]
+    assert "summary" in texts
+    assert any("视频发送准备失败: ConnectError" in text for text in texts)
+    assert any(result.video_url in text for text in texts)
+
+
+@pytest.mark.asyncio
 async def test_audio_is_sent_after_track_summary(monkeypatch):
     result = ParseResult(
         platform="douyin",
@@ -1593,6 +1781,77 @@ async def test_probe_range_reads_headers_without_buffering_response_body(monkeyp
     size_info = await plugin._probe_video_size("https://example.com/video.mp4")
 
     assert size_info.size_bytes == 999999999
+
+
+@pytest.mark.asyncio
+async def test_probe_does_not_treat_http_error_length_as_video_size(monkeypatch):
+    requested_methods = []
+
+    def handler(request):
+        requested_methods.append(request.method)
+        return httpx.Response(
+            403,
+            headers={"Content-Length": "507"},
+            request=request,
+        )
+
+    real_async_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        main.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_async_client(
+            transport=httpx.MockTransport(handler), **kwargs
+        ),
+    )
+    plugin = MultiParserPlugin.__new__(MultiParserPlugin)
+    plugin.config = {"size_check_timeout_seconds": 5}
+
+    size_info = await plugin._probe_video_size("https://example.com/video.mp4")
+
+    assert requested_methods == ["HEAD", "GET"]
+    assert size_info.size_bytes is None
+    assert "403" in size_info.reason
+    assert "example.com" not in size_info.reason
+
+
+@pytest.mark.asyncio
+async def test_probe_uses_platform_headers_without_credentials(monkeypatch):
+    requested_headers = []
+
+    def handler(request):
+        requested_headers.append(request.headers)
+        return httpx.Response(
+            200,
+            headers={"Content-Length": "123"},
+            request=request,
+        )
+
+    real_async_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        main.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_async_client(
+            transport=httpx.MockTransport(handler), **kwargs
+        ),
+    )
+    plugin = MultiParserPlugin.__new__(MultiParserPlugin)
+    plugin.config = {"size_check_timeout_seconds": 5}
+
+    size_info = await plugin._probe_video_size(
+        "https://example.com/video.mp4",
+        {
+            "User-Agent": "PlatformAgent/1.0",
+            "Referer": "https://example.com/source",
+            "Cookie": "must-not-leak",
+            "Authorization": "must-not-leak",
+        },
+    )
+
+    assert size_info.size_bytes == 123
+    assert requested_headers[0]["User-Agent"] == "PlatformAgent/1.0"
+    assert requested_headers[0]["Referer"] == "https://example.com/source"
+    assert "Cookie" not in requested_headers[0]
+    assert "Authorization" not in requested_headers[0]
 
 
 @pytest.mark.asyncio

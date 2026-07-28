@@ -7,9 +7,10 @@ from urllib.parse import urlparse
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, MessageChain
-from astrbot.api.message_components import Image, Node, Nodes, Plain
+from astrbot.api.message_components import Image, Node, Nodes, Plain, Video
 
 from ..core.contracts import ParseResult
+from ..core.media import VideoMaterializer
 from .text_processing import replace_links
 
 
@@ -17,6 +18,7 @@ class DeliveryService:
     """封装 AstrBot 跨平台消息组件编排与平台特有增强。"""
 
     ONEBOT_PLATFORM = "aiocqhttp"
+    KOOK_PLATFORM = "kook"
     FORWARD_NODE_PLATFORMS = {"aiocqhttp", "satori"}
     FORWARD_MODES = {"always", "threshold", "never"}
     DEFAULT_FORWARD_MODE = "threshold"
@@ -86,6 +88,26 @@ class DeliveryService:
             include_video_url=include_video_url,
         )
         return results
+
+    async def prepare_video_chain(
+        self,
+        event: AstrMessageEvent,
+        result: ParseResult,
+    ) -> list:
+        """为需要本地上传的适配器准备视频组件。"""
+        video_chain = result.video_chain()
+        if self._platform_name(event) != self.KOOK_PLATFORM or not video_chain:
+            return video_chain
+
+        if result.video_download_host_suffixes:
+            video_path = await VideoMaterializer(
+                self.config,
+                result.video_download_host_suffixes,
+            ).materialize(result)
+        else:
+            video_path = Path(await video_chain[0].convert_to_file_path()).resolve()
+            result.temporary_files.append(video_path)
+        return [Video.fromFileSystem(video_path)]
 
     def build_content_delivery(
         self,

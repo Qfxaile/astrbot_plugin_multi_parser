@@ -847,6 +847,15 @@ async def test_video_materializes_original_cover(monkeypatch, assert_temporary_i
 
     assert_temporary_image(result, result.cover_urls[0], b"video-cover")
     assert result.video_url == "https://video.example/play.mp4"
+    assert result.video_download_headers == {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) "
+            "Gecko/20100101 Firefox/102.0"
+        ),
+        "Referer": "https://www.bilibili.com",
+    }
+    assert result.video_download_host_suffixes == ("bilivideo.com",)
+    assert "Cookie" not in result.video_download_headers
     assert image_request is not None
     assert str(image_request.url) == "https://i0.hdslb.com/video.jpg"
     assert "Cookie" not in image_request.headers

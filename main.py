@@ -67,8 +67,12 @@ class MultiParserPlugin(Star):
     def _parse_content_range(value: str) -> int | None:
         return parse_content_range(value)
 
-    async def _probe_video_size(self, url: str) -> VideoSizeInfo:
-        return await VideoSizeProbe(self.config).probe(url)
+    async def _probe_video_size(
+        self,
+        url: str,
+        headers: dict[str, str] | None = None,
+    ) -> VideoSizeInfo:
+        return await VideoSizeProbe(self.config).probe(url, headers)
 
     def _video_send_decision(self, size_info: VideoSizeInfo) -> tuple[bool, str]:
         return VideoSendPolicy(self.config).decide(size_info)
@@ -140,7 +144,13 @@ class MultiParserPlugin(Star):
                 should_send_video = False
                 video_reason = ""
                 if send_video_by_url and result.video_url:
-                    video_size_info = await self._probe_video_size(result.video_url)
+                    if result.video_download_headers:
+                        video_size_info = await self._probe_video_size(
+                            result.video_url,
+                            result.video_download_headers,
+                        )
+                    else:
+                        video_size_info = await self._probe_video_size(result.video_url)
                     should_send_video, video_reason = self._video_send_decision(
                         video_size_info
                     )
@@ -174,7 +184,22 @@ class MultiParserPlugin(Star):
 
                 if send_video_by_url and result.video_url:
                     if should_send_video and not video_embedded:
-                        yield event.chain_result(result.video_chain())
+                        try:
+                            video_chain = await delivery.prepare_video_chain(
+                                event, result
+                            )
+                        except Exception as exc:
+                            logger.warning(
+                                f"{parser.name} 视频发送准备失败: {type(exc).__name__}"
+                            )
+                            async for fallback in self._forward_with_fallback(
+                                event,
+                                result,
+                                f"视频发送准备失败: {type(exc).__name__}",
+                            ):
+                                yield fallback
+                        else:
+                            yield event.chain_result(video_chain)
                     elif not should_send_video:
                         async for fallback in self._forward_with_fallback(
                             event,

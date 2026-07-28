@@ -10,6 +10,30 @@ import httpx
 from astrbot.api import logger
 
 from .contracts import ParseResult
+from .http import is_trusted_https_url, request_timeout
+
+FORBIDDEN_MEDIA_HEADERS = {"authorization", "cookie", "proxy-authorization"}
+
+
+def sanitize_media_headers(
+    headers: Mapping[str, str] | None,
+) -> dict[str, str]:
+    """保留安全媒体请求头，剔除凭据与非法换行。"""
+    sanitized: dict[str, str] = {}
+    for name, value in (headers or {}).items():
+        name_text = str(name).strip()
+        value_text = str(value)
+        if (
+            not name_text
+            or name_text.lower() in FORBIDDEN_MEDIA_HEADERS
+            or any(
+                character in name_text or character in value_text
+                for character in "\r\n"
+            )
+        ):
+            continue
+        sanitized[name_text] = value_text
+    return sanitized
 
 
 def mark_invalid_legacy_images(
@@ -282,6 +306,97 @@ class ImageMaterializer:
             return urlparse(image_url).hostname or "unknown"
         except ValueError:
             return "unknown"
+
+
+class VideoMaterializer:
+    """使用平台声明的非敏感请求头安全下载远程视频。"""
+
+    MAX_REDIRECTS = 5
+    CHUNK_SIZE = 64 * 1024
+
+    def __init__(
+        self,
+        config: Mapping[str, object],
+        allowed_host_suffixes: tuple[str, ...],
+    ) -> None:
+        self.config = config
+        self.allowed_host_suffixes = allowed_host_suffixes
+
+    async def materialize(self, result: ParseResult) -> Path:
+        """下载视频、登记临时文件并返回本地路径。"""
+        headers = sanitize_media_headers(result.video_download_headers)
+        async with httpx.AsyncClient(
+            timeout=request_timeout(self.config),
+            headers=headers,
+            follow_redirects=False,
+        ) as client:
+            video_path = await self._download(client, result.video_url)
+        result.temporary_files.append(video_path)
+        return video_path
+
+    async def _download(self, client: httpx.AsyncClient, video_url: str) -> Path:
+        current_url = video_url
+        for redirect_count in range(self.MAX_REDIRECTS + 1):
+            self._validate_url(current_url)
+            async with client.stream("GET", current_url) as response:
+                if 300 <= response.status_code < 400:
+                    location = response.headers.get("Location")
+                    if redirect_count >= self.MAX_REDIRECTS or not location:
+                        raise httpx.InvalidURL("too many video redirects")
+                    current_url = urljoin(current_url, location)
+                    continue
+
+                response.raise_for_status()
+                max_size_bytes = self._max_size_bytes()
+                content_length = response.headers.get("Content-Length", "")
+                if (
+                    max_size_bytes is not None
+                    and content_length.isdigit()
+                    and int(content_length) > max_size_bytes
+                ):
+                    raise ValueError("视频下载大小超过配置限制")
+
+                video_path = self._new_video_path(
+                    current_url, response.headers.get("Content-Type", "")
+                )
+                downloaded_bytes = 0
+                try:
+                    with video_path.open("wb") as video_file:
+                        async for chunk in response.aiter_bytes(
+                            chunk_size=self.CHUNK_SIZE
+                        ):
+                            downloaded_bytes += len(chunk)
+                            if (
+                                max_size_bytes is not None
+                                and downloaded_bytes > max_size_bytes
+                            ):
+                                raise ValueError("视频下载大小超过配置限制")
+                            video_file.write(chunk)
+                except Exception:
+                    video_path.unlink(missing_ok=True)
+                    raise
+                return video_path
+        raise httpx.InvalidURL("too many video redirects")
+
+    def _validate_url(self, video_url: str) -> None:
+        if not self.allowed_host_suffixes or not is_trusted_https_url(
+            video_url, self.allowed_host_suffixes
+        ):
+            raise httpx.InvalidURL("unsafe video URL")
+
+    def _max_size_bytes(self) -> int | None:
+        max_size_mb = float(self.config.get("max_video_size_mb", 50))
+        return None if max_size_mb <= 0 else int(max_size_mb * 1024 * 1024)
+
+    @staticmethod
+    def _new_video_path(video_url: str, content_type: str) -> Path:
+        temp_dir = Path(__file__).resolve().parents[1] / "data" / "temp" / "videos"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        suffix = Path(urlparse(video_url).path).suffix.lower()
+        if suffix not in {".m4v", ".mkv", ".mov", ".mp4", ".webm"}:
+            media_type = content_type.split(";", 1)[0].strip().lower()
+            suffix = mimetypes.guess_extension(media_type) or ".mp4"
+        return temp_dir / f"{uuid4().hex}{suffix}"
 
 
 def cleanup_temporary_files(result: ParseResult) -> None:

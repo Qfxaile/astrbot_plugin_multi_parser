@@ -5,6 +5,8 @@ from dataclasses import dataclass
 import httpx
 from astrbot.api import logger
 
+from ..core.media import sanitize_media_headers
+
 
 @dataclass
 class VideoSizeInfo:
@@ -24,34 +26,43 @@ class VideoSizeProbe:
     def __init__(self, config: Mapping[str, object]) -> None:
         self.config = config
 
-    async def probe(self, url: str) -> VideoSizeInfo:
+    async def probe(
+        self,
+        url: str,
+        headers: Mapping[str, str] | None = None,
+    ) -> VideoSizeInfo:
         timeout = float(
             self.config.get(
                 "size_check_timeout_seconds",
                 self.config.get("request_timeout_seconds", 30),
             )
         )
-        headers = {
+        request_headers = {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             ),
             "Accept": "*/*",
         }
+        request_headers.update(sanitize_media_headers(headers))
         async with httpx.AsyncClient(
-            timeout=timeout, follow_redirects=True, headers=headers
+            timeout=timeout, follow_redirects=True, headers=request_headers
         ) as client:
             try:
                 response = await client.head(url)
+                response.raise_for_status()
                 length = response.headers.get("Content-Length")
                 if length and length.isdigit():
                     return VideoSizeInfo(size_bytes=int(length))
             except Exception as exc:
-                logger.info(f"HEAD 检查视频大小失败，尝试 Range 请求: {exc}")
+                logger.info(
+                    f"HEAD 检查视频大小失败，尝试 Range 请求: {self._error_detail(exc)}"
+                )
 
             try:
                 async with client.stream(
                     "GET", url, headers={"Range": "bytes=0-0"}
                 ) as response:
+                    response.raise_for_status()
                     content_range = response.headers.get("Content-Range", "")
                     size = parse_content_range(content_range)
                     if size is not None:
@@ -63,9 +74,17 @@ class VideoSizeProbe:
                             return VideoSizeInfo(size_bytes=length_bytes)
                         return VideoSizeInfo(reason="服务端未返回完整文件大小")
             except Exception as exc:
-                return VideoSizeInfo(reason=f"视频大小检查失败: {exc}")
+                return VideoSizeInfo(
+                    reason=f"视频大小检查失败: {self._error_detail(exc)}"
+                )
 
         return VideoSizeInfo(reason="服务端未返回视频大小")
+
+    @staticmethod
+    def _error_detail(exc: Exception) -> str:
+        if isinstance(exc, httpx.HTTPStatusError):
+            return f"HTTP {exc.response.status_code}"
+        return type(exc).__name__
 
 
 class VideoSendPolicy:
