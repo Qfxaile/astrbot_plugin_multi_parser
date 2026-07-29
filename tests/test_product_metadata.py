@@ -136,3 +136,8 @@ def test_format_product_price_handles_currency_without_double_prefix():
     assert format_product_price("￥12.00", "CNY") == "￥12.00"
     assert format_product_price("12.00", "USD") == "USD 12.00"
     assert format_product_price("", "CNY") == ""
+
+
+def test_format_product_price_hides_zero_amounts():
+    for value in (0, 0.0, "0", "0.00", "¥0", "￥0.00", "0元"):
+        assert format_product_price(value, "CNY") == ""

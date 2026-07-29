@@ -243,7 +243,7 @@
         "description": "淘宝/天猫 Cookies",
         "type": "text",
         "default": "",
-        "hint": "选填。用于淘宝和天猫商品页面请求，可提高登录态或风控场景下的解析成功率。"
+        "hint": "选填。只填写浏览器请求头中的 Cookie 原文，不要粘贴整条 curl 或带 ^ 的 CMD 转义文本；MTop 商品详情需要包含 _m_h5_tk 和 _m_h5_tk_enc。"
       },
       "jd_cookies": {
         "description": "京东 Cookies",
@@ -255,7 +255,7 @@
         "description": "拼多多 Cookies",
         "type": "text",
         "default": "",
-        "hint": "选填。用于拼多多商品页面请求，可提高登录态或风控场景下的解析成功率。"
+        "hint": "选填。只填写浏览器请求头中的完整 Cookie 原文，不要粘贴整条 curl；商品详情请求需保留 pdd_user_id 和 PDDAccessToken。"
       }
     }
   }

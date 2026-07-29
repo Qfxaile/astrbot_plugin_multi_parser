@@ -1,8 +1,22 @@
+import hashlib
+import json
+
 import httpx
 import pytest
 from astrbot_multi_parser.core.contracts import ParseContext
+from astrbot_multi_parser.core.http import CookieAccessError, build_cookies
+from astrbot_multi_parser.core.product_metadata import ProductMetadata
 from astrbot_multi_parser.core.webpage import FetchedWebPage, TrustedWebPageError
 from astrbot_multi_parser.platforms.taobao import TaobaoParser
+
+
+def test_taobao_result_only_displays_product_content():
+    result = TaobaoParser({})._build_result(
+        ProductMetadata(title="淘宝商品", price="¥88.00", shop="淘宝店铺"),
+        "https://item.taobao.com/item.htm?id=123456",
+    )
+
+    assert result.extra_lines == []
 
 
 @pytest.mark.parametrize(
@@ -85,11 +99,7 @@ async def test_taobao_parse_uses_json_ld_then_platform_data(monkeypatch):
 
     assert result.title == "JSON-LD标题"
     assert result.cover_urls == ["https://img.alicdn.com/main.jpg"]
-    assert result.extra_lines == [
-        "价格: ¥299.00",
-        "店铺: 淘宝测试店",
-        "商品链接: https://item.taobao.com/item.htm?id=123456",
-    ]
+    assert result.extra_lines == []
     assert requested[0][0] == "https://m.tb.cn/h.Abc123"
     assert materialized == ["https://item.taobao.com/item.htm?id=123456&spm=secret"]
 
@@ -125,13 +135,152 @@ async def test_taobao_parse_follows_client_side_share_target(monkeypatch):
     )
 
     assert result.title == "淘宝公开商品"
-    assert result.extra_lines == [
-        "商品链接: https://item.taobao.com/item.htm?id=1067554939784"
-    ]
+    assert result.extra_lines == []
     assert requested == [
         "https://e.tb.cn/h.8VdXPOwpkmPwjZu?tk=share",
         "https://item.taobao.com/item.htm?id=1067554939784&spm=secret",
     ]
+
+
+async def test_taobao_parse_uses_mtop_when_page_has_no_metadata(monkeypatch):
+    parser = TaobaoParser(
+        {
+            "cookies": {
+                "taobao_cookies": "_m_h5_tk=test-token_123; _m_h5_tk_enc=test-enc"
+            }
+        }
+    )
+    requested_item_ids = []
+
+    async def fetch_page(client, url, host_suffixes):
+        return FetchedWebPage(
+            "https://h5.m.taobao.com/awp/core/detail.htm?id=1067554939784",
+            "<html></html>",
+        )
+
+    async def fetch_api_metadata(client, item_id):
+        requested_item_ids.append(item_id)
+        return ProductMetadata(
+            title="MTop 淘宝商品",
+            price="¥17.52",
+            shop="MTop 店铺",
+            image_url="https://img.alicdn.com/product.jpg",
+        )
+
+    async def materialize(result, client, referer):
+        return result
+
+    monkeypatch.setattr(
+        "astrbot_multi_parser.platforms.taobao.parser.fetch_trusted_html", fetch_page
+    )
+    monkeypatch.setattr(
+        parser,
+        "_fetch_api_metadata",
+        fetch_api_metadata,
+        raising=False,
+    )
+    monkeypatch.setattr(parser, "materialize_images", materialize)
+
+    result = await parser.parse(
+        ParseContext(text="https://item.taobao.com/item.htm?id=1067554939784")
+    )
+
+    assert result.title == "MTop 淘宝商品"
+    assert result.cover_urls == ["https://img.alicdn.com/product.jpg"]
+    assert result.extra_lines == []
+    assert requested_item_ids == ["1067554939784"]
+
+
+async def test_taobao_mtop_request_is_signed_and_extracts_product():
+    cookie_value = "_m_h5_tk=test-token_123; _m_h5_tk_enc=test-enc"
+    parser = TaobaoParser({"cookies": {"taobao_cookies": cookie_value}})
+    assert hasattr(parser, "_fetch_api_metadata"), "淘宝解析器尚未实现 MTop 详情请求"
+
+    def handler(request):
+        assert request.url.host == "h5api.m.taobao.com"
+        assert request.url.path == "/h5/mtop.taobao.pcdetail.data.get/1.0/"
+        params = request.url.params
+        assert params["api"] == "mtop.taobao.pcdetail.data.get"
+        request_data = params["data"]
+        assert json.loads(request_data)["id"] == "1067554939784"
+        expected_sign = hashlib.md5(
+            f"test-token&{params['t']}&12574478&{request_data}".encode()
+        ).hexdigest()
+        assert params["sign"] == expected_sign
+        assert "_m_h5_tk=test-token_123" in request.headers["cookie"]
+        return httpx.Response(
+            200,
+            json={
+                "ret": ["SUCCESS::调用成功"],
+                "data": {
+                    "item": {
+                        "title": "MTop 淘宝商品",
+                        "images": ["https://img.alicdn.com/product.jpg"],
+                    },
+                    "price": {"priceText": "17.52"},
+                    "seller": {"shopName": "MTop 店铺"},
+                },
+            },
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        cookies=build_cookies(cookie_value, parser.cookie_domains),
+    ) as client:
+        metadata = await parser._fetch_api_metadata(client, "1067554939784")
+
+    assert metadata == ProductMetadata(
+        title="MTop 淘宝商品",
+        price="¥17.52",
+        shop="MTop 店铺",
+        image_url="https://img.alicdn.com/product.jpg",
+    )
+
+
+async def test_taobao_rejects_cmd_escaped_cookie_before_mtop_request():
+    cookie_value = (
+        "_m_h5_tk=test-token_123; _m_h5_tk_enc=test-enc; cookie17=user^%^3D^%^3D"
+    )
+    parser = TaobaoParser({"cookies": {"taobao_cookies": cookie_value}})
+    requested = False
+
+    def handler(request):
+        nonlocal requested
+        requested = True
+        return httpx.Response(200, json={"ret": ["SUCCESS::调用成功"], "data": {}})
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        cookies=build_cookies(cookie_value, parser.cookie_domains),
+    ) as client:
+        with pytest.raises(ValueError, match="Cookies 格式不正确"):
+            await parser._fetch_api_metadata(client, "1067554939784")
+
+    assert requested is False
+
+
+async def test_taobao_maps_mtop_risk_response_to_cookie_error():
+    cookie_value = "_m_h5_tk=test-token_123; _m_h5_tk_enc=test-enc"
+    parser = TaobaoParser({"cookies": {"taobao_cookies": cookie_value}})
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json={
+                "ret": ["RGV587_ERROR::SM::访问频繁"],
+                "data": {"url": "https://h5api.m.taobao.com/private-token"},
+            },
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        cookies=build_cookies(cookie_value, parser.cookie_domains),
+    ) as client:
+        with pytest.raises(CookieAccessError) as error:
+            await parser._fetch_api_metadata(client, "1067554939784")
+
+    assert "private-token" not in str(error.value)
+    assert "test-token" not in str(error.value)
 
 
 async def test_taobao_scopes_page_cookies_and_keeps_images_cookie_free(monkeypatch):
@@ -148,6 +297,7 @@ async def test_taobao_scopes_page_cookies_and_keeps_images_cookie_free(monkeypat
             """
             <meta property="og:title" content="淘宝商品">
             <meta property="og:image" content="https://img.alicdn.com/main.jpg">
+            <meta property="product:price:amount" content="88.00">
             """,
         )
 
@@ -214,9 +364,7 @@ async def test_taobao_parse_falls_back_to_open_graph_without_price(monkeypatch):
     )
 
     assert result.title == "公开商品"
-    assert result.extra_lines == [
-        "商品链接: https://detail.tmall.com/item.htm?id=234567"
-    ]
+    assert result.extra_lines == []
 
 
 async def test_taobao_parse_rejects_short_link_to_non_product_page(monkeypatch):

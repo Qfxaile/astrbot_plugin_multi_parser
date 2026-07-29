@@ -1,8 +1,18 @@
 import httpx
 import pytest
 from astrbot_multi_parser.core.contracts import ParseContext
+from astrbot_multi_parser.core.product_metadata import ProductMetadata
 from astrbot_multi_parser.core.webpage import FetchedWebPage, TrustedWebPageError
 from astrbot_multi_parser.platforms.jd import JDParser
+
+
+def test_jd_result_only_displays_product_content():
+    result = JDParser({})._build_result(
+        ProductMetadata(title="京东商品", price="¥99.00", shop="京东店铺"),
+        "https://item.jd.com/100012043978.html",
+    )
+
+    assert result.extra_lines == []
 
 
 @pytest.mark.parametrize(
@@ -74,11 +84,7 @@ async def test_jd_parse_uses_json_ld_then_platform_data(monkeypatch):
 
     assert result.title == "JSON-LD京东商品"
     assert result.cover_urls == ["https://img10.360buyimg.com/n1/main.jpg"]
-    assert result.extra_lines == [
-        "价格: ¥99.00",
-        "店铺: 京东测试店",
-        "商品链接: https://item.jd.com/100012043978.html",
-    ]
+    assert result.extra_lines == []
     assert materialized == ["https://item.jd.com/100012043978.html?utm_source=secret"]
 
 
@@ -116,10 +122,7 @@ async def test_jd_parse_reads_item_info_embedded_objects(monkeypatch):
 
     assert result.title == "西部数据固态硬盘"
     assert result.cover_urls == ["https://img10.360buyimg.com/n1/jfs/t1/main.png"]
-    assert result.extra_lines == [
-        "店铺: 西部数据官方旗舰店",
-        "商品链接: https://item.jd.com/10060144289722.html",
-    ]
+    assert result.extra_lines == []
 
 
 async def test_jd_scopes_page_cookies_and_keeps_images_cookie_free(monkeypatch):
@@ -179,7 +182,7 @@ async def test_jd_parse_falls_back_to_open_graph_without_optional_fields(
 
     assert result.title == "京东公开商品"
     assert result.cover_urls == []
-    assert result.extra_lines == ["商品链接: https://item.jd.com/100012043978.html"]
+    assert result.extra_lines == []
 
 
 async def test_jd_parse_rejects_short_link_to_non_product_page(monkeypatch):

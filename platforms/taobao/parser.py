@@ -1,6 +1,9 @@
 """解析淘宝与天猫匿名可访问的公开商品页。"""
 
+import hashlib
+import json
 import re
+import time
 from collections.abc import Iterable, Mapping
 from html import unescape
 from urllib.parse import parse_qs, urljoin, urlsplit
@@ -8,7 +11,13 @@ from urllib.parse import parse_qs, urljoin, urlsplit
 import httpx
 
 from ...core.contracts import ParseContext, ParseResult
-from ...core.http import build_cookies, cookie_config_value, is_trusted_https_url
+from ...core.http import (
+    CookieAccessError,
+    build_cookies,
+    cookie_config_value,
+    is_trusted_https_url,
+    parse_cookie_header,
+)
 from ...core.parser import BaseParser
 from ...core.product_metadata import (
     ProductMetadata,
@@ -19,6 +28,16 @@ from ...core.product_metadata import (
     iter_json_script_values,
 )
 from ...core.webpage import TrustedWebPageError, fetch_trusted_html
+
+
+class TaobaoCookieFormatError(ValueError):
+    """表示手工配置中包含 curl 命令或 CMD 转义字符。"""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "淘宝/天猫 Cookies 格式不正确，请只填写浏览器 Cookie 请求头原文，"
+            "不要粘贴整条 curl 或 CMD 转义符。"
+        )
 
 
 class TaobaoParser(BaseParser):
@@ -47,6 +66,10 @@ class TaobaoParser(BaseParser):
         "main.m.taobao.com": frozenset({"/security-h5-detail/home"}),
     }
     VERIFY_MARKERS = ("验证码", "安全验证", "登录后查看")
+    MTOP_ENDPOINT = "https://h5api.m.taobao.com/h5/mtop.taobao.pcdetail.data.get/1.0/"
+    MTOP_API = "mtop.taobao.pcdetail.data.get"
+    MTOP_APP_KEY = "12574478"
+    MTOP_MAX_BYTES = 2 * 1024 * 1024
     HEADERS = {
         "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
         "Accept-Language": "zh-CN,zh;q=0.9",
@@ -114,6 +137,10 @@ class TaobaoParser(BaseParser):
                     extract_open_graph_product(page.html, page.final_url)
                 )
                 if not metadata.title:
+                    item_id = self._product_id(canonical_url)
+                    if item_id:
+                        metadata = await self._fetch_api_metadata(client, item_id)
+                if not metadata.title:
                     return ParseResult(
                         platform=self.name,
                         error=str(self.cookie_access_error()),
@@ -128,6 +155,8 @@ class TaobaoParser(BaseParser):
                     headers=self.HEADERS,
                 )
         except TrustedWebPageError as exc:
+            return ParseResult(platform=self.name, error=str(exc))
+        except (CookieAccessError, TaobaoCookieFormatError) as exc:
             return ParseResult(platform=self.name, error=str(exc))
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code in self.cookie_failure_status_codes:
@@ -216,8 +245,19 @@ class TaobaoParser(BaseParser):
         html_text: str,
         base_url: str,
     ) -> ProductMetadata:
+        return cls._extract_payload_metadata(
+            iter_json_script_values(html_text),
+            base_url,
+        )
+
+    @classmethod
+    def _extract_payload_metadata(
+        cls,
+        payloads: Iterable[object],
+        base_url: str,
+    ) -> ProductMetadata:
         metadata = ProductMetadata()
-        for payload in iter_json_script_values(html_text):
+        for payload in payloads:
             for container in cls._iter_mappings(payload):
                 item = container.get("item")
                 if not isinstance(item, Mapping):
@@ -238,6 +278,89 @@ class TaobaoParser(BaseParser):
                 )
                 metadata = metadata.with_fallback(candidate)
         return metadata
+
+    async def _fetch_api_metadata(
+        self,
+        client: httpx.AsyncClient,
+        item_id: str,
+    ) -> ProductMetadata:
+        cookie_value = cookie_config_value(self.config, self.cookie_config_key)
+        cookie_text = str(cookie_value or "")
+        if (
+            "^" in cookie_text
+            or "\r" in cookie_text
+            or "\n" in cookie_text
+            or cookie_text.lstrip().lower().startswith("curl ")
+        ):
+            raise TaobaoCookieFormatError()
+        cookie_pairs = dict(parse_cookie_header(cookie_value))
+        token_cookie = cookie_pairs.get("_m_h5_tk", "")
+        token_encrypted = cookie_pairs.get("_m_h5_tk_enc", "")
+        token = token_cookie.split("_", 1)[0]
+        if not token or not token_encrypted:
+            raise self.cookie_access_error()
+
+        ex_params = json.dumps(
+            {
+                "id": item_id,
+                "queryParams": f"id={item_id}",
+                "domain": "https://item.taobao.com",
+                "path_name": "/item.htm",
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        request_data = json.dumps(
+            {"id": item_id, "detail_v": "3.3.2", "exParams": ex_params},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        timestamp = str(int(time.time() * 1000))
+        sign_source = f"{token}&{timestamp}&{self.MTOP_APP_KEY}&{request_data}"
+        sign = hashlib.md5(sign_source.encode()).hexdigest()
+
+        async with client.stream(
+            "GET",
+            self.MTOP_ENDPOINT,
+            params={
+                "jsv": "2.7.2",
+                "appKey": self.MTOP_APP_KEY,
+                "t": timestamp,
+                "sign": sign,
+                "api": self.MTOP_API,
+                "v": "1.0",
+                "dataType": "json",
+                "timeout": "20000",
+                "type": "json",
+                "data": request_data,
+            },
+            headers={"Referer": "https://item.taobao.com/"},
+        ) as response:
+            response.raise_for_status()
+            chunks: list[bytes] = []
+            received_size = 0
+            async for chunk in response.aiter_bytes(chunk_size=64 * 1024):
+                received_size += len(chunk)
+                if received_size > self.MTOP_MAX_BYTES:
+                    raise self.cookie_access_error()
+                chunks.append(chunk)
+
+        try:
+            payload = json.loads(b"".join(chunks))
+        except (json.JSONDecodeError, UnicodeDecodeError, RecursionError):
+            raise self.cookie_access_error() from None
+        if not isinstance(payload, Mapping):
+            raise self.cookie_access_error()
+        returns = payload.get("ret")
+        if not isinstance(returns, list) or not any(
+            isinstance(value, str) and value.startswith("SUCCESS") for value in returns
+        ):
+            raise self.cookie_access_error()
+        data = payload.get("data")
+        if not isinstance(data, Mapping):
+            raise self.cookie_access_error()
+        canonical_url = f"https://item.taobao.com/item.htm?id={item_id}"
+        return self._extract_payload_metadata((data,), canonical_url)
 
     @classmethod
     def _iter_mappings(
@@ -277,15 +400,8 @@ class TaobaoParser(BaseParser):
     def _build_result(
         self,
         metadata: ProductMetadata,
-        canonical_url: str,
+        _canonical_url: str,
     ) -> ParseResult:
-        extra_lines = []
-        if metadata.price:
-            extra_lines.append(f"价格: {metadata.price}")
-        if metadata.shop:
-            extra_lines.append(f"店铺: {metadata.shop}")
-        extra_lines.append(f"商品链接: {canonical_url}")
-
         image_url = metadata.image_url
         if image_url and not is_trusted_https_url(
             image_url,
@@ -296,5 +412,5 @@ class TaobaoParser(BaseParser):
             platform=self.name,
             title=metadata.title,
             cover_urls=[image_url] if image_url else [],
-            extra_lines=extra_lines,
+            extra_lines=[],
         )

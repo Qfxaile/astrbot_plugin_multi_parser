@@ -99,7 +99,6 @@ class JDParser(BaseParser):
                         platform=self.name,
                         error=("未找到京东商品信息，页面可能需要登录或结构已变化。"),
                     )
-
                 result = self._build_result(metadata, canonical_url)
                 if not result.cover_urls:
                     return result
@@ -258,15 +257,8 @@ class JDParser(BaseParser):
     def _build_result(
         self,
         metadata: ProductMetadata,
-        canonical_url: str,
+        _canonical_url: str,
     ) -> ParseResult:
-        extra_lines = []
-        if metadata.price:
-            extra_lines.append(f"价格: {metadata.price}")
-        if metadata.shop:
-            extra_lines.append(f"店铺: {metadata.shop}")
-        extra_lines.append(f"商品链接: {canonical_url}")
-
         image_url = metadata.image_url
         if image_url and not is_trusted_https_url(
             image_url,
@@ -277,7 +269,7 @@ class JDParser(BaseParser):
             platform=self.name,
             title=metadata.title,
             cover_urls=[image_url] if image_url else [],
-            extra_lines=extra_lines,
+            extra_lines=[],
         )
 
     def _network_error(self) -> ParseResult:

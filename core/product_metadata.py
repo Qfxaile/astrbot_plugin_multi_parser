@@ -4,6 +4,7 @@ import html
 import json
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
 from urllib.parse import urljoin
 
@@ -37,6 +38,14 @@ def format_product_price(value: object, currency: object = "CNY") -> str:
     amount = clean_product_text(value)
     if not amount:
         return ""
+    normalized_amount = amount.replace(",", "").lstrip("¥￥")
+    if normalized_amount.endswith("元"):
+        normalized_amount = normalized_amount[:-1].strip()
+    try:
+        if Decimal(normalized_amount) == 0:
+            return ""
+    except InvalidOperation:
+        pass
     unit = clean_product_text(currency).upper()
     if unit in {"", "CNY", "RMB", "¥", "￥"}:
         return amount if amount.startswith(("¥", "￥")) else f"¥{amount}"
