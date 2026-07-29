@@ -59,13 +59,9 @@ class _ProductMetadataHTMLParser(HTMLParser):
         tag: str,
         attrs: list[tuple[str, str | None]],
     ) -> None:
-        attributes = {
-            name.lower(): value or "" for name, value in attrs
-        }
+        attributes = {name.lower(): value or "" for name, value in attrs}
         if tag.lower() == "meta":
-            key = (
-                attributes.get("property") or attributes.get("name")
-            ).lower()
+            key = (attributes.get("property") or attributes.get("name")).lower()
             content = attributes.get("content", "").strip()
             if key and content and key not in self.metadata:
                 self.metadata[key] = content
@@ -134,8 +130,7 @@ def _is_product_node(node: Mapping[str, object]) -> bool:
         return node_type.lower() == "product"
     if isinstance(node_type, list):
         return any(
-            isinstance(value, str) and value.lower() == "product"
-            for value in node_type
+            isinstance(value, str) and value.lower() == "product" for value in node_type
         )
     return False
 
