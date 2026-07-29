@@ -26,6 +26,7 @@ import pytest
         ("douyin", "DouyinParser", "_parse_video_item", "douyin.video"),
         ("douyin", "DouyinParser", "_parse_gallery_item", "douyin.gallery"),
         ("douyin", "DouyinParser", "_parse_slides_data", "douyin.gallery"),
+        ("douyin", "DouyinParser", "_parse_shop_url", "douyin.shop"),
         ("weibo", "WeiboParser", "_parse_status_payload", "weibo.post"),
         ("weibo", "WeiboParser", "_parse_article_payload", "weibo.article"),
         ("weibo", "WeiboParser", "_parse_video_payload", "weibo.video"),

@@ -41,7 +41,7 @@
 | 平台 | 视频 | 图文 | 短链与其他内容 |
 | --- | --- | --- | --- |
 | Bilibili | BV、AV | Opus、动态、专栏 | `b23.tv`、`bili2233.cn`、直播间 |
-| 抖音 | 视频、直播 | 普通图文、Slides | `v.douyin.com`、`jx.douyin.com`、汽水音乐 |
+| 抖音 | 视频、直播 | 普通图文、Slides、商城商品标题与主图 | `v.douyin.com`、`jx.douyin.com`、抖音商城长链、汽水音乐 |
 | 小红书 | 视频笔记 | 图文笔记 | `xhslink.com`、部分 JSON 分享卡片 |
 | 贴吧 | 首帖视频 | 楼主首帖正文 | `tieba.baidu.com/p/<帖子ID>` |
 | 微博 | 普通视频、视频页、TV | 微博、转发、长文章 | 桌面端、移动端及 API 分享链接 |

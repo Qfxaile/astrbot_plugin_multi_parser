@@ -1,4 +1,5 @@
 import json
+from urllib.parse import urlencode
 
 import astrbot_multi_parser.platforms.douyin as douyin
 import httpx
@@ -7,6 +8,17 @@ from astrbot_multi_parser.core.contracts import ParseContext
 from astrbot_multi_parser.core.http import CookieAccessError
 from astrbot_multi_parser.platforms.douyin import music as douyin_music
 from astrbot_multi_parser.platforms.douyin import parser as douyin_parser
+
+
+def build_douyin_shop_url(payload: object) -> str:
+    return "https://haohuo.jinritemai.com/ecommerce/trade/detail/index.html?" + (
+        urlencode(
+            {
+                "id": "3831550538504339666",
+                "goods_detail": json.dumps(payload, ensure_ascii=False),
+            }
+        )
+    )
 
 
 def test_douyin_login_redirect_reports_stale_cookie_without_leak():
@@ -57,10 +69,7 @@ async def test_matches_only_mainland_douyin_urls():
     )
     assert await parser.match(
         ParseContext(
-            text=(
-                "https://webcast.amemv.com/douyin/webcast/reflow/"
-                "7666067452786608950"
-            )
+            text=("https://webcast.amemv.com/douyin/webcast/reflow/7666067452786608950")
         )
     )
     assert await parser.match(
@@ -72,10 +81,226 @@ async def test_matches_only_mainland_douyin_urls():
     assert await parser.match(
         ParseContext(text="https://www.douyin.com/video/7521023890996514083")
     )
+    assert await parser.match(
+        ParseContext(
+            text=(
+                "https://haohuo.jinritemai.com/ecommerce/trade/detail/"
+                "index.html?id=3831550538504339666"
+            )
+        )
+    )
     assert not await parser.match(ParseContext(text="https://vm.tiktok.com/abc123"))
     assert not await parser.match(
         ParseContext(text="https://www.tiktok.com/@user/video/123")
     )
+
+
+@pytest.mark.asyncio
+async def test_parse_shop_long_link_materializes_main_image_without_cookie(
+    monkeypatch, assert_temporary_image
+):
+    image_url = "https://p26-item.ecombdimg.com/img/product.png"
+    shop_url = build_douyin_shop_url(
+        {
+            "title": "抖音商城商品",
+            "img": {"url_list": [image_url]},
+            "min_price": 380,
+            "max_price": 729,
+            "sales": 28714,
+        }
+    )
+    image_request = None
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal image_request
+        image_request = request
+        return httpx.Response(200, content=b"shop-image", request=request)
+
+    real_async_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        douyin_parser.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_async_client(
+            transport=httpx.MockTransport(handler), **kwargs
+        ),
+    )
+
+    result = await douyin.DouyinParser(
+        {"douyin_cookies": "sessionid=shop-session"}
+    ).parse(ParseContext(text=shop_url))
+
+    assert result.title == "抖音商城商品"
+    assert result.extra_lines == []
+    assert_temporary_image(result, result.cover_urls[0], b"shop-image")
+    assert image_request is not None
+    assert image_request.headers["Referer"] == shop_url
+    assert "Cookie" not in image_request.headers
+
+
+@pytest.mark.asyncio
+async def test_short_link_redirects_to_shop_and_keeps_cookie_scoped(
+    monkeypatch, assert_temporary_image
+):
+    short_url = "https://v.douyin.com/Xet_rPRfGHs/"
+    image_url = "https://p3-item.ecombdimg.com/img/product.png"
+    shop_url = build_douyin_shop_url(
+        {"title": "短链商城商品", "img": {"url_list": [image_url]}}
+    )
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.host == "v.douyin.com":
+            return httpx.Response(
+                302,
+                headers={"Location": shop_url},
+                request=request,
+            )
+        if request.url.host == "haohuo.jinritemai.com":
+            return httpx.Response(200, text="shop page", request=request)
+        return httpx.Response(200, content=b"short-shop-image", request=request)
+
+    real_async_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        douyin_parser.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_async_client(
+            transport=httpx.MockTransport(handler), **kwargs
+        ),
+    )
+
+    result = await douyin.DouyinParser(
+        {"douyin_cookies": "sessionid=shop-session"}
+    ).parse(ParseContext(text=short_url))
+
+    assert result.title == "短链商城商品"
+    assert_temporary_image(result, result.cover_urls[0], b"short-shop-image")
+    assert [request.url.host for request in requests] == [
+        "v.douyin.com",
+        "haohuo.jinritemai.com",
+        "p3-item.ecombdimg.com",
+    ]
+    assert "sessionid=shop-session" in requests[0].headers["Cookie"]
+    assert all("Cookie" not in request.headers for request in requests[1:])
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"title": "无主图商品"},
+        {
+            "title": "不可信主图商品",
+            "img": {"url_list": ["https://example.com/private.png"]},
+        },
+    ],
+)
+def test_shop_url_keeps_title_when_main_image_is_unavailable(payload):
+    result = douyin.DouyinParser({})._parse_shop_url(build_douyin_shop_url(payload))
+
+    assert result.title == payload["title"]
+    assert result.cover_urls == []
+    assert result.error == ""
+
+
+@pytest.mark.parametrize(
+    "shop_url",
+    [
+        "https://haohuo.jinritemai.com/ecommerce/trade/detail/index.html?id=123",
+        (
+            "https://haohuo.jinritemai.com/ecommerce/trade/detail/index.html?"
+            "goods_detail=%7Bbroken"
+        ),
+        build_douyin_shop_url({"title": ""}),
+    ],
+)
+def test_shop_url_reports_missing_or_invalid_metadata(shop_url):
+    result = douyin.DouyinParser({})._parse_shop_url(shop_url)
+
+    assert result.error == "未找到抖音商城商品信息，链接可能已失效。"
+    assert result.title == ""
+    assert result.cover_urls == []
+
+
+@pytest.mark.asyncio
+async def test_short_link_rejects_untrusted_redirect_before_request(monkeypatch):
+    requested_hosts = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested_hosts.append(request.url.host)
+        if request.url.host == "v.douyin.com":
+            return httpx.Response(
+                302,
+                headers={"Location": "https://example.com/product/secret"},
+                request=request,
+            )
+        return httpx.Response(200, text="untrusted page", request=request)
+
+    real_async_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        douyin_parser.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_async_client(
+            transport=httpx.MockTransport(handler), **kwargs
+        ),
+    )
+
+    result = await douyin.DouyinParser({}).parse(
+        ParseContext(text="https://v.douyin.com/unsafe123/")
+    )
+
+    assert result.error == "抖音分享链接跳转到不可信域名。"
+    assert requested_hosts == ["v.douyin.com"]
+
+
+@pytest.mark.asyncio
+async def test_short_link_reports_missing_redirect_location(monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(302, request=request)
+
+    real_async_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        douyin_parser.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_async_client(
+            transport=httpx.MockTransport(handler), **kwargs
+        ),
+    )
+
+    result = await douyin.DouyinParser({}).parse(
+        ParseContext(text="https://v.douyin.com/missing123/")
+    )
+
+    assert result.error == "抖音分享链接缺少跳转地址。"
+
+
+@pytest.mark.asyncio
+async def test_short_link_limits_redirect_count(monkeypatch):
+    request_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        return httpx.Response(
+            302,
+            headers={"Location": f"https://v.douyin.com/hop{request_count}/"},
+            request=request,
+        )
+
+    real_async_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        douyin_parser.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_async_client(
+            transport=httpx.MockTransport(handler), **kwargs
+        ),
+    )
+
+    result = await douyin.DouyinParser({}).parse(
+        ParseContext(text="https://v.douyin.com/loop123/")
+    )
+
+    assert result.error == "抖音分享链接重定向次数超过安全限制。"
+    assert request_count == douyin.DouyinParser.MAX_REDIRECTS + 1
 
 
 def test_live_payload_extracts_room_information():
@@ -89,9 +314,7 @@ def test_live_payload_extracts_room_information():
                     "title": "抖音直播标题",
                     "user": {"nickname": "抖音主播"},
                     "cover": {
-                        "url_list": [
-                            "https://p3-webcast.douyinpic.com/live-cover.webp"
-                        ]
+                        "url_list": ["https://p3-webcast.douyinpic.com/live-cover.webp"]
                     },
                     "room_view_stats": {"display_value": "1.2万"},
                 }
@@ -103,9 +326,7 @@ def test_live_payload_extracts_room_information():
 
     assert result.title == "抖音直播标题"
     assert result.author == "抖音主播"
-    assert result.cover_urls == [
-        "https://p3-webcast.douyinpic.com/live-cover.webp"
-    ]
+    assert result.cover_urls == ["https://p3-webcast.douyinpic.com/live-cover.webp"]
     assert result.extra_lines == [
         "直播状态: 直播中",
         "观看人数: 1.2万",
@@ -154,9 +375,9 @@ async def test_parse_live_requests_api_and_materializes_cover(
         ),
     )
 
-    result = await douyin.DouyinParser(
-        {"douyin_cookies": "ttwid=live-session"}
-    ).parse(ParseContext(text=live_url))
+    result = await douyin.DouyinParser({"douyin_cookies": "ttwid=live-session"}).parse(
+        ParseContext(text=live_url)
+    )
 
     assert result.title == "抖音直播标题"
     assert_temporary_image(result, result.cover_urls[0], b"live-cover")
@@ -173,9 +394,7 @@ async def test_short_link_redirects_to_live_reflow_page(
     monkeypatch, assert_temporary_image
 ):
     short_url = "https://v.douyin.com/0-I94aXdAUs/"
-    room_url = (
-        "https://webcast.amemv.com/douyin/webcast/reflow/7666067452786608950"
-    )
+    room_url = "https://webcast.amemv.com/douyin/webcast/reflow/7666067452786608950"
     cover_url = "https://p3-webcast.douyinpic.com/reflow-cover.webp"
     page_request = None
     image_request = None
@@ -197,9 +416,7 @@ async def test_short_link_redirects_to_live_reflow_page(
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal page_request, image_request
         if request.url.host == "v.douyin.com":
-            return httpx.Response(
-                302, headers={"Location": room_url}, request=request
-            )
+            return httpx.Response(302, headers={"Location": room_url}, request=request)
         if request.url.host == "webcast.amemv.com":
             page_request = request
             return httpx.Response(200, text=html, request=request)
