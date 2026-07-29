@@ -1,5 +1,6 @@
 """解析京东匿名可访问的公开商品页。"""
 
+import json
 import re
 from collections.abc import Iterable, Mapping
 from urllib.parse import urljoin, urlsplit
@@ -34,6 +35,7 @@ class JDParser(BaseParser):
     SKU_PATTERN = re.compile(r"\d{1,32}\Z")
     DESKTOP_PATH_PATTERN = re.compile(r"/(?P<sku>\d{1,32})\.html\Z")
     MOBILE_PATH_PATTERN = re.compile(r"/product/(?P<sku>\d{1,32})\.html\Z")
+    ITEM_INFO_PATTERN = re.compile(r"window\._itemInfo\s*=\s*(?:\(\s*)?\{")
     SHORT_HOSTS = frozenset({"3.cn", "u.jd.com"})
     VERIFY_MARKERS = ("验证码", "安全验证", "登录后查看")
     HEADERS = {
@@ -157,7 +159,16 @@ class JDParser(BaseParser):
         html_text: str,
         base_url: str,
     ) -> ProductMetadata:
-        metadata = ProductMetadata()
+        product = cls._item_info_mapping(html_text, "product")
+        stock = cls._item_info_mapping(html_text, "stock")
+        shop = stock.get("D") if isinstance(stock, Mapping) else None
+        shop_mapping = shop if isinstance(shop, Mapping) else {}
+        image_url = cls._scalar(product.get("imageurl") or product.get("imageUrl"))
+        metadata = ProductMetadata(
+            title=clean_product_text(product.get("skuName") or product.get("name")),
+            shop=clean_product_text(shop_mapping.get("shopName")),
+            image_url=cls._normalize_image_url(base_url, image_url),
+        )
         for payload in iter_json_script_values(html_text):
             for container in cls._iter_mappings(payload):
                 product = container.get("product")
@@ -174,10 +185,40 @@ class JDParser(BaseParser):
                     title=clean_product_text(title),
                     price=format_product_price(price_value),
                     shop=clean_product_text(product.get("shopName")),
-                    image_url=urljoin(base_url, image_url) if image_url else "",
+                    image_url=cls._normalize_image_url(base_url, image_url),
                 )
                 metadata = metadata.with_fallback(candidate)
         return metadata
+
+    @classmethod
+    def _item_info_mapping(
+        cls,
+        html_text: str,
+        key: str,
+    ) -> Mapping[str, object]:
+        assignment = cls.ITEM_INFO_PATTERN.search(html_text)
+        if assignment is None:
+            return {}
+        script_end = html_text.find("</script>", assignment.end())
+        if script_end < 0:
+            return {}
+        script = html_text[assignment.start() : script_end]
+        marker = re.search(rf'"{re.escape(key)}"\s*:\s*', script)
+        if marker is None:
+            return {}
+        try:
+            value, _ = json.JSONDecoder().raw_decode(script, marker.end())
+        except (json.JSONDecodeError, RecursionError):
+            return {}
+        return value if isinstance(value, Mapping) else {}
+
+    @staticmethod
+    def _normalize_image_url(base_url: str, image_url: str) -> str:
+        if not image_url:
+            return ""
+        if image_url.startswith("jfs/"):
+            return f"https://img10.360buyimg.com/n1/{image_url}"
+        return urljoin(base_url, image_url)
 
     @classmethod
     def _iter_mappings(

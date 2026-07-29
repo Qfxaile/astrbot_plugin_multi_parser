@@ -10,6 +10,7 @@ from astrbot_multi_parser.platforms.pinduoduo import PinduoduoParser
     [
         ("https://mobile.yangkeduo.com/goods.html?goods_id=123456", True),
         ("https://mobile.yangkeduo.com/goods.html?ps=Abc123", True),
+        ("https://mobile.yangkeduo.com/goods2.html?ps=CQGwm6NMIa", True),
         ("https://p.pinduoduo.com/Abc123", True),
         ("https://mobile.yangkeduo.com/search_result.html?q=test", False),
         ("https://p.pinduoduo.com.evil.test/Abc123", False),
@@ -25,6 +26,12 @@ async def test_pinduoduo_match_accepts_only_supported_product_urls(url, expected
 def test_pinduoduo_builds_canonical_goods_and_ps_urls():
     parser = PinduoduoParser({})
 
+    assert (
+        parser._canonical_product_url(
+            "https://mobile.yangkeduo.com/goods2.html?goods_id=795783843683"
+        )
+        == "https://mobile.yangkeduo.com/goods.html?goods_id=795783843683"
+    )
     assert (
         parser._canonical_product_url(
             "https://mobile.yangkeduo.com/goods.html?goods_id=123456&refer=secret"
@@ -210,6 +217,30 @@ async def test_pinduoduo_reports_verification_page(monkeypatch, marker):
 
     result = await parser.parse(
         ParseContext(text="https://mobile.yangkeduo.com/goods.html?goods_id=123456")
+    )
+
+    assert result.error == "拼多多商品页面需要验证或登录，暂时无法匿名解析。"
+
+
+async def test_pinduoduo_reports_need_login_page(monkeypatch):
+    parser = PinduoduoParser({})
+
+    async def fetch_page(client, url, host_suffixes):
+        return FetchedWebPage(
+            "https://mobile.yangkeduo.com/goods2.html?goods_id=795783843683",
+            """
+            <meta property="og:title" content="拼多多商城">
+            <script>window.rawData={"store":{"initDataObj":{"needLogin":true}}}</script>
+            """,
+        )
+
+    monkeypatch.setattr(
+        "astrbot_multi_parser.platforms.pinduoduo.parser.fetch_trusted_html",
+        fetch_page,
+    )
+
+    result = await parser.parse(
+        ParseContext(text="https://mobile.yangkeduo.com/goods2.html?ps=CQGwm6NMIa")
     )
 
     assert result.error == "拼多多商品页面需要验证或登录，暂时无法匿名解析。"

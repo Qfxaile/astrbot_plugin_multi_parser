@@ -33,6 +33,8 @@ class PinduoduoParser(BaseParser):
     )
     GOODS_ID_PATTERN = re.compile(r"\d{1,32}\Z")
     SHARE_CODE_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,128}\Z")
+    PRODUCT_PATHS = frozenset({"/goods.html", "/goods2.html"})
+    NEED_LOGIN_PATTERN = re.compile(r'"needLogin"\s*:\s*true\b')
     VERIFY_MARKERS = ("验证码", "安全验证", "登录后查看")
     HEADERS = {
         "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
@@ -67,7 +69,9 @@ class PinduoduoParser(BaseParser):
                         platform=self.name,
                         error="拼多多分享链接未指向受支持的商品。",
                     )
-                if any(marker in page.html for marker in self.VERIFY_MARKERS):
+                if any(
+                    marker in page.html for marker in self.VERIFY_MARKERS
+                ) or self.NEED_LOGIN_PATTERN.search(page.html):
                     return ParseResult(
                         platform=self.name,
                         error="拼多多商品页面需要验证或登录，暂时无法匿名解析。",
@@ -146,7 +150,7 @@ class PinduoduoParser(BaseParser):
             return False
         if (
             parsed.hostname or ""
-        ).lower() != "mobile.yangkeduo.com" or parsed.path != "/goods.html":
+        ).lower() != "mobile.yangkeduo.com" or parsed.path not in cls.PRODUCT_PATHS:
             return False
         goods_id, share_code = cls._query_locators(url)
         return bool(goods_id or share_code)

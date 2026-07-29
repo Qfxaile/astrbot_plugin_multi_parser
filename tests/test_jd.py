@@ -82,6 +82,46 @@ async def test_jd_parse_uses_json_ld_then_platform_data(monkeypatch):
     assert materialized == ["https://item.jd.com/100012043978.html?utm_source=secret"]
 
 
+async def test_jd_parse_reads_item_info_embedded_objects(monkeypatch):
+    parser = JDParser({})
+    html = """
+    <meta charset="utf-8">
+    <script>
+    window._itemInfo = ({
+      "product":{"skuName":"西部数据固态硬盘",
+                 "imageurl":"jfs/t1/main.png"},
+      "price":"5??9",
+      "stock":{"D":{"shopName":"西部数据官方旗舰店"}},
+      invalidJavaScriptKey: true
+    });
+    </script>
+    """
+
+    async def fetch_page(client, url, host_suffixes):
+        return FetchedWebPage(
+            "https://item.m.jd.com/product/10060144289722.html",
+            html,
+        )
+
+    async def materialize(result, client, referer):
+        return result
+
+    monkeypatch.setattr(
+        "astrbot_multi_parser.platforms.jd.parser.fetch_trusted_html",
+        fetch_page,
+    )
+    monkeypatch.setattr(parser, "materialize_images", materialize)
+
+    result = await parser.parse(ParseContext(text="https://3.cn/2Xhi-9CP"))
+
+    assert result.title == "西部数据固态硬盘"
+    assert result.cover_urls == ["https://img10.360buyimg.com/n1/jfs/t1/main.png"]
+    assert result.extra_lines == [
+        "店铺: 西部数据官方旗舰店",
+        "商品链接: https://item.jd.com/10060144289722.html",
+    ]
+
+
 async def test_jd_parse_falls_back_to_open_graph_without_optional_fields(
     monkeypatch,
 ):

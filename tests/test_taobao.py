@@ -94,6 +94,67 @@ async def test_taobao_parse_uses_json_ld_then_platform_data(monkeypatch):
     assert materialized == ["https://item.taobao.com/item.htm?id=123456&spm=secret"]
 
 
+async def test_taobao_parse_follows_client_side_share_target(monkeypatch):
+    parser = TaobaoParser({})
+    requested = []
+    share_html = """
+    <script>
+      var url = 'https://item.taobao.com/item.htm?id=1067554939784&spm=secret';
+      window.location.replace(url);
+    </script>
+    """
+
+    async def fetch_page(client, url, host_suffixes):
+        requested.append(url)
+        if url.startswith("https://e.tb.cn/"):
+            return FetchedWebPage(
+                "https://e.tb.cn/h.8VdXPOwpkmPwjZu?tk=share",
+                share_html,
+            )
+        return FetchedWebPage(
+            "https://h5.m.taobao.com/awp/core/detail.htm?id=1067554939784",
+            '<meta property="og:title" content="淘宝公开商品">',
+        )
+
+    monkeypatch.setattr(
+        "astrbot_multi_parser.platforms.taobao.parser.fetch_trusted_html", fetch_page
+    )
+
+    result = await parser.parse(
+        ParseContext(text="https://e.tb.cn/h.8VdXPOwpkmPwjZu?tk=share")
+    )
+
+    assert result.title == "淘宝公开商品"
+    assert result.extra_lines == [
+        "商品链接: https://item.taobao.com/item.htm?id=1067554939784"
+    ]
+    assert requested == [
+        "https://e.tb.cn/h.8VdXPOwpkmPwjZu?tk=share",
+        "https://item.taobao.com/item.htm?id=1067554939784&spm=secret",
+    ]
+
+
+async def test_taobao_parse_rejects_untrusted_client_side_target(monkeypatch):
+    parser = TaobaoParser({})
+    requested = []
+
+    async def fetch_page(client, url, host_suffixes):
+        requested.append(url)
+        return FetchedWebPage(
+            "https://e.tb.cn/h.Abc123",
+            "var url = 'https://item.taobao.com.evil.test/item.htm?id=123456';",
+        )
+
+    monkeypatch.setattr(
+        "astrbot_multi_parser.platforms.taobao.parser.fetch_trusted_html", fetch_page
+    )
+
+    result = await parser.parse(ParseContext(text="https://e.tb.cn/h.Abc123"))
+
+    assert result.error == "淘宝/天猫分享链接未指向受支持的商品。"
+    assert requested == ["https://e.tb.cn/h.Abc123"]
+
+
 async def test_taobao_parse_falls_back_to_open_graph_without_price(monkeypatch):
     parser = TaobaoParser({})
     html = """

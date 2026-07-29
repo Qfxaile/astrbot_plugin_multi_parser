@@ -2,6 +2,7 @@
 
 import re
 from collections.abc import Iterable, Mapping
+from html import unescape
 from urllib.parse import parse_qs, urljoin, urlsplit
 
 import httpx
@@ -33,6 +34,10 @@ class TaobaoParser(BaseParser):
     )
     ITEM_ID_PATTERN = re.compile(r"\d{1,32}\Z")
     SHORT_HOSTS = frozenset({"m.tb.cn", "e.tb.cn"})
+    SHARE_TARGET_PATTERN = re.compile(
+        r"\bvar\s+url\s*=\s*(?P<quote>['\"])(?P<url>https://[^'\"\r\n]{1,8192})(?P=quote)\s*;",
+        re.IGNORECASE,
+    )
     PRODUCT_PATHS = {
         "item.taobao.com": frozenset({"/item.htm"}),
         "detail.tmall.com": frozenset({"/item.htm"}),
@@ -69,6 +74,18 @@ class TaobaoParser(BaseParser):
                     self.page_host_suffixes,
                 )
                 canonical_url = self._canonical_product_url(page.final_url)
+                if not canonical_url:
+                    product_url = self._client_side_product_url(
+                        page.final_url,
+                        page.html,
+                    )
+                    if product_url:
+                        page = await fetch_trusted_html(
+                            client,
+                            product_url,
+                            self.page_host_suffixes,
+                        )
+                        canonical_url = self._canonical_product_url(page.final_url)
                 if not canonical_url:
                     return ParseResult(
                         platform=self.name,
@@ -154,6 +171,26 @@ class TaobaoParser(BaseParser):
         if host == "detail.tmall.com":
             return f"https://detail.tmall.com/item.htm?id={item_id}"
         return f"https://item.taobao.com/item.htm?id={item_id}"
+
+    @classmethod
+    def _client_side_product_url(
+        cls,
+        page_url: str,
+        html_text: str,
+    ) -> str | None:
+        try:
+            host = (urlsplit(page_url).hostname or "").lower()
+        except ValueError:
+            return None
+        if host not in cls.SHORT_HOSTS:
+            return None
+        match = cls.SHARE_TARGET_PATTERN.search(html_text)
+        if match is None:
+            return None
+        target = unescape(match.group("url")).replace(r"\/", "/")
+        if not is_trusted_https_url(target, cls.page_host_suffixes):
+            return None
+        return target if cls._product_id(target) is not None else None
 
     @classmethod
     def _extract_platform_metadata(

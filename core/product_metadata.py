@@ -61,7 +61,7 @@ class _ProductMetadataHTMLParser(HTMLParser):
     ) -> None:
         attributes = {name.lower(): value or "" for name, value in attrs}
         if tag.lower() == "meta":
-            key = (attributes.get("property") or attributes.get("name")).lower()
+            key = (attributes.get("property") or attributes.get("name") or "").lower()
             content = attributes.get("content", "").strip()
             if key and content and key not in self.metadata:
                 self.metadata[key] = content

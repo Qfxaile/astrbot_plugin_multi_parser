@@ -87,6 +87,22 @@ def test_extract_open_graph_product_reads_public_card_fields():
     )
 
 
+def test_extract_open_graph_product_ignores_unnamed_meta_tags():
+    html = """
+    <meta charset="utf-8">
+    <meta content="noindex">
+    <meta property="og:title" content="公开商品">
+    """
+
+    assert (
+        extract_open_graph_product(
+            html,
+            "https://shop.example.com/item/1",
+        ).title
+        == "公开商品"
+    )
+
+
 def test_iter_json_script_values_reads_only_valid_json_scripts():
     html = """
     <script type="application/json">{"item":{"title":"商品"}}</script>
