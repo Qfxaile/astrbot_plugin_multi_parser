@@ -377,8 +377,10 @@ class WeiboLoginProvider(HTTPPlatformLoginProvider):
     @staticmethod
     def _is_safe_sso_token(value: str) -> bool:
         """允许官方令牌扩展字符，同时拒绝控制字符和异常长度。"""
-        return bool(value) and len(value) <= 2048 and all(
-            character.isprintable() for character in value
+        return (
+            bool(value)
+            and len(value) <= 2048
+            and all(character.isprintable() for character in value)
         )
 
     @classmethod

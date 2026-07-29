@@ -48,9 +48,7 @@ class TiebaLoginProvider(HTTPPlatformLoginProvider):
     )
     TIEBA_COOKIE_HOST = "tieba.baidu.com"
     LOGIN_HOSTS = frozenset({"passport.baidu.com", "tieba.baidu.com"})
-    COOKIE_DOMAINS = frozenset(
-        {"baidu.com", "passport.baidu.com", "tieba.baidu.com"}
-    )
+    COOKIE_DOMAINS = frozenset({"baidu.com", "passport.baidu.com", "tieba.baidu.com"})
     USER_AGENT = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -123,10 +121,7 @@ class TiebaLoginProvider(HTTPPlatformLoginProvider):
 
     async def poll_qr_status(self, session_key: str) -> LoginPollResult:
         """轮询扫码状态，成功后完成受控跳转并提取必要 Cookie。"""
-        if (
-            not self._gid
-            or self._SESSION_KEY_PATTERN.fullmatch(session_key) is None
-        ):
+        if not self._gid or self._SESSION_KEY_PATTERN.fullmatch(session_key) is None:
             raise PlatformLoginError("贴吧登录会话无效，请重新发起登录。")
 
         callback = self._callback_name()
@@ -151,9 +146,7 @@ class TiebaLoginProvider(HTTPPlatformLoginProvider):
         if errno in {2, "2"}:
             return LoginPollResult(LoginPollState.EXPIRED)
         if errno not in {0, "0"}:
-            raise PlatformLoginError(
-                "贴吧返回了无法识别的登录状态，请重新发起登录。"
-            )
+            raise PlatformLoginError("贴吧返回了无法识别的登录状态，请重新发起登录。")
 
         channel_value = payload.get("channel_v")
         try:
@@ -175,9 +168,7 @@ class TiebaLoginProvider(HTTPPlatformLoginProvider):
         if status in {2, "2"}:
             return LoginPollResult(LoginPollState.EXPIRED)
         if status not in {0, "0"}:
-            raise PlatformLoginError(
-                "贴吧返回了无法识别的登录状态，请重新发起登录。"
-            )
+            raise PlatformLoginError("贴吧返回了无法识别的登录状态，请重新发起登录。")
 
         login_token = str(channel_payload.get("v") or "")
         if not self._is_safe_token(login_token):
@@ -264,17 +255,13 @@ class TiebaLoginProvider(HTTPPlatformLoginProvider):
         except PlatformLoginError:
             raise
         except httpx.HTTPError as exc:
-            raise PlatformLoginError(
-                "贴吧登录二维码获取失败，请稍后重试。"
-            ) from exc
+            raise PlatformLoginError("贴吧登录二维码获取失败，请稍后重试。") from exc
 
         content_type = headers.get("Content-Type", "").split(";", 1)[0].strip()
         supported_type = content_type.lower() in {"image/jpeg", "image/png"}
         supported_signature = content.startswith(
             b"\x89PNG\r\n\x1a\n"
-        ) or content.startswith(
-            b"\xff\xd8\xff"
-        )
+        ) or content.startswith(b"\xff\xd8\xff")
         if not supported_type or not supported_signature:
             raise PlatformLoginError("贴吧返回了无效的登录二维码图片。")
         return content
@@ -326,16 +313,12 @@ class TiebaLoginProvider(HTTPPlatformLoginProvider):
             except PlatformLoginError:
                 raise
             except httpx.HTTPError as exc:
-                raise PlatformLoginError(
-                    "贴吧登录确认请求失败，请稍后重试。"
-                ) from exc
+                raise PlatformLoginError("贴吧登录确认请求失败，请稍后重试。") from exc
             if self._is_verification_content(content):
                 raise self._verification_error()
             if status_code not in self._REDIRECT_STATUS_CODES:
                 if status_code >= 400:
-                    raise PlatformLoginError(
-                        "贴吧登录确认请求失败，请稍后重试。"
-                    )
+                    raise PlatformLoginError("贴吧登录确认请求失败，请稍后重试。")
                 return
             location = headers.get("Location", "")
             if not location or len(location) > 2048:
@@ -420,8 +403,10 @@ class TiebaLoginProvider(HTTPPlatformLoginProvider):
 
     @staticmethod
     def _is_safe_token(value: str) -> bool:
-        return bool(value) and len(value) <= 2048 and all(
-            0x21 <= ord(character) <= 0x7E for character in value
+        return (
+            bool(value)
+            and len(value) <= 2048
+            and all(0x21 <= ord(character) <= 0x7E for character in value)
         )
 
     @staticmethod

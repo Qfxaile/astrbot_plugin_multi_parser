@@ -30,9 +30,7 @@ def extract_token_and_export_id(url: str) -> tuple[str, str]:
     except ValueError:
         return "", ""
     token = str((query.get("token") or [""])[0])
-    export_id = str(
-        (query.get("eid") or query.get("exportId") or [""])[0]
-    )
+    export_id = str((query.get("eid") or query.get("exportId") or [""])[0])
     return token, export_id
 
 
@@ -131,9 +129,7 @@ async def _get_feed_info(
         CHANNELS_FEED_INFO_URL,
         params={
             "_rid": rid,
-            "_pageUrl": (
-                "https://channels.weixin.qq.com/finder-preview/pages/feed"
-            ),
+            "_pageUrl": ("https://channels.weixin.qq.com/finder-preview/pages/feed"),
         },
         json={"baseReq": {"generalToken": token}, "exportId": export_id},
         headers={
@@ -193,9 +189,7 @@ def _pick_video_url(feed_info: Mapping[str, Any]) -> str:
         info = feed_info.get(key)
         if isinstance(info, Mapping):
             candidates.append(info.get("videoUrl"))
-    candidates.extend(
-        [feed_info.get("originVideoUrl"), feed_info.get("videoUrl")]
-    )
+    candidates.extend([feed_info.get("originVideoUrl"), feed_info.get("videoUrl")])
     return next(
         (
             candidate.strip()

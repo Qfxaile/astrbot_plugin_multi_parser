@@ -82,9 +82,7 @@ def qr_handler(poll_payload: dict, *, confirm_response=None, auth_response=None)
             assert request.url.params["tpl"] == "tb"
             assert request.url.params["jump"] == ""
             assert request.url.params["return_type"] == "3"
-            assert request.url.params["u"] == (
-                "https://tieba.baidu.com/index.html"
-            )
+            assert request.url.params["u"] == ("https://tieba.baidu.com/index.html")
             if auth_response is not None:
                 return auth_response(request)
             return httpx.Response(
@@ -97,10 +95,7 @@ def qr_handler(poll_payload: dict, *, confirm_response=None, auth_response=None)
                     )
                 },
             )
-        if (
-            request.url.host == "tieba.baidu.com"
-            and request.url.path == "/index.html"
-        ):
+        if request.url.host == "tieba.baidu.com" and request.url.path == "/index.html":
             return httpx.Response(
                 200,
                 request=request,
@@ -111,8 +106,7 @@ def qr_handler(poll_payload: dict, *, confirm_response=None, auth_response=None)
                     ),
                     (
                         "Set-Cookie",
-                        "TIEBA_SID=tieba-session; "
-                        "Domain=.tieba.baidu.com; Path=/",
+                        "TIEBA_SID=tieba-session; Domain=.tieba.baidu.com; Path=/",
                     ),
                 ],
             )
@@ -164,9 +158,7 @@ async def test_tieba_qr_login_saves_only_expected_domain_cookies():
     handler = qr_handler(
         {
             "errno": 0,
-            "channel_v": json.dumps(
-                {"status": 0, "v": "one-time-login-token"}
-            ),
+            "channel_v": json.dumps({"status": 0, "v": "one-time-login-token"}),
         }
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
@@ -236,10 +228,7 @@ async def test_tieba_qr_login_accepts_official_host_without_scheme():
                 {
                     "errno": 0,
                     "sign": "one-time-sign",
-                    "imgurl": (
-                        "passport.baidu.com/v2/api/qrcode"
-                        "?sign=one-time-sign"
-                    ),
+                    "imgurl": ("passport.baidu.com/v2/api/qrcode?sign=one-time-sign"),
                 },
             )
         return httpx.Response(
@@ -254,9 +243,7 @@ async def test_tieba_qr_login_accepts_official_host_without_scheme():
         challenge = await provider.create_qr_challenge()
 
     assert challenge.image_bytes.startswith(b"\x89PNG")
-    assert requested_urls[1].startswith(
-        "https://passport.baidu.com/v2/api/qrcode?"
-    )
+    assert requested_urls[1].startswith("https://passport.baidu.com/v2/api/qrcode?")
     assert "/v2/api/passport.baidu.com/" not in requested_urls[1]
 
 
@@ -272,9 +259,7 @@ async def test_tieba_qr_login_rejects_untrusted_success_redirect():
     handler = qr_handler(
         {
             "errno": 0,
-            "channel_v": json.dumps(
-                {"status": 0, "v": "one-time-login-token"}
-            ),
+            "channel_v": json.dumps({"status": 0, "v": "one-time-login-token"}),
         },
         confirm_response=redirect_response,
     )
@@ -297,9 +282,7 @@ async def test_tieba_qr_login_rejects_untrusted_authorization_redirect():
     handler = qr_handler(
         {
             "errno": 0,
-            "channel_v": json.dumps(
-                {"status": 0, "v": "one-time-login-token"}
-            ),
+            "channel_v": json.dumps({"status": 0, "v": "one-time-login-token"}),
         },
         auth_response=redirect_response,
     )

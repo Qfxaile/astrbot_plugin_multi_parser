@@ -383,7 +383,7 @@ def test_opus_payload_keeps_paragraph_order():
                                                 "url": "//i0.hdslb.com/opus.jpg@!web-comment-note.avif"
                                             }
                                         ]
-                                    }
+                                    },
                                 },
                                 {
                                     "text": {
@@ -506,9 +506,7 @@ def test_article_payload_keeps_full_content_and_image_order():
         "data": {
             "title": "传统专栏标题",
             "author": {"name": "专栏作者"},
-            "origin_image_urls": [
-                "//i0.hdslb.com/article-cover.jpg@672w.webp"
-            ],
+            "origin_image_urls": ["//i0.hdslb.com/article-cover.jpg@672w.webp"],
             "content": (
                 '<img data-src="//i0.hdslb.com/article-cover.jpg@672w.webp">'
                 "<p>完整正文第一段</p>"
@@ -741,9 +739,7 @@ async def test_article_materializes_original_image_and_preserves_failed_slot(
         "data": {
             "title": "专栏标题",
             "author": {"name": "专栏作者"},
-            "origin_image_urls": [
-                "//i0.hdslb.com/article-cover.jpg@672w.webp"
-            ],
+            "origin_image_urls": ["//i0.hdslb.com/article-cover.jpg@672w.webp"],
             "content": (
                 "<p>第一段</p>"
                 '<img src="//i0.hdslb.com/failed.jpg@!web-article-pic.avif">'
@@ -780,9 +776,7 @@ async def test_article_materializes_original_image_and_preserves_failed_slot(
     ).parse(ParseContext(text=article_url))
 
     assert result.ordered_contents[0].kind == "image"
-    assert_temporary_image(
-        result, result.ordered_contents[0].value, b"article-image"
-    )
+    assert_temporary_image(result, result.ordered_contents[0].value, b"article-image")
     assert [(item.kind, item.value) for item in result.ordered_contents[1:4]] == [
         ("text", "第一段"),
         ("image_error", "第 2 张图片获取失败：HTTP 403"),

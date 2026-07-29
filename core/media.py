@@ -148,9 +148,7 @@ class ImageMaterializer:
                 else:
                     image_values[field_index] = ""
                     detail = self._image_error_detail(outcome)
-                    result.image_errors[index] = (
-                        f"第 {number} 张图片获取失败：{detail}"
-                    )
+                    result.image_errors[index] = f"第 {number} 张图片获取失败：{detail}"
                     logger.warning(
                         f"图片下载失败 ({self._hostname_label(image_url)}): {detail}"
                     )

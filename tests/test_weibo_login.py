@@ -33,10 +33,7 @@ def test_weibo_confirmation_token_supports_bounded_nested_payloads():
 
 def test_weibo_confirmation_token_rejects_control_characters():
     assert (
-        WeiboLoginProvider._find_sso_token(
-            {"data": {"alt": "token\nforbidden"}}
-        )
-        == ""
+        WeiboLoginProvider._find_sso_token({"data": {"alt": "token\nforbidden"}}) == ""
     )
 
 

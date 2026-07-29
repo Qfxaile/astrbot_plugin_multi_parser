@@ -41,9 +41,7 @@ def poll_response(request: httpx.Request, status: int, code: str = ""):
         200,
         request=request,
         headers={"Content-Type": "application/javascript"},
-        content=(
-            f"window.wx_errcode={status};window.wx_code='{code}';"
-        ).encode(),
+        content=(f"window.wx_errcode={status};window.wx_code='{code}';").encode(),
     )
 
 
@@ -309,7 +307,9 @@ async def test_wechat_qr_login_stops_on_yuanbao_verification_page():
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         provider = WeChatLoginProvider({}, client=client)
         challenge = await provider.create_qr_challenge()
-        with pytest.raises(PlatformLoginError, match="人机、设备验证或风控") as exc_info:
+        with pytest.raises(
+            PlatformLoginError, match="人机、设备验证或风控"
+        ) as exc_info:
             await provider.poll_qr_status(challenge.session_key)
 
     assert "secret-auth-code" not in str(exc_info.value)

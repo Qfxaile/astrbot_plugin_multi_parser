@@ -33,9 +33,7 @@ def test_invalid_legacy_image_slots_are_marked_in_original_order():
 
 
 @pytest.mark.asyncio
-async def test_materialize_images_respects_download_concurrency(
-    monkeypatch, tmp_path
-):
+async def test_materialize_images_respects_download_concurrency(monkeypatch, tmp_path):
     from astrbot_multi_parser.core.media import ImageMaterializer
 
     active_downloads = 0

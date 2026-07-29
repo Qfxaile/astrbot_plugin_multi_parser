@@ -199,11 +199,7 @@ async def test_short_channels_url_uses_yuanbao_headers_without_leaking_them(
 
     install_mock_client(monkeypatch, handler)
     parser = WeChatParser(
-        {
-            "wechat_yuanbao_cookies": (
-                "yb_user_id=user-secret; yb_token=token-secret"
-            )
-        }
+        {"wechat_yuanbao_cookies": ("yb_user_id=user-secret; yb_token=token-secret")}
     )
 
     result = await parser.parse(

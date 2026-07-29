@@ -359,9 +359,7 @@ def test_game_helpers_deduplicate_images_and_format_prices():
         "heybox_price": {"cost_coin": 1250},
     }
 
-    assert extract_game_images(game, "") == [
-        "https://gameimg.max-c.com/a.jpg?x=1"
-    ]
+    assert extract_game_images(game, "") == ["https://gameimg.max-c.com/a.jpg?x=1"]
     assert format_yuan_from_coin(1250) == "1.25"
     assert "价格：¥ 100" in build_game_desc("", game, {})
     assert "史低价格：¥ 80" in build_game_desc("", game, {})

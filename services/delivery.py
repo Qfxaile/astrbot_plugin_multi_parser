@@ -190,9 +190,7 @@ class DeliveryService:
                         parse_result.image_source_urls,
                         parse_result.image_download_headers,
                     )
-                messages = await self._serialize_onebot_nodes(
-                    nodes, image_files
-                )
+                messages = await self._serialize_onebot_nodes(nodes, image_files)
                 await self._send_onebot_forward_nodes(event, messages)
                 continue
             await event.send(MessageChain([Nodes(nodes)]))

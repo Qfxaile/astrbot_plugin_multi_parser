@@ -16,9 +16,7 @@ def create_payload(**result):
     return {
         "status": "ok",
         "result": {
-            "qr_url": (
-                "https://api.xiaoheihe.cn/account/qr_login/?qr=qr-secret"
-            ),
+            "qr_url": ("https://api.xiaoheihe.cn/account/qr_login/?qr=qr-secret"),
             "expire": 120,
             **result,
         },

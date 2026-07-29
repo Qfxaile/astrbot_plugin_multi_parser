@@ -130,9 +130,7 @@ class WeChatLoginProvider(HTTPPlatformLoginProvider):
         except PlatformLoginError:
             raise
         except httpx.HTTPError as exc:
-            raise PlatformLoginError(
-                "微信登录服务请求失败，请稍后重试。"
-            ) from exc
+            raise PlatformLoginError("微信登录服务请求失败，请稍后重试。") from exc
 
         if status_code in self._REDIRECT_STATUS_CODES:
             raise PlatformLoginError("微信登录服务返回了不安全的重定向。")
@@ -174,9 +172,7 @@ class WeChatLoginProvider(HTTPPlatformLoginProvider):
         except PlatformLoginError:
             raise
         except httpx.HTTPError as exc:
-            raise PlatformLoginError(
-                "微信登录状态查询失败，请稍后重试。"
-            ) from exc
+            raise PlatformLoginError("微信登录状态查询失败，请稍后重试。") from exc
 
         if status_code in self._REDIRECT_STATUS_CODES or status_code >= 400:
             raise PlatformLoginError("微信登录状态查询失败，请稍后重试。")
@@ -184,9 +180,7 @@ class WeChatLoginProvider(HTTPPlatformLoginProvider):
         if match is None:
             if self._contains_risk_marker(content):
                 raise self._verification_error()
-            raise PlatformLoginError(
-                "微信返回了无法识别的登录状态，请重新发起登录。"
-            )
+            raise PlatformLoginError("微信返回了无法识别的登录状态，请重新发起登录。")
 
         poll_status = int(match.group(1))
         auth_code = match.group(2)
@@ -201,9 +195,7 @@ class WeChatLoginProvider(HTTPPlatformLoginProvider):
             return LoginPollResult(LoginPollState.EXPIRED)
         if poll_status == 403:
             self._sessions.pop(session_key, None)
-            raise PlatformLoginError(
-                "微信登录已在手机端取消，请重新发起登录。"
-            )
+            raise PlatformLoginError("微信登录已在手机端取消，请重新发起登录。")
         if poll_status == 405:
             if self._AUTH_CODE_PATTERN.fullmatch(auth_code) is None:
                 raise PlatformLoginError("微信返回了无效的登录确认信息。")
@@ -213,9 +205,7 @@ class WeChatLoginProvider(HTTPPlatformLoginProvider):
             self._sessions.pop(session_key, None)
             return LoginPollResult(LoginPollState.SUCCESS, credential_header)
 
-        raise PlatformLoginError(
-            "微信返回了无法识别的登录状态，请重新发起登录。"
-        )
+        raise PlatformLoginError("微信返回了无法识别的登录状态，请重新发起登录。")
 
     async def get_current_user(self, cookie_header: str) -> PlatformUser | None:
         credentials = dict(parse_cookie_header(cookie_header))
@@ -238,9 +228,7 @@ class WeChatLoginProvider(HTTPPlatformLoginProvider):
         except PlatformLoginError:
             raise
         except httpx.HTTPError as exc:
-            raise PlatformLoginError(
-                "微信登录二维码获取失败，请稍后重试。"
-            ) from exc
+            raise PlatformLoginError("微信登录二维码获取失败，请稍后重试。") from exc
         if status_code in self._REDIRECT_STATUS_CODES:
             raise PlatformLoginError("微信登录二维码返回了不安全的重定向。")
         if status_code >= 400:
@@ -248,9 +236,9 @@ class WeChatLoginProvider(HTTPPlatformLoginProvider):
 
         media_type = content_type.split(";", 1)[0].strip()
         supported_type = media_type in {"image/jpeg", "image/png"}
-        supported_signature = content.startswith(b"\x89PNG\r\n\x1a\n") or content.startswith(
-            b"\xff\xd8\xff"
-        )
+        supported_signature = content.startswith(
+            b"\x89PNG\r\n\x1a\n"
+        ) or content.startswith(b"\xff\xd8\xff")
         if not supported_type or not supported_signature:
             raise PlatformLoginError("微信返回了无效的登录二维码图片。")
         return content
@@ -289,9 +277,7 @@ class WeChatLoginProvider(HTTPPlatformLoginProvider):
         except PlatformLoginError:
             raise
         except httpx.HTTPError as exc:
-            raise PlatformLoginError(
-                "微信登录确认请求失败，请稍后重试。"
-            ) from exc
+            raise PlatformLoginError("微信登录确认请求失败，请稍后重试。") from exc
 
         if status_code in self._REDIRECT_STATUS_CODES:
             raise PlatformLoginError("微信登录服务返回了不安全的重定向。")
@@ -359,9 +345,8 @@ class WeChatLoginProvider(HTTPPlatformLoginProvider):
                 continue
             path_match = re.fullmatch(r"/connect/qrcode/([^/]+)", parsed.path)
             if (
-                (parsed.hostname or "").lower() != cls.QR_IMAGE_HOST
-                or path_match is None
-            ):
+                parsed.hostname or ""
+            ).lower() != cls.QR_IMAGE_HOST or path_match is None:
                 continue
             uuid = path_match.group(1)
             if cls._UUID_PATTERN.fullmatch(uuid) is not None:

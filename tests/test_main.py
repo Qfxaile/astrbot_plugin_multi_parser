@@ -935,8 +935,13 @@ async def test_pixiv_forward_falls_back_to_single_image_upload_when_url_terminat
     ]
     assert len(download_params) == 4
     assert [params["url"] for params in download_params[::2]] == source_urls
-    assert all(params["headers"] == ["Referer=https://www.pixiv.net/"] for params in download_params[::2])
-    assert all(params["base64"] == "cGl4aXYtaW1hZ2U=" for params in download_params[1::2])
+    assert all(
+        params["headers"] == ["Referer=https://www.pixiv.net/"]
+        for params in download_params[::2]
+    )
+    assert all(
+        params["base64"] == "cGl4aXYtaW1hZ2U=" for params in download_params[1::2]
+    )
     assert bot.actions[-1][0] == "send_group_forward_msg"
     assert [
         node["data"]["content"][0]["data"]["file"]

@@ -138,9 +138,7 @@ class XiaoheiheLoginProvider(HTTPPlatformLoginProvider):
                 restored_result = await self._restore_login()
                 cookie_header = self._cookie_header(result, restored_result)
             if not self._has_required_credentials(cookie_header):
-                raise PlatformLoginError(
-                    "小黑盒登录成功，但响应中缺少有效登录凭据。"
-                )
+                raise PlatformLoginError("小黑盒登录成功，但响应中缺少有效登录凭据。")
             return LoginPollResult(LoginPollState.SUCCESS, cookie_header)
         return LoginPollResult(LoginPollState.EXPIRED)
 
@@ -171,9 +169,7 @@ class XiaoheiheLoginProvider(HTTPPlatformLoginProvider):
                 follow_redirects=False,
             ) as response:
                 if response.is_redirect:
-                    raise PlatformLoginError(
-                        "小黑盒登录服务返回了不安全的重定向。"
-                    )
+                    raise PlatformLoginError("小黑盒登录服务返回了不安全的重定向。")
                 content = await read_login_response_body(
                     response,
                     limit=self.MAX_RESPONSE_BYTES,
@@ -186,9 +182,7 @@ class XiaoheiheLoginProvider(HTTPPlatformLoginProvider):
         except PlatformLoginError:
             raise
         except httpx.HTTPError as exc:
-            raise PlatformLoginError(
-                "小黑盒登录服务请求失败，请稍后重试。"
-            ) from exc
+            raise PlatformLoginError("小黑盒登录服务请求失败，请稍后重试。") from exc
 
         if "text/html" in content_type or content.lstrip().startswith(b"<"):
             raise self._verification_error()
@@ -216,9 +210,7 @@ class XiaoheiheLoginProvider(HTTPPlatformLoginProvider):
             )
         result = payload.get("result")
         if status != "ok" or not isinstance(result, Mapping):
-            raise PlatformLoginError(
-                "小黑盒登录状态恢复失败，请重新发起登录。"
-            )
+            raise PlatformLoginError("小黑盒登录状态恢复失败，请重新发起登录。")
         return result
 
     @classmethod
@@ -232,9 +224,8 @@ class XiaoheiheLoginProvider(HTTPPlatformLoginProvider):
         except ValueError:
             return None
         if (
-            (parsed.hostname or "").lower() != "api.xiaoheihe.cn"
-            or parsed.path != cls.QR_LOGIN_PATH
-        ):
+            parsed.hostname or ""
+        ).lower() != "api.xiaoheihe.cn" or parsed.path != cls.QR_LOGIN_PATH:
             return None
         values = parse_qs(parsed.query, keep_blank_values=True).get("qr", [])
         if len(values) != 1 or cls._SESSION_KEY_PATTERN.fullmatch(values[0]) is None:
@@ -275,9 +266,7 @@ class XiaoheiheLoginProvider(HTTPPlatformLoginProvider):
 
     @classmethod
     def _has_required_credentials(cls, cookie_header: str) -> bool:
-        return all(
-            f"{name}=" in cookie_header for name in cls.REQUIRED_COOKIE_NAMES
-        )
+        return all(f"{name}=" in cookie_header for name in cls.REQUIRED_COOKIE_NAMES)
 
     @staticmethod
     def _is_safe_cookie_value(value: object) -> bool:

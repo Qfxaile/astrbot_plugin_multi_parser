@@ -217,9 +217,7 @@ async def test_cancel_only_stops_login_from_same_private_session():
 
 @pytest.mark.asyncio
 async def test_logout_clears_cookie_and_saves_config():
-    config = SavingConfig(
-        cookies={"bilibili_cookies": "SESSDATA=session-secret"}
-    )
+    config = SavingConfig(cookies={"bilibili_cookies": "SESSDATA=session-secret"})
     service = AuthenticationService(config, provider_factories={"B站": lambda: None})
 
     message = await service.logout("B站")
