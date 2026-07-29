@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping
 from html.parser import HTMLParser
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 from ...core.contracts import OrderedContent, ParseResult
 from ...core.http import is_trusted_https_url
@@ -41,6 +41,18 @@ def _normalize_media_url(value: str, host_suffixes: tuple[str, ...]) -> str:
     if not is_trusted_https_url(candidate, host_suffixes):
         return ""
     return candidate
+
+
+def _prefer_large_psc_image_url(url: str) -> str:
+    """将 QQ 空间 psc 中图或小图地址提升为大图规格。"""
+    parsed = urlsplit(url)
+    if parsed.path != "/psc":
+        return url
+    image_path, separator, parameters = parsed.query.partition("&")
+    if not image_path.endswith(("/m", "/s")):
+        return url
+    query = f"{image_path[:-1]}b{separator}{parameters}"
+    return urlunsplit(parsed._replace(query=query))
 
 
 class _QzonePageParser(HTMLParser):
@@ -138,6 +150,7 @@ class _QzonePageParser(HTMLParser):
 
     def _append_image(self, attributes: dict[str, str]) -> None:
         image_url = self._media_from_attributes(attributes, IMAGE_HOST_SUFFIXES)
+        image_url = _prefer_large_psc_image_url(image_url)
         if not image_url or image_url in self._image_urls:
             return
         self._image_urls.add(image_url)

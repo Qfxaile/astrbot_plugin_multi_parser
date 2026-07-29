@@ -254,6 +254,32 @@ def test_qzone_page_extracts_lazy_image_from_real_template_attribute():
     assert result.ordered_contents[0].value == "https://m.qpic.cn/lazy.jpg"
 
 
+def test_qzone_page_promotes_psc_thumbnails_to_large_images():
+    result = QzoneParser({})._parse_page(
+        """
+        <div class="feed dataItem">
+          <div class="feed-hd"><span class="username">作者</span></div>
+          <div class="feed-bd">
+            <div class="images">
+              <img src="https://a.photo.store.qq.com/psc?/album/first/m&amp;ek=1">
+              <img src="https://m.qpic.cn/psc?/album/second/s&amp;bo=size">
+              <img src="https://m.qpic.cn/psc?/album/third/b&amp;bo=size">
+              <img src="https://m.qpic.cn/album/plain.jpg">
+            </div>
+          </div>
+        </div>
+        """,
+        res_uin="123456",
+    )
+
+    assert [item.value for item in result.ordered_contents] == [
+        "https://a.photo.store.qq.com/psc?/album/first/b&ek=1",
+        "https://m.qpic.cn/psc?/album/second/b&bo=size",
+        "https://m.qpic.cn/psc?/album/third/b&bo=size",
+        "https://m.qpic.cn/album/plain.jpg",
+    ]
+
+
 def test_qzone_album_page_extracts_direct_feed_image():
     result = QzoneParser({})._parse_page(
         """
