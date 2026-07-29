@@ -26,6 +26,9 @@ COOKIE_KEYS = (
     "wechat_yuanbao_cookies",
     "xiaoheihe_cookies",
     "zhihu_cookies",
+    "taobao_cookies",
+    "jd_cookies",
+    "pinduoduo_cookies",
 )
 
 

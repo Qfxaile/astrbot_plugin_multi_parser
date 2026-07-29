@@ -8,7 +8,7 @@ from urllib.parse import urljoin, urlsplit
 import httpx
 
 from ...core.contracts import ParseContext, ParseResult
-from ...core.http import is_trusted_https_url
+from ...core.http import build_cookies, cookie_config_value, is_trusted_https_url
 from ...core.parser import BaseParser
 from ...core.product_metadata import (
     ProductMetadata,
@@ -26,6 +26,8 @@ class JDParser(BaseParser):
 
     name = "jd"
     display_name = "京东"
+    cookie_config_key = "jd_cookies"
+    cookie_domains = (".jd.com", ".3.cn")
     page_host_suffixes = ("jd.com", "3.cn")
     image_host_suffixes = ("360buyimg.com", "jd.com")
     URL_PATTERN = re.compile(
@@ -60,6 +62,10 @@ class JDParser(BaseParser):
                 timeout=self.request_timeout,
                 follow_redirects=False,
                 headers=self.HEADERS,
+                cookies=build_cookies(
+                    cookie_config_value(self.config, self.cookie_config_key),
+                    self.cookie_domains,
+                ),
             ) as client:
                 page = await fetch_trusted_html(
                     client,
@@ -75,7 +81,7 @@ class JDParser(BaseParser):
                 if any(marker in page.html for marker in self.VERIFY_MARKERS):
                     return ParseResult(
                         platform=self.name,
-                        error="京东商品页面需要验证或登录，暂时无法匿名解析。",
+                        error=str(self.cookie_access_error()),
                     )
 
                 metadata = extract_json_ld_product(
@@ -97,10 +103,19 @@ class JDParser(BaseParser):
                 result = self._build_result(metadata, canonical_url)
                 if not result.cover_urls:
                     return result
-                return await self.materialize_images(result, client, page.final_url)
+                return await self.materialize_public_images(
+                    result,
+                    page.final_url,
+                    headers=self.HEADERS,
+                )
         except TrustedWebPageError as exc:
             return ParseResult(platform=self.name, error=str(exc))
         except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in self.cookie_failure_status_codes:
+                return ParseResult(
+                    platform=self.name,
+                    error=str(self.cookie_access_error()),
+                )
             if exc.response.status_code in {404, 410}:
                 return ParseResult(
                     platform=self.name,

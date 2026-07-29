@@ -128,12 +128,15 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 | `cookies.wechat_yuanbao_cookies` | 视频号短链需要 | 保存 `yb_user_id` 和 `yb_token` |
 | `cookies.xiaoheihe_cookies` | 否 | 配置后用于游戏详情请求，未配置时使用公开接口 |
 | `cookies.zhihu_cookies` | 否 | 二维码登录暂不可用，可手工填写 |
+| `cookies.taobao_cookies` | 否 | 手工填写，用于淘宝和天猫商品页面请求 |
+| `cookies.jd_cookies` | 否 | 手工填写，用于京东商品页面请求 |
+| `cookies.pinduoduo_cookies` | 否 | 手工填写，用于拼多多商品页面请求 |
 
 GitHub 仅解析公开仓库主页，不需要 Token；Issue、PR、文件、提交等仓库子路径不会触发解析。
 
 QQ空间仅解析匿名可访问的公开说说分享页，不读取或保存 QQ Cookie；私密说说、日志和相册暂不支持。
 
-淘宝/天猫、京东和拼多多仅解析匿名可访问的公开商品页及分享短链，不读取或保存平台 Cookie。价格只采用页面明确公开的值；受地区、SKU、活动或风控影响时可能不显示价格，仍会尽量保留标题、店铺和主图。
+淘宝/天猫、京东和拼多多未配置 Cookie 时解析匿名可访问的公开商品页及分享短链；手工配置后，Cookie 仅发送到对应平台的商品页面请求，不发送到图片 CDN。价格只采用页面明确公开的值；受地区、SKU、活动或风控影响时可能不显示价格，仍会尽量保留标题、店铺和主图。
 
 Pixiv 仅解析匿名可访问的公开插画作品，不需要 Cookie；动图、小说及登录、年龄或地区限制作品暂不支持。
 

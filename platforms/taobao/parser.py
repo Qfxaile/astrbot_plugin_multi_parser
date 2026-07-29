@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urljoin, urlsplit
 import httpx
 
 from ...core.contracts import ParseContext, ParseResult
-from ...core.http import is_trusted_https_url
+from ...core.http import build_cookies, cookie_config_value, is_trusted_https_url
 from ...core.parser import BaseParser
 from ...core.product_metadata import (
     ProductMetadata,
@@ -26,6 +26,8 @@ class TaobaoParser(BaseParser):
 
     name = "taobao"
     display_name = "淘宝/天猫"
+    cookie_config_key = "taobao_cookies"
+    cookie_domains = (".taobao.com", ".tmall.com", ".tb.cn")
     page_host_suffixes = ("taobao.com", "tmall.com", "tb.cn")
     image_host_suffixes = ("alicdn.com", "tbcdn.cn")
     URL_PATTERN = re.compile(
@@ -67,6 +69,10 @@ class TaobaoParser(BaseParser):
                 timeout=self.request_timeout,
                 follow_redirects=False,
                 headers=self.HEADERS,
+                cookies=build_cookies(
+                    cookie_config_value(self.config, self.cookie_config_key),
+                    self.cookie_domains,
+                ),
             ) as client:
                 page = await fetch_trusted_html(
                     client,
@@ -94,7 +100,7 @@ class TaobaoParser(BaseParser):
                 if any(marker in page.html for marker in self.VERIFY_MARKERS):
                     return ParseResult(
                         platform=self.name,
-                        error=("淘宝/天猫商品页面需要验证或登录，暂时无法匿名解析。"),
+                        error=str(self.cookie_access_error()),
                     )
 
                 metadata = extract_json_ld_product(
@@ -110,17 +116,29 @@ class TaobaoParser(BaseParser):
                 if not metadata.title:
                     return ParseResult(
                         platform=self.name,
-                        error=(
-                            "未找到淘宝/天猫商品信息，页面可能需要登录或结构已变化。"
-                        ),
+                        error=str(self.cookie_access_error()),
                     )
 
                 result = self._build_result(metadata, canonical_url)
                 if not result.cover_urls:
                     return result
-                return await self.materialize_images(result, client, page.final_url)
+                return await self.materialize_public_images(
+                    result,
+                    page.final_url,
+                    headers=self.HEADERS,
+                )
         except TrustedWebPageError as exc:
             return ParseResult(platform=self.name, error=str(exc))
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in self.cookie_failure_status_codes:
+                return ParseResult(
+                    platform=self.name,
+                    error=str(self.cookie_access_error()),
+                )
+            return ParseResult(
+                platform=self.name,
+                error="淘宝/天猫商品请求失败，请稍后重试。",
+            )
         except httpx.HTTPError:
             return ParseResult(
                 platform=self.name,

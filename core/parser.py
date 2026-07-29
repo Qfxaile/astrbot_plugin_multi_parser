@@ -68,3 +68,18 @@ class BaseParser:
     ) -> ParseResult:
         materializer = ImageMaterializer(self.config, self.image_host_suffixes)
         return await materializer.materialize(result, client, referer)
+
+    async def materialize_public_images(
+        self,
+        result: ParseResult,
+        referer: str,
+        *,
+        headers: Mapping[str, str] | None = None,
+    ) -> ParseResult:
+        """使用不含平台 Cookie 的独立客户端读取公开图片。"""
+        async with httpx.AsyncClient(
+            timeout=self.request_timeout,
+            follow_redirects=False,
+            headers=headers,
+        ) as client:
+            return await self.materialize_images(result, client, referer)

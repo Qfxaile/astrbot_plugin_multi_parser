@@ -238,6 +238,24 @@
         "type": "text",
         "default": "",
         "hint": "选填。用于知乎页面和接口请求；二维码登录入口已保留，但获取 Cookies 暂未实现，当前会登录失败，请手动填写。"
+      },
+      "taobao_cookies": {
+        "description": "淘宝/天猫 Cookies",
+        "type": "text",
+        "default": "",
+        "hint": "选填。用于淘宝和天猫商品页面请求，可提高登录态或风控场景下的解析成功率。"
+      },
+      "jd_cookies": {
+        "description": "京东 Cookies",
+        "type": "text",
+        "default": "",
+        "hint": "选填。用于京东商品页面请求，可提高登录态或风控场景下的解析成功率。"
+      },
+      "pinduoduo_cookies": {
+        "description": "拼多多 Cookies",
+        "type": "text",
+        "default": "",
+        "hint": "选填。用于拼多多商品页面请求，可提高登录态或风控场景下的解析成功率。"
       }
     }
   }

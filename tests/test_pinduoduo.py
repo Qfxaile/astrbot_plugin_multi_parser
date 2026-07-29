@@ -97,6 +97,44 @@ async def test_pinduoduo_parse_converts_integer_cent_price(monkeypatch):
     ]
 
 
+async def test_pinduoduo_scopes_page_cookies_and_keeps_images_cookie_free(
+    monkeypatch,
+):
+    parser = PinduoduoParser({"cookies": {"pinduoduo_cookies": "session=test-secret"}})
+    page_cookie_domains = []
+    image_cookies = []
+
+    async def fetch_page(client, url, host_suffixes):
+        page_cookie_domains.append(
+            sorted(cookie.domain for cookie in client.cookies.jar)
+        )
+        return FetchedWebPage(
+            "https://mobile.yangkeduo.com/goods2.html?goods_id=795783843683",
+            """
+            <meta property="og:title" content="拼多多商品">
+            <meta property="og:image" content="https://img.pddpic.com/main.jpg">
+            """,
+        )
+
+    async def materialize(result, client, referer):
+        image_cookies.extend(client.cookies.jar)
+        return result
+
+    monkeypatch.setattr(
+        "astrbot_multi_parser.platforms.pinduoduo.parser.fetch_trusted_html",
+        fetch_page,
+    )
+    monkeypatch.setattr(parser, "materialize_images", materialize)
+
+    result = await parser.parse(
+        ParseContext(text="https://mobile.yangkeduo.com/goods2.html?ps=Abc123")
+    )
+
+    assert result.title == "拼多多商品"
+    assert page_cookie_domains == [[".pinduoduo.com", ".yangkeduo.com"]]
+    assert image_cookies == []
+
+
 async def test_pinduoduo_string_price_is_not_divided_again(monkeypatch):
     parser = PinduoduoParser({})
     html = """
@@ -201,8 +239,20 @@ async def test_pinduoduo_short_link_must_resolve_to_goods_page(monkeypatch):
 
 
 @pytest.mark.parametrize("marker", ["验证码", "安全验证", "登录后查看"])
-async def test_pinduoduo_reports_verification_page(monkeypatch, marker):
-    parser = PinduoduoParser({})
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        ({}, "拼多多内容获取失败，可能需要配置 Cookies，请在插件配置中填写后重试。"),
+        (
+            {"cookies": {"pinduoduo_cookies": "session=test-secret"}},
+            "拼多多内容获取失败，配置的 Cookies 可能已失效，请更新后重试。",
+        ),
+    ],
+)
+async def test_pinduoduo_reports_verification_page(
+    monkeypatch, marker, config, expected
+):
+    parser = PinduoduoParser(config)
 
     async def fetch_page(client, url, host_suffixes):
         return FetchedWebPage(
@@ -219,11 +269,22 @@ async def test_pinduoduo_reports_verification_page(monkeypatch, marker):
         ParseContext(text="https://mobile.yangkeduo.com/goods.html?goods_id=123456")
     )
 
-    assert result.error == "拼多多商品页面需要验证或登录，暂时无法匿名解析。"
+    assert result.error == expected
+    assert "test-secret" not in result.error
 
 
-async def test_pinduoduo_reports_need_login_page(monkeypatch):
-    parser = PinduoduoParser({})
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        ({}, "拼多多内容获取失败，可能需要配置 Cookies，请在插件配置中填写后重试。"),
+        (
+            {"cookies": {"pinduoduo_cookies": "session=test-secret"}},
+            "拼多多内容获取失败，配置的 Cookies 可能已失效，请更新后重试。",
+        ),
+    ],
+)
+async def test_pinduoduo_reports_need_login_page(monkeypatch, config, expected):
+    parser = PinduoduoParser(config)
 
     async def fetch_page(client, url, host_suffixes):
         return FetchedWebPage(
@@ -243,7 +304,42 @@ async def test_pinduoduo_reports_need_login_page(monkeypatch):
         ParseContext(text="https://mobile.yangkeduo.com/goods2.html?ps=CQGwm6NMIa")
     )
 
-    assert result.error == "拼多多商品页面需要验证或登录，暂时无法匿名解析。"
+    assert result.error == expected
+    assert "test-secret" not in result.error
+
+
+@pytest.mark.parametrize("status_code", [401, 403])
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        ({}, "拼多多内容获取失败，可能需要配置 Cookies，请在插件配置中填写后重试。"),
+        (
+            {"cookies": {"pinduoduo_cookies": "session=test-secret"}},
+            "拼多多内容获取失败，配置的 Cookies 可能已失效，请更新后重试。",
+        ),
+    ],
+)
+async def test_pinduoduo_maps_auth_status_to_cookie_error(
+    monkeypatch, status_code, config, expected
+):
+    parser = PinduoduoParser(config)
+
+    async def fetch_page(client, url, host_suffixes):
+        request = httpx.Request("GET", url)
+        response = httpx.Response(status_code, request=request)
+        raise httpx.HTTPStatusError("secret", request=request, response=response)
+
+    monkeypatch.setattr(
+        "astrbot_multi_parser.platforms.pinduoduo.parser.fetch_trusted_html",
+        fetch_page,
+    )
+
+    result = await parser.parse(
+        ParseContext(text="https://mobile.yangkeduo.com/goods2.html?ps=Abc123")
+    )
+
+    assert result.error == expected
+    assert "test-secret" not in result.error
 
 
 @pytest.mark.parametrize("status_code", [404, 410])

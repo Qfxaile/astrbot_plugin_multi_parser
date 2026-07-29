@@ -134,6 +134,39 @@ async def test_taobao_parse_follows_client_side_share_target(monkeypatch):
     ]
 
 
+async def test_taobao_scopes_page_cookies_and_keeps_images_cookie_free(monkeypatch):
+    parser = TaobaoParser({"cookies": {"taobao_cookies": "session=test-secret"}})
+    page_cookie_domains = []
+    image_cookies = []
+
+    async def fetch_page(client, url, host_suffixes):
+        page_cookie_domains.append(
+            sorted(cookie.domain for cookie in client.cookies.jar)
+        )
+        return FetchedWebPage(
+            "https://item.taobao.com/item.htm?id=123456",
+            """
+            <meta property="og:title" content="淘宝商品">
+            <meta property="og:image" content="https://img.alicdn.com/main.jpg">
+            """,
+        )
+
+    async def materialize(result, client, referer):
+        image_cookies.extend(client.cookies.jar)
+        return result
+
+    monkeypatch.setattr(
+        "astrbot_multi_parser.platforms.taobao.parser.fetch_trusted_html", fetch_page
+    )
+    monkeypatch.setattr(parser, "materialize_images", materialize)
+
+    result = await parser.parse(ParseContext(text="https://m.tb.cn/h.Abc123"))
+
+    assert result.title == "淘宝商品"
+    assert page_cookie_domains == [[".taobao.com", ".tb.cn", ".tmall.com"]]
+    assert image_cookies == []
+
+
 async def test_taobao_parse_rejects_untrusted_client_side_target(monkeypatch):
     parser = TaobaoParser({})
     requested = []
@@ -202,8 +235,20 @@ async def test_taobao_parse_rejects_short_link_to_non_product_page(monkeypatch):
 
 
 @pytest.mark.parametrize("marker", ["验证码", "安全验证", "登录后查看"])
-async def test_taobao_parse_reports_verification_page(monkeypatch, marker):
-    parser = TaobaoParser({})
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        ({}, "淘宝/天猫内容获取失败，可能需要配置 Cookies，请在插件配置中填写后重试。"),
+        (
+            {"cookies": {"taobao_cookies": "session=test-secret"}},
+            "淘宝/天猫内容获取失败，配置的 Cookies 可能已失效，请更新后重试。",
+        ),
+    ],
+)
+async def test_taobao_parse_reports_verification_page(
+    monkeypatch, marker, config, expected
+):
+    parser = TaobaoParser(config)
 
     async def fetch_page(client, url, host_suffixes):
         return FetchedWebPage(
@@ -219,7 +264,72 @@ async def test_taobao_parse_reports_verification_page(monkeypatch, marker):
         ParseContext(text="https://item.taobao.com/item.htm?id=123456")
     )
 
-    assert result.error == "淘宝/天猫商品页面需要验证或登录，暂时无法匿名解析。"
+    assert result.error == expected
+    assert "test-secret" not in result.error
+
+
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        ({}, "淘宝/天猫内容获取失败，可能需要配置 Cookies，请在插件配置中填写后重试。"),
+        (
+            {"cookies": {"taobao_cookies": "session=test-secret"}},
+            "淘宝/天猫内容获取失败，配置的 Cookies 可能已失效，请更新后重试。",
+        ),
+    ],
+)
+async def test_taobao_parse_maps_missing_metadata_to_cookie_error(
+    monkeypatch, config, expected
+):
+    parser = TaobaoParser(config)
+
+    async def fetch_page(client, url, host_suffixes):
+        return FetchedWebPage(
+            "https://item.taobao.com/item.htm?id=123456",
+            "<html></html>",
+        )
+
+    monkeypatch.setattr(
+        "astrbot_multi_parser.platforms.taobao.parser.fetch_trusted_html", fetch_page
+    )
+
+    result = await parser.parse(
+        ParseContext(text="https://item.taobao.com/item.htm?id=123456")
+    )
+
+    assert result.error == expected
+    assert "test-secret" not in result.error
+
+
+@pytest.mark.parametrize("status_code", [401, 403])
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        ({}, "淘宝/天猫内容获取失败，可能需要配置 Cookies，请在插件配置中填写后重试。"),
+        (
+            {"cookies": {"taobao_cookies": "session=test-secret"}},
+            "淘宝/天猫内容获取失败，配置的 Cookies 可能已失效，请更新后重试。",
+        ),
+    ],
+)
+async def test_taobao_maps_auth_status_to_cookie_error(
+    monkeypatch, status_code, config, expected
+):
+    parser = TaobaoParser(config)
+
+    async def fetch_page(client, url, host_suffixes):
+        request = httpx.Request("GET", url)
+        response = httpx.Response(status_code, request=request)
+        raise httpx.HTTPStatusError("secret", request=request, response=response)
+
+    monkeypatch.setattr(
+        "astrbot_multi_parser.platforms.taobao.parser.fetch_trusted_html", fetch_page
+    )
+
+    result = await parser.parse(ParseContext(text="https://m.tb.cn/h.Abc123"))
+
+    assert result.error == expected
+    assert "test-secret" not in result.error
 
 
 async def test_taobao_parse_does_not_leak_network_error(monkeypatch):
