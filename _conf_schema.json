@@ -64,6 +64,24 @@
         "type": "bool",
         "default": true
       },
+      "taobao": {
+        "description": "淘宝/天猫",
+        "hint": "解析匿名可访问的淘宝和天猫公开商品页及分享短链。",
+        "type": "bool",
+        "default": true
+      },
+      "jd": {
+        "description": "京东",
+        "hint": "解析匿名可访问的京东公开商品页及分享短链。",
+        "type": "bool",
+        "default": true
+      },
+      "pinduoduo": {
+        "description": "拼多多",
+        "hint": "解析匿名可访问的拼多多公开商品页及分享短链。",
+        "type": "bool",
+        "default": true
+      },
       "pixiv": {
         "description": "Pixiv",
         "hint": "解析匿名可访问的公开插画作品，默认关闭；暂不支持动图、小说和受限作品。",

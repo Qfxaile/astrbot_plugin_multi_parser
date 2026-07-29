@@ -12,6 +12,9 @@ PLATFORMS = (
     "zhihu",
     "github",
     "qzone",
+    "taobao",
+    "jd",
+    "pinduoduo",
     "pixiv",
 )
 COOKIE_KEYS = (

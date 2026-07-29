@@ -6,7 +6,7 @@
 
 ## 项目概览
 
-- 这是 AstrBot 插件，支持 B站、抖音、小红书、贴吧、微博、微信、小黑盒、知乎、GitHub、QQ空间和 Pixiv。
+- 这是 AstrBot 插件，支持 B站、抖音、小红书、贴吧、微博、微信、小黑盒、知乎、GitHub、QQ空间、淘宝/天猫、京东、拼多多和 Pixiv。
 - `main.py` 负责插件注册、命令入口和服务装配，不承载平台解析细节。
 - `core/` 保存跨平台契约和基础能力；`services/` 保存编排与策略；`platforms/` 保存平台特有实现；`tests/` 保存 pytest 测试。
 - `metadata.yaml` 是插件版本的唯一来源。除非用户明确要求发布或升版，不修改版本号。
@@ -45,7 +45,7 @@ uv run ruff check .
 | 插件注册、事件入口、依赖装配 | `main.py` |
 | 解析结果和上下文契约 | `core/contracts.py` |
 | 登录契约、登录 HTTP 基类和二维码渲染 | `core/platform_login.py` |
-| 安全 HTTP、可信 URL、Cookie、媒体和渲染 | `core/http.py`、`core/media.py`、`core/rendering.py` |
+| 安全 HTTP、可信 URL、Cookie、商品网页元数据、媒体和渲染 | `core/http.py`、`core/webpage.py`、`core/product_metadata.py`、`core/media.py`、`core/rendering.py` |
 | 解析器公共流程 | `core/parser.py` |
 | 平台清单及解析器、登录适配器对应关系 | `platforms/registry.py` |
 | 配置读取和解析器创建 | `services/configuration.py` |

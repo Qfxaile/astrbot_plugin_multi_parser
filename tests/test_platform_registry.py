@@ -1,3 +1,4 @@
+import pytest
 from astrbot_multi_parser.platforms.registry import PLATFORM_REGISTRY
 
 
@@ -13,6 +14,9 @@ def test_platform_registry_has_stable_parser_and_login_order():
         "zhihu",
         "github",
         "qzone",
+        "taobao",
+        "jd",
+        "pinduoduo",
         "pixiv",
     ]
     assert [
@@ -47,9 +51,11 @@ def test_pixiv_registration_is_parser_only_and_disabled_by_default():
     assert registration.enabled_by_default is False
 
 
-def test_qzone_registration_is_parser_only_and_enabled_by_default():
-    registration = PLATFORM_REGISTRY[-2]
+@pytest.mark.parametrize("platform", ["qzone", "taobao", "jd", "pinduoduo"])
+def test_public_parser_only_platforms_are_enabled_by_default(platform):
+    registration = next(
+        item for item in PLATFORM_REGISTRY if item.parser_type.name == platform
+    )
 
-    assert registration.parser_type.name == "qzone"
     assert registration.login_provider_type is None
     assert registration.enabled_by_default is True
