@@ -9,6 +9,7 @@ import pytest
     [
         ("bilibili", "BilibiliParser", "_get_video_info", "bilibili.video"),
         ("bilibili", "BilibiliParser", "_parse_live_payload", "bilibili.live"),
+        ("bilibili", "BilibiliParser", "_parse_mall", "bilibili.mall"),
         (
             "bilibili",
             "BilibiliParser",

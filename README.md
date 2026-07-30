@@ -40,7 +40,7 @@
 
 | 平台 | 视频 | 图文 | 短链与其他内容 |
 | --- | --- | --- | --- |
-| Bilibili | BV、AV | Opus、动态、专栏 | `b23.tv`、`bili2233.cn`、直播间 |
+| Bilibili | BV、AV | Opus、动态、专栏、会员购详情 | `b23.tv`、`bili2233.cn`、直播间、会员购票务/商品/工房/市集链接 |
 | 抖音 | 视频、直播 | 普通图文、Slides、商城商品标题与主图 | `v.douyin.com`、`jx.douyin.com`、抖音商城长链、汽水音乐 |
 | 小红书 | 视频笔记 | 图文笔记 | `xhslink.com`、部分 JSON 分享卡片 |
 | 贴吧 | 首帖视频 | 楼主首帖正文 | `tieba.baidu.com/p/<帖子ID>` |
@@ -135,6 +135,8 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 GitHub 仅解析公开仓库主页，不需要 Token；Issue、PR、文件、提交等仓库子路径不会触发解析。
 
 QQ空间仅解析匿名可访问的公开说说分享页，不读取或保存 QQ Cookie；私密说说、日志和相册暂不支持。
+
+Bilibili 会员购解析覆盖可唯一定位 ID 的新旧票务、普通或商家商品、UP 主工房商品和魔力赏市集商品详情；首页、分类页、兑换列表、购物车和订单页不会触发解析。摘要展示价格、店铺或主办方及类型专属信息，并最多发送 6 张可信详情图。
 
 淘宝/天猫、京东和拼多多未配置 Cookie 时解析匿名可访问的公开商品页及分享短链；手工配置后，Cookie 仅发送到对应平台的商品页面请求，不发送到图片 CDN。解析结果只展示商品标题和主图。
 

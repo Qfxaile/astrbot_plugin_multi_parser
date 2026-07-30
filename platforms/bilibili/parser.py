@@ -10,12 +10,14 @@ from .article import BilibiliArticleContent
 from .common import BilibiliContentSupport, original_image_url
 from .dynamic import BilibiliDynamicContent
 from .live import BilibiliLiveContent
+from .mall import BilibiliMallContent, find_mall_target
 from .video import BilibiliVideoContent
 
 _original_image_url = original_image_url
 
 
 class BilibiliParser(
+    BilibiliMallContent,
     BilibiliLiveContent,
     BilibiliDynamicContent,
     BilibiliArticleContent,
@@ -23,7 +25,7 @@ class BilibiliParser(
     BilibiliContentSupport,
     BaseParser,
 ):
-    """将 B站链接路由到视频、直播、动态或文章解析器。"""
+    """将 B站链接路由到视频、直播、图文、文章或会员购解析器。"""
 
     name = "bilibili"
     display_name = "B站"
@@ -42,7 +44,7 @@ class BilibiliParser(
 
     async def match(self, context: ParseContext) -> bool:
         text = context.combined_text
-        return any(
+        return find_mall_target(text) is not None or any(
             re.search(pattern, text)
             for pattern in (
                 self.DYNAMIC_PATTERN,
@@ -56,6 +58,8 @@ class BilibiliParser(
 
     async def parse(self, context: ParseContext) -> ParseResult:
         text = context.combined_text
+        if mall_target := find_mall_target(text):
+            return await self._parse_mall(mall_target)
         if match := re.search(self.DYNAMIC_PATTERN, text):
             return await self._parse_dynamic(match.group("dynamic_id"))
         if match := re.search(self.OPUS_PATTERN, text):
