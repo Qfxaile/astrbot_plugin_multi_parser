@@ -158,6 +158,195 @@ async def test_matches_bilibili_graphic_urls(url):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://www.bilibili.com/bangumi/play/ep199612",
+        "https://www.bilibili.com/bangumi/play/ss33378",
+    ],
+)
+async def test_matches_bilibili_bangumi_urls(url):
+    parser = bilibili.BilibiliParser({})
+
+    assert await parser.match(ParseContext(text=url))
+
+
+def test_bangumi_payload_extracts_introduction_without_video():
+    payload = {
+        "code": 0,
+        "result": {
+            "season_title": "测试番剧",
+            "evaluate": "这是一段作品简介。",
+            "cover": "//i0.hdslb.com/bfs/bangumi/cover.jpg@672w.webp",
+            "type_name": "国创",
+            "areas": [{"name": "中国大陆"}],
+            "styles": [{"name": "剧情"}, {"name": "奇幻"}],
+            "rating": {"score": 9.6, "count": 123456},
+            "new_ep": {"desc": "更新至第12话"},
+            "episodes": [
+                {"id": 199611, "title": "11", "long_title": "前夜"},
+                {"id": 199612, "title": "12", "long_title": "终章"},
+            ],
+        },
+    }
+
+    result = bilibili.BilibiliParser({})._parse_bangumi_payload(
+        payload, episode_id="199612"
+    )
+
+    assert result.title == "测试番剧"
+    assert result.description == "这是一段作品简介。"
+    assert result.cover_urls == ["https://i0.hdslb.com/bfs/bangumi/cover.jpg"]
+    assert result.extra_lines == [
+        "类型: 国创",
+        "地区: 中国大陆",
+        "风格: 剧情 / 奇幻",
+        "评分: 9.6（123,456 人）",
+        "状态: 更新至第12话",
+        "当前分集: 12 - 终章",
+    ]
+    assert result.video_url == ""
+
+
+def test_bangumi_payload_uses_numeric_type_name_fallback():
+    payload = {
+        "code": 0,
+        "result": {
+            "season_title": "电影标题",
+            "type": 2,
+        },
+    }
+
+    result = bilibili.BilibiliParser({})._parse_bangumi_payload(payload)
+
+    assert result.extra_lines == ["类型: 电影"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("url", "parameter_name", "content_id"),
+    [
+        (
+            "https://www.bilibili.com/bangumi/play/ep199612",
+            "ep_id",
+            "199612",
+        ),
+        (
+            "https://www.bilibili.com/bangumi/play/ss33378",
+            "season_id",
+            "33378",
+        ),
+    ],
+)
+async def test_parse_bangumi_requests_season_api_without_video(
+    monkeypatch, url, parameter_name, content_id
+):
+    api_request = None
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal api_request
+        api_request = request
+        return httpx.Response(
+            200,
+            json={
+                "code": 0,
+                "result": {
+                    "season_title": "影视标题",
+                    "evaluate": "影视简介",
+                    "cover": "",
+                },
+            },
+            request=request,
+        )
+
+    async_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        bilibili.httpx,
+        "AsyncClient",
+        lambda **kwargs: async_client(transport=httpx.MockTransport(handler), **kwargs),
+    )
+
+    result = await bilibili.BilibiliParser(
+        {"bilibili_cookies": "SESSDATA=bangumi-session"}
+    ).parse(ParseContext(text=url))
+
+    assert result.title == "影视标题"
+    assert result.description == "影视简介"
+    assert result.video_url == ""
+    assert api_request is not None
+    assert api_request.url.path == "/pgc/view/web/season"
+    assert dict(api_request.url.params) == {parameter_name: content_id}
+    assert api_request.headers["Referer"] == url
+    assert "SESSDATA=bangumi-session" in api_request.headers["Cookie"]
+
+
+@pytest.mark.asyncio
+async def test_parse_bangumi_reports_api_business_error(monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"code": -404, "message": "啥都木有"},
+            request=request,
+        )
+
+    async_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        bilibili.httpx,
+        "AsyncClient",
+        lambda **kwargs: async_client(transport=httpx.MockTransport(handler), **kwargs),
+    )
+
+    result = await bilibili.BilibiliParser({}).parse(
+        ParseContext(text="https://www.bilibili.com/bangumi/play/ep404")
+    )
+
+    assert result.error == "获取影视信息失败: 啥都木有"
+    assert result.title == ""
+    assert result.video_url == ""
+
+
+@pytest.mark.asyncio
+async def test_parse_bangumi_materializes_cover_without_cdn_cookie(
+    monkeypatch, assert_temporary_image
+):
+    page_url = "https://www.bilibili.com/bangumi/play/ep199612"
+    image_request = None
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal image_request
+        if request.url.host == "api.bilibili.com":
+            return httpx.Response(
+                200,
+                json={
+                    "code": 0,
+                    "result": {
+                        "season_title": "影视标题",
+                        "cover": "https://i0.hdslb.com/bangumi-cover.jpg",
+                    },
+                },
+                request=request,
+            )
+        image_request = request
+        return httpx.Response(200, content=b"bangumi-cover", request=request)
+
+    async_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        bilibili.httpx,
+        "AsyncClient",
+        lambda **kwargs: async_client(transport=httpx.MockTransport(handler), **kwargs),
+    )
+
+    result = await bilibili.BilibiliParser(
+        {"bilibili_cookies": "SESSDATA=bangumi-session"}
+    ).parse(ParseContext(text=page_url))
+
+    assert_temporary_image(result, result.cover_urls[0], b"bangumi-cover")
+    assert image_request is not None
+    assert image_request.headers["Referer"] == page_url
+    assert "Cookie" not in image_request.headers
+
+
+@pytest.mark.asyncio
 async def test_matches_bilibili_live_url():
     parser = bilibili.BilibiliParser({})
 

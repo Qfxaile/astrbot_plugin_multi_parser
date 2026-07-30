@@ -8,6 +8,12 @@ import pytest
     ("parser_module", "parser_name", "method_name", "content_module"),
     [
         ("bilibili", "BilibiliParser", "_get_video_info", "bilibili.video"),
+        (
+            "bilibili",
+            "BilibiliParser",
+            "_parse_bangumi_payload",
+            "bilibili.bangumi",
+        ),
         ("bilibili", "BilibiliParser", "_parse_live_payload", "bilibili.live"),
         ("bilibili", "BilibiliParser", "_parse_mall", "bilibili.mall"),
         (

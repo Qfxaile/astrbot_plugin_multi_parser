@@ -7,6 +7,7 @@ import httpx
 from ...core.contracts import ParseContext, ParseResult
 from ...core.parser import BaseParser
 from .article import BilibiliArticleContent
+from .bangumi import BilibiliBangumiContent
 from .common import BilibiliContentSupport, original_image_url
 from .dynamic import BilibiliDynamicContent
 from .live import BilibiliLiveContent
@@ -19,13 +20,14 @@ _original_image_url = original_image_url
 class BilibiliParser(
     BilibiliMallContent,
     BilibiliLiveContent,
+    BilibiliBangumiContent,
     BilibiliDynamicContent,
     BilibiliArticleContent,
     BilibiliVideoContent,
     BilibiliContentSupport,
     BaseParser,
 ):
-    """将 B站链接路由到视频、直播、图文、文章或会员购解析器。"""
+    """将 B站链接路由到视频、影视、直播、图文、文章或会员购解析器。"""
 
     name = "bilibili"
     display_name = "B站"
@@ -41,6 +43,10 @@ class BilibiliParser(
     OPUS_PATTERN = r"https?://www\.bilibili\.com/opus/(?P<opus_id>\d+)"
     ARTICLE_PATTERN = r"https?://www\.bilibili\.com/read/cv(?P<article_id>\d+)"
     LIVE_PATTERN = r"https?://live\.bilibili\.com/(?P<room_id>\d+)"
+    BANGUMI_PATTERN = (
+        r"https?://www\.bilibili\.com/bangumi/play/"
+        r"(?P<bangumi_kind>ep|ss)(?P<bangumi_id>\d+)"
+    )
 
     async def match(self, context: ParseContext) -> bool:
         text = context.combined_text
@@ -51,6 +57,7 @@ class BilibiliParser(
                 self.OPUS_PATTERN,
                 self.ARTICLE_PATTERN,
                 self.LIVE_PATTERN,
+                self.BANGUMI_PATTERN,
                 self.ID_PATTERN,
                 self.SHORT_PATTERN,
             )
@@ -68,6 +75,11 @@ class BilibiliParser(
             return await self._parse_article(match.group("article_id"))
         if match := re.search(self.LIVE_PATTERN, text):
             return await self._parse_live(match.group("room_id"))
+        if match := re.search(self.BANGUMI_PATTERN, text):
+            return await self._parse_bangumi(
+                match.group("bangumi_kind"),
+                match.group("bangumi_id"),
+            )
 
         match = re.search(self.ID_PATTERN, text)
         if not match and (short_match := re.search(self.SHORT_PATTERN, text)):
