@@ -27,10 +27,15 @@ class PlatformRegistration:
     parser_type: type[BaseParser]
     login_provider_type: type[PlatformLoginProvider] | None
     enabled_by_default: bool = True
+    parser_priority: int = 0
 
 
 PLATFORM_REGISTRY: tuple[PlatformRegistration, ...] = (
-    PlatformRegistration(BilibiliParser, BilibiliLoginProvider),
+    PlatformRegistration(
+        BilibiliParser,
+        BilibiliLoginProvider,
+        parser_priority=1,
+    ),
     PlatformRegistration(DouyinParser, DouyinLoginProvider),
     PlatformRegistration(RedBookParser, RedBookLoginProvider),
     PlatformRegistration(TiebaParser, TiebaLoginProvider),

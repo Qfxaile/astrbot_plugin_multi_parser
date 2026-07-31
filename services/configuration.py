@@ -8,7 +8,10 @@ def build_parsers(config) -> dict[str, BaseParser]:
     """按稳定优先级创建所有平台解析器。"""
     return {
         registration.parser_type.name: registration.parser_type(config)
-        for registration in PLATFORM_REGISTRY
+        for registration in sorted(
+            PLATFORM_REGISTRY,
+            key=lambda registration: registration.parser_priority,
+        )
     }
 
 
