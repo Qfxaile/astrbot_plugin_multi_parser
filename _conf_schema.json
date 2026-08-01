@@ -70,24 +70,6 @@
         "type": "bool",
         "default": true
       },
-      "taobao": {
-        "description": "淘宝/天猫",
-        "hint": "解析商品标题和主图。",
-        "type": "bool",
-        "default": true
-      },
-      "jd": {
-        "description": "京东",
-        "hint": "解析商品标题和主图。",
-        "type": "bool",
-        "default": true
-      },
-      "pinduoduo": {
-        "description": "拼多多",
-        "hint": "解析商品标题和主图。",
-        "type": "bool",
-        "default": true
-      },
       "pixiv": {
         "description": "Pixiv",
         "hint": "解析公开插画作品。",
@@ -244,24 +226,6 @@
         "type": "text",
         "default": "",
         "hint": "必填，用于知乎内容解析。"
-      },
-      "taobao_cookies": {
-        "description": "淘宝/天猫 Cookies",
-        "type": "text",
-        "default": "",
-        "hint": "必填，用于淘宝和天猫商品解析。"
-      },
-      "jd_cookies": {
-        "description": "京东 Cookies",
-        "type": "text",
-        "default": "",
-        "hint": "选填，用于京东商品解析。"
-      },
-      "pinduoduo_cookies": {
-        "description": "拼多多 Cookies",
-        "type": "text",
-        "default": "",
-        "hint": "必填，用于拼多多商品解析。"
       }
     }
   }

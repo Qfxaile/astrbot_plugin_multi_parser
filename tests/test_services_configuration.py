@@ -13,9 +13,6 @@ def test_registry_order_is_stable():
         "zhihu",
         "github",
         "qzone",
-        "taobao",
-        "jd",
-        "pinduoduo",
         "pixiv",
         "bilibili",
     ]
@@ -34,24 +31,15 @@ def test_github_is_enabled_and_pixiv_is_disabled_when_switch_is_missing():
     ]
 
 
-def test_commerce_parsers_are_enabled_by_default_and_can_be_disabled():
-    parsers = build_parsers({})
-    from astrbot_multi_parser.services.configuration import enabled_parsers
+def test_disabled_commerce_parsers_are_not_built_even_with_stale_switches():
+    parsers = build_parsers(
+        {
+            "platform_switches": {
+                "taobao": True,
+                "jd": True,
+                "pinduoduo": True,
+            }
+        }
+    )
 
-    enabled = [parser.name for parser in enabled_parsers({}, parsers)]
-    assert {"taobao", "jd", "pinduoduo"}.issubset(enabled)
-
-    disabled = [
-        parser.name
-        for parser in enabled_parsers(
-            {
-                "platform_switches": {
-                    "taobao": False,
-                    "jd": False,
-                    "pinduoduo": False,
-                }
-            },
-            parsers,
-        )
-    ]
-    assert {"taobao", "jd", "pinduoduo"}.isdisjoint(disabled)
+    assert {"taobao", "jd", "pinduoduo"}.isdisjoint(parsers)

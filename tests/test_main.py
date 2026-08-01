@@ -180,9 +180,6 @@ def test_plugin_registers_all_supported_parsers():
         "zhihu",
         "github",
         "qzone",
-        "taobao",
-        "jd",
-        "pinduoduo",
         "pixiv",
     }
 
@@ -201,9 +198,6 @@ def test_plugin_respects_platform_switches():
             "zhihu": False,
             "github": False,
             "qzone": False,
-            "taobao": False,
-            "jd": False,
-            "pinduoduo": False,
             "pixiv": False,
         }
     }
