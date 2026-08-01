@@ -171,6 +171,7 @@ def test_plugin_registers_all_supported_parsers():
     assert set(plugin.parsers) == {
         "bilibili",
         "douyin",
+        "fanqie",
         "redbook",
         "tieba",
         "weibo",
@@ -191,6 +192,7 @@ def test_plugin_respects_platform_switches():
         "platform_switches": {
             "bilibili": False,
             "douyin": True,
+            "fanqie": False,
             "redbook": False,
             "tieba": False,
             "weibo": False,

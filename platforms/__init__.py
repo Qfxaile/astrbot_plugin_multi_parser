@@ -3,6 +3,7 @@
 __all__ = [
     "BilibiliParser",
     "DouyinParser",
+    "FanqieParser",
     "RedBookParser",
     "TiebaParser",
     "WeiboParser",

@@ -6,6 +6,7 @@ from ..core.parser import BaseParser
 from ..core.platform_login import PlatformLoginProvider
 from .bilibili import BilibiliLoginProvider, BilibiliParser
 from .douyin import DouyinLoginProvider, DouyinParser
+from .fanqie import FanqieParser
 from .github import GitHubParser
 from .jd import JDParser
 from .pinduoduo import PinduoduoParser
@@ -37,6 +38,7 @@ PLATFORM_REGISTRY: tuple[PlatformRegistration, ...] = (
         parser_priority=1,
     ),
     PlatformRegistration(DouyinParser, DouyinLoginProvider),
+    PlatformRegistration(FanqieParser, None),
     PlatformRegistration(RedBookParser, RedBookLoginProvider),
     PlatformRegistration(TiebaParser, TiebaLoginProvider),
     PlatformRegistration(WeiboParser, WeiboLoginProvider),

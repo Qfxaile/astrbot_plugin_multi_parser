@@ -42,6 +42,7 @@
 | --- | --- | --- | --- |
 | Bilibili | BV、AV | Opus、动态、专栏、会员购详情 | `b23.tv`、`bili2233.cn`、直播间、番剧/电影/纪录片介绍、会员购票务/商品/工房/市集链接 |
 | 抖音 | 视频、直播 | 普通图文、Slides、商城商品标题与主图 | `v.douyin.com`、`jx.douyin.com`、抖音商城长链、汽水音乐 |
+| 番茄小说 | 不支持 | 小说标题、作者、简介与封面 | `changdunovel.com/t/...` 公开分享链接 |
 | 小红书 | 视频笔记 | 图文笔记 | `xhslink.com`、部分 JSON 分享卡片 |
 | 贴吧 | 首帖视频 | 楼主首帖正文 | `tieba.baidu.com/p/<帖子ID>` |
 | 微博 | 普通视频、视频页、TV | 微博、转发、长文章 | 桌面端、移动端及 API 分享链接 |
@@ -92,7 +93,7 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 
 | 配置项 | 默认值 | 作用 |
 | --- | --- | --- |
-| `platform_switches` | 十二个平台启用，GitHub/Pixiv 关闭 | 分别控制各平台的解析器；GitHub 和 Pixiv 需显式开启 |
+| `platform_switches` | 十三个平台启用，GitHub/Pixiv 关闭 | 分别控制各平台的解析器；GitHub 和 Pixiv 需显式开启 |
 | `filter_output_links` | `false` | 替换解析结果中的网页链接，不修改用户原消息 |
 | `filtered_link_text` | `[详细内容请打开原链接查看]` | 链接过滤后的替换文案 |
 | `enable_conversation_history` | `false` | 是否将解析结果写入当前 AstrBot LLM 会话 |
@@ -133,6 +134,10 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 | `cookies.pinduoduo_cookies` | 否 | 手工填写，用于拼多多商品页面请求 |
 
 GitHub 仅解析公开仓库主页，不需要 Token；Issue、PR、文件、提交等仓库子路径不会触发解析。
+
+番茄小说仅解析 `changdunovel.com/t/...` 公开分享链接，展示小说标题、作者、简介和封面，不抓取章节正文，也不需要 Cookie。
+
+番茄小说仅解析 `changdunovel.com/t/...` 公开分享链接，展示小说标题、作者、简介和封面，不抓取章节正文，也不需要 Cookie。
 
 QQ空间仅解析匿名可访问的公开说说分享页，不读取或保存 QQ Cookie；私密说说、日志和相册暂不支持。
 

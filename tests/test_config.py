@@ -4,6 +4,7 @@ from pathlib import Path
 PLATFORMS = (
     "bilibili",
     "douyin",
+    "fanqie",
     "redbook",
     "tieba",
     "weibo",

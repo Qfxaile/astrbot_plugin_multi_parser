@@ -16,6 +16,12 @@
         "type": "bool",
         "default": true
       },
+      "fanqie": {
+        "description": "番茄小说",
+        "hint": "解析 changdunovel.com 公开小说分享链接的书名、作者、简介和封面。",
+        "type": "bool",
+        "default": true
+      },
       "redbook": {
         "description": "小红书",
         "hint": "解析视频笔记、图文笔记。",

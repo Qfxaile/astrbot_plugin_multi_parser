@@ -6,6 +6,7 @@ def test_platform_registry_has_stable_parser_and_login_order():
     assert [registration.parser_type.name for registration in PLATFORM_REGISTRY] == [
         "bilibili",
         "douyin",
+        "fanqie",
         "redbook",
         "tieba",
         "weibo",
@@ -51,7 +52,7 @@ def test_pixiv_registration_is_parser_only_and_disabled_by_default():
     assert registration.enabled_by_default is False
 
 
-@pytest.mark.parametrize("platform", ["qzone", "taobao", "jd", "pinduoduo"])
+@pytest.mark.parametrize("platform", ["fanqie", "qzone", "taobao", "jd", "pinduoduo"])
 def test_public_parser_only_platforms_are_enabled_by_default(platform):
     registration = next(
         item for item in PLATFORM_REGISTRY if item.parser_type.name == platform
