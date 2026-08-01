@@ -4,9 +4,15 @@
 
 本文件适用于本仓库的代码、测试、配置和文档。先遵循用户要求和上级指令；冲突时以优先级更高的指令为准。
 
+## 项目开发 Skill
+
+- 在本仓库进行开发、修复、重构、代码审查、配置调整、测试维护、依赖变更、版本处理或项目文档维护时，Codex 必须主动调用 `$astrbot-multi-parser-development-guide`，无需等待用户显式点名。
+- 项目 Skill 位于 `.agents/skills/astrbot-multi-parser-development-guide/SKILL.md`；开始工作前完整读取，并按其流程检查当前代码事实、复用入口、验证范围和文档同步要求。
+- Skill 只补充执行流程，不得覆盖用户要求、上级指令或本文件中的项目事实；发生冲突时遵循优先级更高的规则。
+
 ## 项目概览
 
-- 这是 AstrBot 插件，支持 B站、抖音、小红书、贴吧、微博、微信、小黑盒、知乎、GitHub、QQ空间、淘宝/天猫、京东、拼多多和 Pixiv。
+- 这是 AstrBot 插件，支持 B站、抖音、番茄小说、小红书、贴吧、微博、微信、小黑盒、知乎、GitHub、QQ空间、淘宝/天猫、京东、拼多多和 Pixiv。
 - `main.py` 负责插件注册、命令入口和服务装配，不承载平台解析细节。
 - `core/` 保存跨平台契约和基础能力；`services/` 保存编排与策略；`platforms/` 保存平台特有实现；`tests/` 保存 pytest 测试。
 - `metadata.yaml` 是插件版本的唯一来源。除非用户明确要求发布或升版，不修改版本号。
@@ -51,6 +57,7 @@ uv run ruff check .
 | 配置读取和解析器创建 | `services/configuration.py` |
 | 登录编排、取消和凭据持久化 | `services/authentication.py` |
 | 消息上下文、文本处理和投递 | `services/message_context.py`、`services/text_processing.py`、`services/delivery.py` |
+| LLM 会话历史写入与媒体序列化 | `services/conversation_history.py` |
 | 视频大小探测与发送策略 | `services/video.py` |
 | 平台请求、签名、登录和载荷转换 | `platforms/<platform>/` |
 
@@ -82,8 +89,16 @@ uv run ruff check .
 - 登录适配器复用 `HTTPPlatformLoginProvider`、`read_login_response_body` 和公共二维码渲染；可信域、Cookie 值及 CookieJar 白名单序列化复用 `core/http.py`。
 - 平台解析器或登录适配器的增删与顺序只在 `platforms/registry.py` 声明，配置和认证服务从注册表装配，不维护平行清单。
 - 公开 API 和关键异步入口使用准确的中文文档字符串。注释解释边界、顺序、并发和降级原因，不逐行复述代码。
-- 配置变化同步 `_conf_schema.json`、`services/configuration.py`、README 和测试。
+- 配置变化同步 `_conf_schema.json`、README 和测试，并检查 `services/configuration.py` 是否需要调整；注册表已经提供所需装配语义时不要制造无意义改动。
+- `_conf_schema.json` 的用户可见文案保持简洁：平台开关用一句话概括支持的内容类型；Cookies 配置只说明是否选填及用途；登录状态、填写格式、兼容限制和故障处理等详细说明放入 README，不堆叠在配置提示中。Cookies 分组仍需保留简短的敏感信息警告。
 - 不为单次需求增加兼容层、重复入口或无调用方的扩展点。
+
+## 文档同步规则
+
+- 新增、删除或调整平台时，同步检查 `AGENTS.md`、项目 Skill、README、`_conf_schema.json`、`metadata.yaml` 的描述字段、CHANGELOG 和平台清单测试。
+- 模块职责、公共 API、目录结构、配置项、依赖、命令权限或验证流程变化时，在同次变更中更新对应项目事实和 AI 执行指南。
+- `AGENTS.md` 记录稳定的项目事实、边界和索引；项目 Skill 记录 AI 的查找、实现、验证和交付流程，避免大段重复。
+- 普通功能开发可以更新 `metadata.yaml` 的描述和仓库地址，但只有明确发布或升版时才修改版本号、README 版本徽章和 Git 标签。
 
 ## 验证流程
 
@@ -99,7 +114,7 @@ uv run ruff check .
 uv run pytest tests/test_<area>.py -q
 uv run pytest
 uv run ruff check .
-git diff --name-only --diff-filter=ACMR -- '*.py' | xargs -r uv run ruff format --check
+uv run ruff format --check .
 uv run python -m compileall main.py core services platforms
 git diff --check
 ```

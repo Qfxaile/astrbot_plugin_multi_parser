@@ -44,7 +44,7 @@ def test_schema_uses_platform_switches_without_legacy_settings():
     assert tuple(platform_switches["items"]) == PLATFORMS
     for platform in PLATFORMS:
         assert platform_switches["items"][platform]["type"] == "bool"
-        expected_default = platform not in {"github", "pixiv"}
+        expected_default = platform != "pixiv"
         assert platform_switches["items"][platform]["default"] is expected_default
 
     assert "enabled_platforms" not in schema

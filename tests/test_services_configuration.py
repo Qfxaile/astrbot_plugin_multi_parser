@@ -21,11 +21,13 @@ def test_registry_order_is_stable():
     ]
 
 
-def test_pixiv_is_disabled_when_switch_is_missing_or_false():
+def test_github_is_enabled_and_pixiv_is_disabled_when_switch_is_missing():
     parsers = build_parsers({})
     from astrbot_multi_parser.services.configuration import enabled_parsers
 
-    assert "pixiv" not in [parser.name for parser in enabled_parsers({}, parsers)]
+    enabled = [parser.name for parser in enabled_parsers({}, parsers)]
+    assert "github" in enabled
+    assert "pixiv" not in enabled
     assert "pixiv" in [
         parser.name
         for parser in enabled_parsers({"platform_switches": {"pixiv": True}}, parsers)

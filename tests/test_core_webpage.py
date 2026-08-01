@@ -77,7 +77,7 @@ async def test_fetch_trusted_html_rejects_untrusted_redirect(location):
     async with make_client(handler) as client:
         with pytest.raises(
             TrustedWebPageError,
-            match="^商品分享链接跳转到不可信域名。$",
+            match="^分享链接跳转到不可信域名。$",
         ) as error:
             await fetch_trusted_html(
                 client,
@@ -101,7 +101,7 @@ async def test_fetch_trusted_html_rejects_untrusted_start_without_request():
     async with make_client(handler) as client:
         with pytest.raises(
             TrustedWebPageError,
-            match="^商品分享链接跳转到不可信域名。$",
+            match="^分享链接跳转到不可信域名。$",
         ):
             await fetch_trusted_html(
                 client,
@@ -127,7 +127,7 @@ async def test_fetch_trusted_html_rejects_six_redirects():
     async with make_client(handler) as client:
         with pytest.raises(
             TrustedWebPageError,
-            match="^商品页面重定向次数超过安全限制。$",
+            match="^网页重定向次数超过安全限制。$",
         ):
             await fetch_trusted_html(
                 client,
@@ -143,7 +143,7 @@ async def test_fetch_trusted_html_rejects_redirect_without_location():
     async with make_client(lambda request: httpx.Response(302)) as client:
         with pytest.raises(
             TrustedWebPageError,
-            match="^商品分享链接缺少跳转地址。$",
+            match="^分享链接缺少跳转地址。$",
         ):
             await fetch_trusted_html(
                 client,
@@ -163,7 +163,7 @@ async def test_fetch_trusted_html_rejects_non_html_response():
     ) as client:
         with pytest.raises(
             TrustedWebPageError,
-            match="^商品页面不是可读取的 HTML。$",
+            match="^目标网页不是可读取的 HTML。$",
         ):
             await fetch_trusted_html(
                 client,
@@ -185,7 +185,7 @@ async def test_fetch_trusted_html_rejects_oversized_content_length():
     ) as client:
         with pytest.raises(
             TrustedWebPageError,
-            match="^商品页面响应过大，已停止解析。$",
+            match="^目标网页响应过大，已停止解析。$",
         ):
             await fetch_trusted_html(
                 client,
@@ -207,7 +207,7 @@ async def test_fetch_trusted_html_stops_when_stream_exceeds_limit():
     ) as client:
         with pytest.raises(
             TrustedWebPageError,
-            match="^商品页面响应过大，已停止解析。$",
+            match="^目标网页响应过大，已停止解析。$",
         ):
             await fetch_trusted_html(
                 client,

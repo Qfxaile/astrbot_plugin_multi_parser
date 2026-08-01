@@ -19,7 +19,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 登录契约、HTTP 登录基类和二维码渲染：`core/platform_login.py`
 - 安全 HTTP、媒体和结果渲染：`core/http.py`、`core/media.py`、`core/rendering.py`
 - 解析器公共流程：`core/parser.py`
-- 配置、登录、消息投递和视频策略编排：`services/`
+- 配置、登录、会话历史、消息投递和视频策略编排：`services/`
 - 平台清单以及解析器、登录适配器对应关系：`platforms/registry.py`
 - 平台入口和协议实现：`platforms/<platform>/parser.py`、支持登录平台的 `platforms/<platform>/login.py` 及同目录内容模块
 - 配置声明：`_conf_schema.json`
@@ -31,7 +31,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 ### 修改解析器
 
-复用 `BaseParser`、统一契约、安全 HTTP、媒体和投递服务。保持内容顺序，区分鉴权失败、网络失败、内容不存在和部分媒体失败。新增平台时更新平台包导出、`platforms/registry.py`、`platforms/__init__.py`、`_conf_schema.json`、README 和测试；`services/configuration.py` 与 `services/authentication.py` 从注册表装配，只有装配语义变化时才修改。
+复用 `BaseParser`、统一契约、安全 HTTP、媒体和投递服务。保持内容顺序，区分鉴权失败、网络失败、内容不存在和部分媒体失败。新增平台时更新平台包导出、`platforms/registry.py`、`platforms/__init__.py`、`_conf_schema.json`、README、项目事实文档和测试，并按用户可见程度更新 CHANGELOG；`services/configuration.py` 与 `services/authentication.py` 从注册表装配，只有装配语义变化时才修改。
 
 ### 修改平台登录
 
@@ -39,11 +39,15 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 ### 修改配置或依赖
 
-配置变化同步 `_conf_schema.json`、配置服务、README 和测试。项目环境统一通过 `uv` 管理，不假设仓库、AstrBot 或虚拟环境位于固定目录。改变依赖时同步 `pyproject.toml`、`uv.lock`，运行依赖还需同步 `requirements.txt`。
+配置变化同步 `_conf_schema.json`、README 和测试，并检查配置服务是否需要调整。项目环境统一通过 `uv` 管理，不假设仓库、AstrBot 或虚拟环境位于固定目录。改变依赖时同步 `pyproject.toml`、`uv.lock`，运行依赖还需同步 `requirements.txt`。
 
 ### 修改版本或发布资料
 
 以 `metadata.yaml` 为唯一版本源。只有用户明确要求发布或升版时才修改版本，并同步 README 徽章、CHANGELOG 和 Git 标签；普通功能、修复和重构不升版。
+
+### 同步项目指导文档
+
+平台清单、模块职责、公共 API、目录结构、配置、依赖、命令权限或验证流程变化时，必须在同次变更中检查并更新根目录 `AGENTS.md` 和本 Skill。`AGENTS.md` 维护稳定项目事实与组件索引，本 Skill 维护 AI 执行步骤，避免复制相同段落。普通功能可以修正 `metadata.yaml` 的描述、短描述和仓库地址，但不能借此修改版本号。
 
 ## 验证与交付
 
@@ -53,7 +57,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 - 差异只包含本次目标，未覆盖用户改动。
 - 新行为有回归测试，安全边界和敏感信息不泄漏已覆盖。
-- 文档与当前代码一致，没有固定盘符、父目录、解释器或虚拟环境路径。
+- README、CHANGELOG、`AGENTS.md`、项目 Skill、配置 Schema 和元数据描述与当前代码一致，没有固定盘符、父目录、解释器或虚拟环境路径。
 - 提交和 PR 使用中文，提交信息符合 Conventional Commits。
 
 ## 确保 Skill 有效性

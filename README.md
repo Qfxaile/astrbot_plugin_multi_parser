@@ -93,7 +93,7 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 
 | 配置项 | 默认值 | 作用 |
 | --- | --- | --- |
-| `platform_switches` | 十三个平台启用，GitHub/Pixiv 关闭 | 分别控制各平台的解析器；GitHub 和 Pixiv 需显式开启 |
+| `platform_switches` | 十四个平台启用，Pixiv 关闭 | 分别控制各平台的解析器；Pixiv 需显式开启 |
 | `filter_output_links` | `false` | 替换解析结果中的网页链接，不修改用户原消息 |
 | `filtered_link_text` | `[详细内容请打开原链接查看]` | 链接过滤后的替换文案 |
 | `enable_conversation_history` | `false` | 是否将解析结果写入当前 AstrBot LLM 会话 |
@@ -121,21 +121,19 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 
 | 配置项 | 是否必需 | 说明 |
 | --- | :---: | --- |
-| `cookies.bilibili_cookies` | 否 | 提高登录态或风控场景下的解析成功率 |
+| `cookies.bilibili_cookies` | 是 | 用于 B站内容解析 |
 | `cookies.douyin_cookies` | 否 | 二维码登录暂不可用，可手工填写 |
 | `cookies.redbook_cookies` | 否 | 提高部分内容或无水印资源的可用性 |
-| `cookies.tieba_cookies` | 否 | 降低安全验证导致的解析失败 |
+| `cookies.tieba_cookies` | 是 | 用于贴吧内容解析 |
 | `cookies.weibo_cookies` | 否 | 用于需要登录态的微博页面 |
 | `cookies.wechat_yuanbao_cookies` | 视频号短链需要 | 保存 `yb_user_id` 和 `yb_token` |
 | `cookies.xiaoheihe_cookies` | 否 | 配置后用于游戏详情请求，未配置时使用公开接口 |
-| `cookies.zhihu_cookies` | 否 | 二维码登录暂不可用，可手工填写 |
-| `cookies.taobao_cookies` | 否 | 手工填写，用于淘宝和天猫商品页面请求 |
+| `cookies.zhihu_cookies` | 是 | 用于知乎内容解析 |
+| `cookies.taobao_cookies` | 是 | 用于淘宝和天猫商品解析 |
 | `cookies.jd_cookies` | 否 | 手工填写，用于京东商品页面请求 |
-| `cookies.pinduoduo_cookies` | 否 | 手工填写，用于拼多多商品页面请求 |
+| `cookies.pinduoduo_cookies` | 是 | 用于拼多多商品解析 |
 
-GitHub 仅解析公开仓库主页，不需要 Token；Issue、PR、文件、提交等仓库子路径不会触发解析。
-
-番茄小说仅解析 `changdunovel.com/t/...` 公开分享链接，展示小说标题、作者、简介和封面，不抓取章节正文，也不需要 Cookie。
+GitHub 默认启用，仅解析公开仓库主页，不需要 Token；Issue、PR、文件、提交等仓库子路径不会触发解析。
 
 番茄小说仅解析 `changdunovel.com/t/...` 公开分享链接，展示小说标题、作者、简介和封面，不抓取章节正文，也不需要 Cookie。
 
@@ -143,7 +141,7 @@ QQ空间仅解析匿名可访问的公开说说分享页，不读取或保存 QQ
 
 Bilibili 会员购解析覆盖可唯一定位 ID 的新旧票务、普通或商家商品、UP 主工房商品和魔力赏市集商品详情；首页、分类页、兑换列表、购物车和订单页不会触发解析。摘要展示价格、店铺或主办方及类型专属信息，并最多发送 6 张可信详情图。
 
-淘宝/天猫、京东和拼多多未配置 Cookie 时解析匿名可访问的公开商品页及分享短链；手工配置后，Cookie 仅发送到对应平台的商品页面请求，不发送到图片 CDN。解析结果只展示商品标题和主图。
+淘宝/天猫和拼多多需要配置对应 Cookie；京东 Cookie 选填。Cookie 仅发送到对应平台的商品页面请求，不发送到图片 CDN。解析结果只展示商品标题和主图。
 
 Pixiv 仅解析匿名可访问的公开插画作品，不需要 Cookie；动图、小说及登录、年龄或地区限制作品暂不支持。
 

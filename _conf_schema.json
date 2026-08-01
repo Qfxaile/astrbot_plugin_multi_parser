@@ -6,91 +6,91 @@
     "items": {
       "bilibili": {
         "description": "B站",
-        "hint": "解析视频、动态、专栏、图文和直播间。",
+        "hint": "解析视频、动态、专栏、直播和会员购。",
         "type": "bool",
         "default": true
       },
       "douyin": {
         "description": "抖音",
-        "hint": "解析视频、图文、Slides、直播间和汽水音乐。",
+        "hint": "解析视频、图文、直播、商品和汽水音乐。",
         "type": "bool",
         "default": true
       },
       "fanqie": {
         "description": "番茄小说",
-        "hint": "解析 changdunovel.com 公开小说分享链接的书名、作者、简介和封面。",
+        "hint": "解析小说书名、作者、简介和封面。",
         "type": "bool",
         "default": true
       },
       "redbook": {
         "description": "小红书",
-        "hint": "解析视频笔记、图文笔记。",
+        "hint": "解析视频和图文笔记。",
         "type": "bool",
         "default": true
       },
       "tieba": {
         "description": "贴吧",
-        "hint": "解析帖子正文、图片和首帖视频。",
+        "hint": "解析帖子正文、图片和视频。",
         "type": "bool",
         "default": true
       },
       "weibo": {
         "description": "微博",
-        "hint": "解析微博正文、转发、长文章和视频。",
+        "hint": "解析微博、长文章和视频。",
         "type": "bool",
         "default": true
       },
       "wechat": {
         "description": "微信",
-        "hint": "解析公众号文章和视频号视频。",
+        "hint": "解析公众号文章和视频号。",
         "type": "bool",
         "default": true
       },
       "xiaoheihe": {
         "description": "小黑盒",
-        "hint": "解析社区帖子、帖子视频、游戏详情。",
+        "hint": "解析社区帖子和游戏信息。",
         "type": "bool",
         "default": true
       },
       "zhihu": {
         "description": "知乎",
-        "hint": "解析问题、回答、专栏文章、想法和正文内视频。",
+        "hint": "解析问题、回答、文章和想法。",
         "type": "bool",
         "default": true
       },
       "github": {
         "description": "GitHub",
-        "hint": "解析公开仓库主页，并发送 GitHub 官方 OpenGraph 卡片图片。",
+        "hint": "解析公开仓库卡片。",
         "type": "bool",
-        "default": false
+        "default": true
       },
       "qzone": {
         "description": "QQ空间",
-        "hint": "解析无需登录即可访问的公开说说分享页。",
+        "hint": "解析公开说说、图片和视频。",
         "type": "bool",
         "default": true
       },
       "taobao": {
         "description": "淘宝/天猫",
-        "hint": "解析匿名可访问的淘宝和天猫公开商品页及分享短链。",
+        "hint": "解析商品标题和主图。",
         "type": "bool",
         "default": true
       },
       "jd": {
         "description": "京东",
-        "hint": "解析匿名可访问的京东公开商品页及分享短链。",
+        "hint": "解析商品标题和主图。",
         "type": "bool",
         "default": true
       },
       "pinduoduo": {
         "description": "拼多多",
-        "hint": "解析匿名可访问的拼多多公开商品页及分享短链。",
+        "hint": "解析商品标题和主图。",
         "type": "bool",
         "default": true
       },
       "pixiv": {
         "description": "Pixiv",
-        "hint": "解析匿名可访问的公开插画作品，默认关闭；暂不支持动图、小说和受限作品。",
+        "hint": "解析公开插画作品。",
         "type": "bool",
         "default": false
       }
@@ -195,73 +195,73 @@
   "cookies": {
     "description": "Cookies 配置",
     "type": "object",
-    "hint": "按平台填写 Cookies。Cookies 属于敏感信息，请勿写入日志或公开内容。",
+    "hint": "按需填写各平台 Cookies，请勿泄露。",
     "items": {
       "bilibili_cookies": {
         "description": "B站 Cookies",
         "type": "text",
         "default": "",
-        "hint": "选填。用于 B站页面和接口请求，可提高登录态或风控场景下的解析成功率。"
+        "hint": "必填，用于 B站内容解析。"
       },
       "douyin_cookies": {
         "description": "抖音 Cookies",
         "type": "text",
         "default": "",
-        "hint": "选填。用于抖音内容解析；二维码登录入口已保留，但获取 Cookies 暂未实现，当前会登录失败，请手动填写。"
+        "hint": "选填，用于抖音内容解析。"
       },
       "redbook_cookies": {
         "description": "小红书 Cookies",
         "type": "text",
         "default": "",
-        "hint": "选填。可提高部分内容或无水印资源的可用性；二维码登录入口已保留，但获取 Cookies 暂未实现，当前会登录失败，请手动填写。"
+        "hint": "选填，用于小红书内容解析。"
       },
       "tieba_cookies": {
         "description": "贴吧 Cookies",
         "type": "text",
         "default": "",
-        "hint": "选填。用于贴吧帖子页面请求，可降低登录态或安全验证导致的解析失败。"
+        "hint": "必填，用于贴吧内容解析。"
       },
       "weibo_cookies": {
         "description": "微博 Cookies",
         "type": "text",
         "default": "",
-        "hint": "选填。仅用于需要登录态的微博页面请求。"
+        "hint": "选填，用于微博内容解析。"
       },
       "wechat_yuanbao_cookies": {
         "description": "腾讯元宝 Cookies",
         "type": "text",
         "default": "",
-        "hint": "解析视频号短链时必填。扫码登录会保存 yb_user_id、yb_token，并仅作为腾讯元宝请求认证头发送。"
+        "hint": "解析视频号短链必填，用于腾讯元宝授权。"
       },
       "xiaoheihe_cookies": {
         "description": "小黑盒 Cookies",
         "type": "text",
         "default": "",
-        "hint": "选填。用于小黑盒社区接口请求。"
+        "hint": "选填，用于小黑盒内容解析。"
       },
       "zhihu_cookies": {
         "description": "知乎 Cookies",
         "type": "text",
         "default": "",
-        "hint": "选填。用于知乎页面和接口请求；二维码登录入口已保留，但获取 Cookies 暂未实现，当前会登录失败，请手动填写。"
+        "hint": "必填，用于知乎内容解析。"
       },
       "taobao_cookies": {
         "description": "淘宝/天猫 Cookies",
         "type": "text",
         "default": "",
-        "hint": "选填。只填写浏览器请求头中的 Cookie 原文，不要粘贴整条 curl 或带 ^ 的 CMD 转义文本；MTop 商品详情需要包含 _m_h5_tk 和 _m_h5_tk_enc。"
+        "hint": "必填，用于淘宝和天猫商品解析。"
       },
       "jd_cookies": {
         "description": "京东 Cookies",
         "type": "text",
         "default": "",
-        "hint": "选填。用于京东商品页面请求，可提高登录态或风控场景下的解析成功率。"
+        "hint": "选填，用于京东商品解析。"
       },
       "pinduoduo_cookies": {
         "description": "拼多多 Cookies",
         "type": "text",
         "default": "",
-        "hint": "选填。只填写浏览器请求头中的完整 Cookie 原文，不要粘贴整条 curl；商品详情请求需保留 pdd_user_id 和 PDDAccessToken。"
+        "hint": "必填，用于拼多多商品解析。"
       }
     }
   }
