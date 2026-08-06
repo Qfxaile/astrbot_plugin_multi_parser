@@ -33,6 +33,8 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 复用 `BaseParser`、统一契约、安全 HTTP、媒体和投递服务。保持内容顺序，区分鉴权失败、网络失败、内容不存在和部分媒体失败。新增平台时更新平台包导出、`platforms/registry.py`、`platforms/__init__.py`、`_conf_schema.json`、README、项目事实文档和测试，并按用户可见程度更新 CHANGELOG；`services/configuration.py` 与 `services/authentication.py` 从注册表装配，只有装配语义变化时才修改。
 
+修改自动链接解析入口、平台解析器、表情回应或投递流程时，先核对 AstrBot 的事件传播和默认 LLM 触发条件。自动解析只能附加解析输出，禁止停止事件、修改或消费原消息、设置 LLM 禁用状态，或主动请求 LLM 接管后续流程；发送解析结果后仍须让后续插件与 AstrBot 默认流程按原规则处理。若发送副作用会改变事件状态，恢复进入解析处理器前的原值，并用成功解析、匹配异常、解析异常、未匹配和入口已有发送状态测试防止回归。
+
 ### 修改平台登录
 
 复用 `core/platform_login.py` 的契约和 HTTP 基类，以及 `services/authentication.py` 的编排。保留管理员权限边界，以 `main.py` 和测试确认每条命令是否限制私聊。限制二维码与重定向域名，只持久化最小 Cookie；成功、状态和错误输出不得泄漏凭据。遇到风控或设备验证时终止，不尝试绕过。

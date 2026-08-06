@@ -137,15 +137,18 @@ class MultiParserPlugin(Star):
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def handle_parse(self, event: AstrMessageEvent):
+        original_has_send_oper = getattr(event, "_has_send_oper", None)
         context = extract_context(event)
         if not context.combined_text:
             return
 
         for parser in self._enabled_parsers():
             result: ParseResult | None = None
+            restore_send_state = False
             try:
                 if not await parser.match(context):
                     continue
+                restore_send_state = True
                 await self._react_success(event)
                 result = await parser.parse(context)
                 send_video_by_url = bool(self.config.get("send_video_by_url", True))
@@ -227,16 +230,20 @@ class MultiParserPlugin(Star):
                     )
                 return
             except CookieAccessError as exc:
+                restore_send_state = True
                 logger.warning(f"{parser.name} Cookie 访问失败: {exc}")
                 yield event.plain_result(str(exc))
                 return
             except Exception as exc:
+                restore_send_state = True
                 logger.warning(f"{parser.name} 解析失败: {exc}")
                 yield event.plain_result(f"{parser.name} 解析失败: {exc}")
                 return
             finally:
                 if result is not None:
                     result.cleanup_temporary_files()
+                if restore_send_state and original_has_send_oper is not None:
+                    event._has_send_oper = original_has_send_oper
 
     async def _forward_with_fallback(
         self,

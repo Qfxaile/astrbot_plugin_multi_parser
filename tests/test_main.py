@@ -41,6 +41,20 @@ class FailingParser:
         raise CookieAccessError("测试平台", configured=False)
 
 
+class NonMatchingParser:
+    name = "non-matching"
+
+    async def match(self, context):
+        return False
+
+
+class MatchFailingParser:
+    name = "match-failing"
+
+    async def match(self, context):
+        raise RuntimeError("match failed")
+
+
 class FakeBot:
     def __init__(self, failure=None, responses=None):
         self.failure = failure
@@ -65,6 +79,7 @@ class FakeEvent:
         platform_id="测试机器人",
         forward_failure_limit=None,
         bot=None,
+        has_send_oper=False,
     ):
         self.sender_id = sender_id
         self.sender_name = sender_name
@@ -72,6 +87,7 @@ class FakeEvent:
         self.platform_id = platform_id
         self.forward_failure_limit = forward_failure_limit
         self.bot = bot
+        self._has_send_oper = has_send_oper
         self.sent = []
         self.forward_attempt_sizes = []
         self.message_obj = SimpleNamespace(
@@ -115,6 +131,7 @@ class FakeEvent:
         return [Plain(text)]
 
     async def send(self, message):
+        self._has_send_oper = True
         chain = list(message.chain)
         if len(chain) == 1 and isinstance(chain[0], Nodes):
             node_count = len(chain[0].nodes)
@@ -243,6 +260,89 @@ async def collect_results(monkeypatch, result, event=None, **config):
 async def collect_plugin_results(plugin, event):
     yielded = [item async for item in plugin.handle_parse(event)]
     return [*event.sent, *yielded]
+
+
+@pytest.mark.asyncio
+async def test_parse_delivery_restores_unsent_event_state(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda event: SimpleNamespace(combined_text="https://example.com/post"),
+    )
+    plugin = make_plugin(ParseResult(platform="测试平台", title="解析结果"))
+    event = FakeEvent(has_send_oper=False)
+
+    async for _ in plugin.handle_parse(event):
+        # AstrBot 的响应阶段发送 yield 结果后会标记本次事件已经发送消息。
+        event._has_send_oper = True
+
+    assert event._has_send_oper is False
+
+
+@pytest.mark.asyncio
+async def test_parse_delivery_preserves_existing_sent_event_state(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda event: SimpleNamespace(combined_text="https://example.com/post"),
+    )
+    plugin = make_plugin(ParseResult(platform="测试平台", title="解析结果"))
+    event = FakeEvent(has_send_oper=True)
+
+    async for _ in plugin.handle_parse(event):
+        event._has_send_oper = True
+
+    assert event._has_send_oper is True
+
+
+@pytest.mark.asyncio
+async def test_parse_failure_restores_unsent_event_state(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda event: SimpleNamespace(combined_text="https://example.com/post"),
+    )
+    plugin = make_plugin(ParseResult(platform="fake"))
+    plugin.parsers = {"fake": FailingParser()}
+    event = FakeEvent(has_send_oper=False)
+
+    async for _ in plugin.handle_parse(event):
+        event._has_send_oper = True
+
+    assert event._has_send_oper is False
+
+
+@pytest.mark.asyncio
+async def test_match_failure_restores_unsent_event_state(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda event: SimpleNamespace(combined_text="https://example.com/post"),
+    )
+    plugin = make_plugin(ParseResult(platform="fake"))
+    plugin.parsers = {"fake": MatchFailingParser()}
+    event = FakeEvent(has_send_oper=False)
+
+    async for _ in plugin.handle_parse(event):
+        event._has_send_oper = True
+
+    assert event._has_send_oper is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("has_send_oper", [False, True])
+async def test_unmatched_parse_keeps_event_state(monkeypatch, has_send_oper):
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda event: SimpleNamespace(combined_text="ordinary message"),
+    )
+    plugin = make_plugin(ParseResult(platform="fake"))
+    plugin.parsers = {"fake": NonMatchingParser()}
+    event = FakeEvent(has_send_oper=has_send_oper)
+
+    assert [item async for item in plugin.handle_parse(event)] == []
+    assert event._has_send_oper is has_send_oper
 
 
 @pytest.mark.asyncio
