@@ -17,6 +17,8 @@ BACKGROUND_URL_PATTERN = re.compile(
     r"background-image\s*:\s*url\(\s*(['\"]?)(.*?)\1\s*\)",
     re.IGNORECASE,
 )
+FRONT_PAGE_PATTERN = re.compile(r"\bvar\s+FrontPage\s*=")
+FRONT_PAGE_DATA_PATTERN = re.compile(r"\bdata\s*:\s*")
 VOID_TAGS = {
     "area",
     "base",
@@ -53,6 +55,104 @@ def _prefer_large_psc_image_url(url: str) -> str:
         return url
     query = f"{image_path[:-1]}b{separator}{parameters}"
     return urlunsplit(parsed._replace(query=query))
+
+
+def _front_page_image_urls(html_text: str) -> list[str]:
+    """提取传统分享页内嵌的完整图片列表。"""
+    front_page = FRONT_PAGE_PATTERN.search(html_text)
+    if front_page is None:
+        return []
+    data_property = FRONT_PAGE_DATA_PATTERN.search(html_text, front_page.end())
+    if data_property is None:
+        return []
+    try:
+        payload, _ = json.JSONDecoder().raw_decode(html_text, data_property.end())
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if not isinstance(payload, Mapping):
+        return []
+    feed = payload.get("data")
+    if not isinstance(feed, Mapping):
+        return []
+
+    original = feed.get("cell_original")
+    candidates = (original, feed) if isinstance(original, Mapping) else (feed,)
+    for candidate in candidates:
+        cell_pic = candidate.get("cell_pic")
+        if not isinstance(cell_pic, Mapping):
+            continue
+        picdata = cell_pic.get("picdata")
+        if not isinstance(picdata, list):
+            continue
+        image_urls = _picdata_image_urls(picdata)
+        if image_urls:
+            return image_urls
+    return []
+
+
+def _picdata_image_urls(picdata: list[object]) -> list[str]:
+    image_urls: list[str] = []
+    seen: set[str] = set()
+    for item in picdata:
+        if not isinstance(item, Mapping):
+            continue
+        image_url = _picdata_image_url(item)
+        if not image_url or image_url in seen:
+            continue
+        seen.add(image_url)
+        image_urls.append(image_url)
+    return image_urls
+
+
+def _picdata_image_url(item: Mapping[str, Any]) -> str:
+    photourl = item.get("photourl")
+    if isinstance(photourl, Mapping):
+        preferred_keys = ("1", "0", "11")
+        values = [photourl.get(key) for key in preferred_keys]
+        values.extend(
+            value for key, value in photourl.items() if str(key) not in preferred_keys
+        )
+        for value in values:
+            if not isinstance(value, Mapping):
+                continue
+            image_url = _normalize_media_url(
+                str(value.get("url", "")),
+                IMAGE_HOST_SUFFIXES,
+            )
+            if image_url:
+                return _prefer_large_psc_image_url(image_url)
+
+    image_url = _normalize_media_url(
+        str(item.get("sloc", "")),
+        IMAGE_HOST_SUFFIXES,
+    )
+    return _prefer_large_psc_image_url(image_url)
+
+
+def _expand_page_images(
+    contents: list[OrderedContent],
+    complete_image_urls: list[str],
+) -> None:
+    visible_image_count = sum(item.kind == "image" for item in contents)
+    if len(complete_image_urls) <= visible_image_count:
+        return
+
+    expanded_images = [
+        OrderedContent(kind="image", value=image_url)
+        for image_url in complete_image_urls
+    ]
+    merged: list[OrderedContent] = []
+    inserted = False
+    for item in contents:
+        if item.kind == "image":
+            if not inserted:
+                merged.extend(expanded_images)
+                inserted = True
+            continue
+        merged.append(item)
+    if not inserted:
+        merged.extend(expanded_images)
+    contents[:] = merged
 
 
 class _QzonePageParser(HTMLParser):
@@ -223,6 +323,7 @@ class QzonePageContent:
                 platform=self.name,
                 error="未找到QQ空间说说内容，页面可能需要登录或结构已变化。",
             )
+        _expand_page_images(page.contents, _front_page_image_urls(html_text))
         author = page.author
         if not author or author.lower() == "unknown":
             author = f"QQ {res_uin}"

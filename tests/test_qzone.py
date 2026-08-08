@@ -280,6 +280,48 @@ def test_qzone_page_promotes_psc_thumbnails_to_large_images():
     ]
 
 
+def test_qzone_page_extracts_all_images_from_front_page_data():
+    visible_images = "".join(
+        '<span data-feedlazy="https://m.qpic.cn/psc?'
+        f'/album/{index}/m&amp;ek={index}"></span>'
+        for index in range(9)
+    )
+    picdata = [
+        {
+            "photourl": {
+                "1": {"url": (f"https://m.qpic.cn/psc?/album/{index}/b&ek={index}")}
+            }
+        }
+        for index in range(26)
+    ]
+    front_page_data = {"data": {"cell_original": {"cell_pic": {"picdata": picdata}}}}
+    result = QzoneParser({})._parse_page(
+        f"""
+        <script>
+          window.shine0callback = '';
+          var FrontPage = {{data   : {json.dumps(front_page_data)}}};
+        </script>
+        <div class="feed dataItem">
+          <div class="feed-hd"><span class="username">作者</span></div>
+          <div class="feed-bd">
+            <p class="txt">正文</p>
+            <div class="images ui-img-list">{visible_images}</div>
+          </div>
+        </div>
+        """,
+        res_uin="1307993674",
+    )
+
+    image_urls = [
+        item.value for item in result.ordered_contents if item.kind == "image"
+    ]
+    assert len(image_urls) == 26
+    assert image_urls[0] == "https://m.qpic.cn/psc?/album/0/b&ek=0"
+    assert image_urls[8] == "https://m.qpic.cn/psc?/album/8/b&ek=8"
+    assert image_urls[9] == "https://m.qpic.cn/psc?/album/9/b&ek=9"
+    assert image_urls[-1] == "https://m.qpic.cn/psc?/album/25/b&ek=25"
+
+
 def test_qzone_album_page_extracts_direct_feed_image():
     result = QzoneParser({})._parse_page(
         """

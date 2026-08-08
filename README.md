@@ -7,7 +7,7 @@
 <p align="center">自动识别聊天消息中的内容链接，并发送作品信息、图文、视频或音频。</p>
 
 <p align="center">
-  <a href="https://github.com/Qfxaile/astrbot_multi_parser/releases"><img src="https://img.shields.io/badge/version-v1.1.0-2f6f5e" alt="Version v1.1.0"></a>
+  <a href="https://github.com/Qfxaile/astrbot_multi_parser/releases"><img src="https://img.shields.io/badge/version-v1.1.1-2f6f5e" alt="Version v1.1.1"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-%3E%3D3.10-3776ab" alt="Python 3.10+"></a>
   <a href="https://astrbot.app/"><img src="https://img.shields.io/badge/AstrBot-plugin-4c78a8" alt="AstrBot Plugin"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2f6f5e" alt="MIT License"></a>
