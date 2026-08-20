@@ -20,6 +20,7 @@ def extract_context(event: AstrMessageEvent) -> ParseContext:
     json_urls: list[str] = []
     json_previews: list[str] = []
     json_titles: list[str] = []
+    json_metadata: list[dict[str, str]] = []
 
     for segment in raw_message:
         if isinstance(segment, dict):
@@ -42,31 +43,33 @@ def extract_context(event: AstrMessageEvent) -> ParseContext:
                 if isinstance(data, dict)
                 else getattr(data, "data", "")
             )
-            url, title, preview = _extract_json_card(str(json_data))
+            url, title, preview, metadata = _extract_json_card(str(json_data))
             if url:
                 json_urls.append(url)
                 json_previews.append(preview)
                 json_titles.append(title)
+                json_metadata.append(metadata)
 
     return ParseContext(
         text="\n".join(part for part in text_parts if part).strip(),
         json_urls=json_urls,
         json_previews=json_previews,
         json_titles=json_titles,
+        json_metadata=json_metadata,
     )
 
 
-def _extract_json_card(data: str) -> tuple[str, str, str]:
-    """从 QQ JSON 分享卡片中提取跳转链接、标题和预览图。"""
+def _extract_json_card(data: str) -> tuple[str, str, str, dict[str, str]]:
+    """从 QQ JSON 分享卡片中提取公开展示字段和非敏感标识。"""
     try:
         payload = json.loads(data)
     except json.JSONDecodeError:
-        return "", "", ""
+        return "", "", "", {}
     if not isinstance(payload, dict):
-        return "", "", ""
+        return "", "", "", {}
     meta = payload.get("meta", {})
     if not isinstance(meta, dict):
-        return "", "", ""
+        return "", "", "", {}
     detail = meta.get("detail_1", {})
     news = meta.get("news", {})
     miniapp = meta.get("miniapp", {})
@@ -88,10 +91,27 @@ def _extract_json_card(data: str) -> tuple[str, str, str]:
     preview = (
         news.get("preview", "") or miniapp.get("preview", "") or feed.get("cover", "")
     )
-    return str(url or ""), str(title or ""), str(preview or "")
+    feed_id = _extract_feed_id(feed)
+    metadata = {"feed_id": feed_id} if feed_id else {}
+    return str(url or ""), str(title or ""), str(preview or ""), metadata
+
+
+def _extract_feed_id(feed: dict) -> str:
+    """仅保留腾讯频道帖子公开标识，不传递卡片令牌或用户标识。"""
+    busi_data = feed.get("busiData", {})
+    if isinstance(busi_data, str):
+        try:
+            busi_data = json.loads(busi_data)
+        except json.JSONDecodeError:
+            busi_data = {}
+    if isinstance(busi_data, dict):
+        share_data = busi_data.get("share_biz_data", {})
+        if isinstance(share_data, dict) and share_data.get("feed_id"):
+            return str(share_data["feed_id"])
+    return str(feed.get("ark_reserved3") or "")
 
 
 def _extract_json_url_and_preview(data: str) -> tuple[str, str]:
     """兼容现有调用，只返回 QQ JSON 分享卡片的链接和预览图。"""
-    url, _, preview = _extract_json_card(data)
+    url, _, preview, _ = _extract_json_card(data)
     return url, preview
