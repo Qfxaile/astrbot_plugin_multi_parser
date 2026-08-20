@@ -20,6 +20,7 @@ class WeiboVideoContent:
             follow_redirects=False,
             headers=headers,
             cookies=self._cookies(),
+            **self.http_client_options,
         ) as client:
             response = await client.post(
                 f"https://h5.video.weibo.com/api/component?page=/show/{fid}",

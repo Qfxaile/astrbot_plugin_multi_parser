@@ -155,6 +155,7 @@ class XiaoheihePostContent:
             timeout=self._timeout(),
             follow_redirects=False,
             headers=self.HEADERS,
+            **self.http_client_options,
         ) as client:
             response = await client.get(
                 "https://api.xiaoheihe.cn/bbs/app/link/tree",

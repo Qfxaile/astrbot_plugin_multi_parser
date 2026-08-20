@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import httpx
 from astrbot.api import logger
 
+from ..core.http import http_client_proxy_options
 from ..core.media import sanitize_media_headers
 
 
@@ -23,8 +24,13 @@ class VideoSizeInfo:
 class VideoSizeProbe:
     """通过 HEAD 或单字节 Range 请求探测视频大小。"""
 
-    def __init__(self, config: Mapping[str, object]) -> None:
+    def __init__(
+        self,
+        config: Mapping[str, object],
+        platform_name: str = "",
+    ) -> None:
         self.config = config
+        self.platform_name = platform_name
 
     async def probe(
         self,
@@ -45,7 +51,10 @@ class VideoSizeProbe:
         }
         request_headers.update(sanitize_media_headers(headers))
         async with httpx.AsyncClient(
-            timeout=timeout, follow_redirects=True, headers=request_headers
+            timeout=timeout,
+            follow_redirects=True,
+            headers=request_headers,
+            **http_client_proxy_options(self.config, self.platform_name),
         ) as client:
             try:
                 response = await client.head(url)

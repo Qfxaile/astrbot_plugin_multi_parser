@@ -56,6 +56,7 @@ class PixivParser(BaseParser):
                 timeout=self.request_timeout,
                 follow_redirects=False,
                 headers=self.HEADERS,
+                **self.http_client_options,
             ) as client:
                 metadata = await self._request_body(
                     client, f"{self.AJAX_BASE_URL}/{artwork_id}"

@@ -59,6 +59,16 @@ def test_schema_uses_platform_switches_without_legacy_settings():
     assert schema["filter_output_links"]["default"] is False
     assert schema["filtered_link_text"]["default"] == "[详细内容请打开原链接查看]"
 
+    proxy_url = schema["proxy_url"]
+    assert proxy_url["type"] == "text"
+    assert proxy_url["default"] == ""
+    proxy_switches = schema["proxy_switches"]
+    assert proxy_switches["type"] == "object"
+    assert tuple(proxy_switches["items"]) == PLATFORMS
+    for platform in PLATFORMS:
+        assert proxy_switches["items"][platform]["type"] == "bool"
+        assert proxy_switches["items"][platform]["default"] is False
+
     over_limit_action = schema["video_over_limit_action"]
     assert over_limit_action["type"] == "string"
     assert over_limit_action["default"] == "direct_link"

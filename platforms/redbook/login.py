@@ -40,6 +40,7 @@ class _QRSession:
 class RedBookLoginProvider(HTTPPlatformLoginProvider):
     """通过小红书官方 Web 二维码接口建立管理员登录态。"""
 
+    name = "redbook"
     display_name = "小红书"
     cookie_config_key = "redbook_cookies"
     BOOTSTRAP_URL = "https://www.xiaohongshu.com/explore"

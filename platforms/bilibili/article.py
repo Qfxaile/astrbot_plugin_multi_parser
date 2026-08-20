@@ -114,6 +114,7 @@ class BilibiliArticleContent:
             timeout=self.request_timeout,
             headers=self._headers(url),
             cookies=self._cookies(),
+            **self.http_client_options,
         ) as client:
             response = await client.get(self.ARTICLE_API, params={"id": article_id})
             self.raise_for_response_status(response)

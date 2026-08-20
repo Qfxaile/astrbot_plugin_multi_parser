@@ -21,6 +21,7 @@ from ...core.platform_login import (
 class BilibiliLoginProvider(HTTPPlatformLoginProvider):
     """通过 B站官方网页二维码接口建立管理员登录态。"""
 
+    name = "bilibili"
     display_name = "B站"
     cookie_config_key = "bilibili_cookies"
     QR_GENERATE_URL = (

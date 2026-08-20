@@ -91,6 +91,7 @@ class WeiboParser(
             follow_redirects=True,
             headers=self.HEADERS,
             cookies=self._cookies(),
+            **self.http_client_options,
         ) as client:
             response = await client.get(url)
             self.raise_for_response_status(response)

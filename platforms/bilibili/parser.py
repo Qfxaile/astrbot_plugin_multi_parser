@@ -87,6 +87,7 @@ class BilibiliParser(
             async with httpx.AsyncClient(
                 timeout=self.request_timeout,
                 follow_redirects=True,
+                **self.http_client_options,
             ) as client:
                 response = await client.get(short_match.group(0), headers=headers)
             final_url = str(response.url)

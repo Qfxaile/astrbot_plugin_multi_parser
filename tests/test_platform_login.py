@@ -1,5 +1,6 @@
 import httpx
 import pytest
+from astrbot_multi_parser.core import platform_login
 from astrbot_multi_parser.core.platform_login import (
     HTTPPlatformLoginProvider,
     PlatformLoginError,
@@ -9,6 +10,8 @@ from astrbot_multi_parser.core.platform_login import (
 
 
 class StubProvider(HTTPPlatformLoginProvider):
+    name = "pixiv"
+
     async def create_qr_challenge(self):
         raise NotImplementedError
 
@@ -34,6 +37,32 @@ async def test_http_login_provider_closes_owned_client():
     await provider.close()
 
     assert provider._client.is_closed is True
+
+
+@pytest.mark.asyncio
+async def test_http_login_provider_uses_platform_proxy(monkeypatch):
+    captured_options = {}
+
+    class FakeClient:
+        async def aclose(self):
+            return None
+
+    def create_client(**options):
+        captured_options.update(options)
+        return FakeClient()
+
+    monkeypatch.setattr(platform_login.httpx, "AsyncClient", create_client)
+    provider = StubProvider(
+        {
+            "proxy_url": "http://proxy.example.com:8080",
+            "proxy_switches": {"pixiv": True},
+        }
+    )
+
+    await provider.close()
+
+    assert captured_options["proxy"] == "http://proxy.example.com:8080"
+    assert captured_options["trust_env"] is False
 
 
 @pytest.mark.asyncio

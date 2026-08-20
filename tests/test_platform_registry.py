@@ -41,6 +41,14 @@ def test_platform_registry_login_providers_declare_cookie_keys():
     ]
 
 
+def test_login_provider_proxy_names_match_registered_parsers():
+    assert all(
+        registration.login_provider_type is None
+        or registration.login_provider_type.name == registration.parser_type.name
+        for registration in PLATFORM_REGISTRY
+    )
+
+
 def test_pixiv_registration_is_parser_only_and_disabled_by_default():
     registration = PLATFORM_REGISTRY[-1]
 

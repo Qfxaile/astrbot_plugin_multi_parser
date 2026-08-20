@@ -24,6 +24,7 @@ from ...core.platform_login import (
 class TiebaLoginProvider(HTTPPlatformLoginProvider):
     """通过百度官方 Web 二维码流程建立贴吧解析登录态。"""
 
+    name = "tieba"
     display_name = "贴吧"
     cookie_config_key = "tieba_cookies"
     QR_GENERATE_URL = "https://passport.baidu.com/v2/api/getqrcode"

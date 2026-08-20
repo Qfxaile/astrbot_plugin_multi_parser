@@ -24,6 +24,7 @@ from .signing import RequestSigner
 class XiaoheiheLoginProvider(HTTPPlatformLoginProvider):
     """通过小黑盒官网原生二维码接口建立管理员登录态。"""
 
+    name = "xiaoheihe"
     display_name = "小黑盒"
     cookie_config_key = "xiaoheihe_cookies"
     API_ORIGIN = "https://api.xiaoheihe.cn"

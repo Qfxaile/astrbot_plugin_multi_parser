@@ -5,6 +5,9 @@ from pathlib import Path
 
 import pytest
 
+PLUGIN_NAME = "astrbot_multi_parser"
+PLUGIN_ROOT = Path(__file__).resolve().parents[1]
+
 
 def test_platform_login_contract_uses_explicit_core_module():
     module = import_module("astrbot_multi_parser.core.platform_login")
@@ -34,7 +37,10 @@ def test_package_initializers_do_not_eagerly_import_implementation_modules(
     implementation_module,
 ):
     script = (
-        "import sys; "
+        "import sys; from types import ModuleType; "
+        f"package = ModuleType({PLUGIN_NAME!r}); "
+        f"package.__path__ = {[str(PLUGIN_ROOT)]!r}; "
+        f"sys.modules[{PLUGIN_NAME!r}] = package; "
         f"import {package_name}; "
         f"print({implementation_module!r} in sys.modules)"
     )
@@ -42,7 +48,7 @@ def test_package_initializers_do_not_eagerly_import_implementation_modules(
         [sys.executable, "-c", script],
         check=True,
         capture_output=True,
-        cwd=Path(__file__).resolve().parents[2],
+        cwd=PLUGIN_ROOT.parent,
         text=True,
     )
 

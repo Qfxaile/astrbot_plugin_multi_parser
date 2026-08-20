@@ -72,6 +72,7 @@ class GitHubParser(BaseParser):
                 timeout=self.request_timeout,
                 follow_redirects=False,
                 headers=self.HEADERS,
+                **self.http_client_options,
             ) as client:
                 card_url = await self._fetch_opengraph_url(client, repository_url)
                 result = ParseResult(

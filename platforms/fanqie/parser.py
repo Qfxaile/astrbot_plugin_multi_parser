@@ -130,6 +130,7 @@ class FanqieParser(BaseParser):
                 timeout=self.request_timeout,
                 follow_redirects=False,
                 headers=self.HEADERS,
+                **self.http_client_options,
             ) as client:
                 book_id = await self._resolve_book_id(client, url)
                 if not book_id:

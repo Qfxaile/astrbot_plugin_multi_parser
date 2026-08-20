@@ -444,6 +444,7 @@ class XiaoheiheGameContent:
             timeout=self._timeout(),
             follow_redirects=False,
             headers=self.HEADERS,
+            **self.http_client_options,
         ) as client:
             detail_response = await client.get(
                 "https://api.xiaoheihe.cn/game/get_game_detail/",

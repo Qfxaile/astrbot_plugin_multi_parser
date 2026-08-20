@@ -102,6 +102,17 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 | `image_download_concurrency` | `4` | 并发图片下载数，范围为 `1`～`16` |
 | `enable_parse_reaction` | `true` | OneBot v11 识别链接后添加表情回应 |
 
+### 网络与代理
+
+| 配置项 | 默认值 | 作用 |
+| --- | --- | --- |
+| `proxy_url` | 空 | 全平台共用的 HTTP/HTTPS 代理地址，可包含用户名和密码 |
+| `proxy_switches` | 全部关闭 | 分别控制各平台是否使用代理 |
+
+平台代理开启后，该平台的链接解析、接口请求、登录、图片下载、视频大小探测和插件侧视频下载都会使用 `proxy_url`。代理地址为空或格式无效时会停止对应请求，不会静默改为直连；插件不会自动读取进程的代理环境变量，代理配置校验错误不会回显地址或认证信息。
+
+代理只作用于插件自身的 HTTP 请求。AstrBot 或 OneBot 收到图片、音频、视频 URL 后自行发起的下载，以及 `upload_group_file` 的远程文件上传，不经过本插件的代理。
+
 ### 视频
 
 | 配置项 | 默认值 | 作用 |

@@ -1550,7 +1550,7 @@ async def test_main_uses_notice_action_for_over_limit_video(monkeypatch):
         main, "extract_context", lambda event: SimpleNamespace(combined_text="url")
     )
 
-    async def fake_probe(url):
+    async def fake_probe(url, headers=None, platform_name=""):
         return VideoSizeInfo(size_bytes=51 * 1024 * 1024)
 
     monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
@@ -1603,7 +1603,7 @@ async def test_main_uses_group_file_action_when_video_send_fails(
         main, "extract_context", lambda event: SimpleNamespace(combined_text="url")
     )
 
-    async def fake_probe(url):
+    async def fake_probe(url, headers=None, platform_name=""):
         return VideoSizeInfo(size_bytes=100 * 1024 * 1024)
 
     monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
@@ -1815,7 +1815,7 @@ async def test_threshold_forward_keeps_regular_video_as_separate_message(monkeyp
         main, "extract_context", lambda event: SimpleNamespace(combined_text="url")
     )
 
-    async def fake_probe(url):
+    async def fake_probe(url, headers=None, platform_name=""):
         return VideoSizeInfo(size_bytes=1024)
 
     monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
@@ -1844,7 +1844,7 @@ async def test_threshold_forward_keeps_xiaoheihe_game_video_inside(monkeypatch):
         main, "extract_context", lambda event: SimpleNamespace(combined_text="url")
     )
 
-    async def fake_probe(url):
+    async def fake_probe(url, headers=None, platform_name=""):
         return VideoSizeInfo(size_bytes=1024)
 
     monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
@@ -1869,7 +1869,7 @@ async def test_always_forward_keeps_regular_video_inside(monkeypatch):
         main, "extract_context", lambda event: SimpleNamespace(combined_text="url")
     )
 
-    async def fake_probe(url):
+    async def fake_probe(url, headers=None, platform_name=""):
         return VideoSizeInfo(size_bytes=1024)
 
     monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
@@ -1921,7 +1921,7 @@ async def test_non_forward_content_keeps_video_as_separate_message(monkeypatch):
         main, "extract_context", lambda event: SimpleNamespace(combined_text="url")
     )
 
-    async def fake_probe(url):
+    async def fake_probe(url, headers=None, platform_name=""):
         return VideoSizeInfo(size_bytes=1024)
 
     monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
@@ -1948,7 +1948,7 @@ async def test_kook_materializes_remote_video_before_send(monkeypatch, tmp_path)
     )
     converted_urls = []
 
-    async def fake_probe(url):
+    async def fake_probe(url, headers=None, platform_name=""):
         return VideoSizeInfo(size_bytes=1024)
 
     async def fake_convert_to_file_path(video):
@@ -1976,6 +1976,8 @@ async def test_kook_materializes_remote_video_before_send(monkeypatch, tmp_path)
 async def test_kook_materializes_video_with_platform_headers(monkeypatch):
     requested_headers = []
     probed_headers = []
+    probed_platforms = []
+    materialized_platforms = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         requested_headers.append(request.headers)
@@ -1992,6 +1994,13 @@ async def test_kook_materializes_video_with_platform_headers(monkeypatch):
         return async_client(transport=httpx.MockTransport(handler), **kwargs)
 
     monkeypatch.setattr(media.httpx, "AsyncClient", create_client)
+    monkeypatch.setattr(
+        media,
+        "http_client_proxy_options",
+        lambda config, platform_name: (
+            materialized_platforms.append(platform_name) or {}
+        ),
+    )
     result = ParseResult(
         platform="bilibili",
         title="summary",
@@ -2009,8 +2018,9 @@ async def test_kook_materializes_video_with_platform_headers(monkeypatch):
         main, "extract_context", lambda event: SimpleNamespace(combined_text="url")
     )
 
-    async def fake_probe(url, headers=None):
+    async def fake_probe(url, headers=None, platform_name=""):
         probed_headers.append(headers)
+        probed_platforms.append(platform_name)
         return VideoSizeInfo(size_bytes=5)
 
     monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
@@ -2022,6 +2032,8 @@ async def test_kook_materializes_video_with_platform_headers(monkeypatch):
 
     assert len(requested_headers) == 1
     assert probed_headers == [result.video_download_headers]
+    assert probed_platforms == ["fake"]
+    assert materialized_platforms == ["bilibili"]
     assert requested_headers[0]["User-Agent"] == "BilibiliTestAgent/1.0"
     assert requested_headers[0]["Referer"] == "https://www.bilibili.com"
     assert "Cookie" not in requested_headers[0]
@@ -2061,7 +2073,7 @@ async def test_kook_video_rejects_untrusted_download_redirect(monkeypatch):
         main, "extract_context", lambda event: SimpleNamespace(combined_text="url")
     )
 
-    async def fake_probe(url, headers=None):
+    async def fake_probe(url, headers=None, platform_name=""):
         return VideoSizeInfo(size_bytes=5)
 
     monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
@@ -2097,7 +2109,7 @@ async def test_kook_video_materialization_failure_falls_back_to_direct_link(
         main, "extract_context", lambda event: SimpleNamespace(combined_text="url")
     )
 
-    async def fake_probe(url):
+    async def fake_probe(url, headers=None, platform_name=""):
         return VideoSizeInfo(size_bytes=1024)
 
     async def fail_convert_to_file_path(video):

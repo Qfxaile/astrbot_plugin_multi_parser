@@ -51,7 +51,7 @@ uv run ruff check .
 | 插件注册、事件入口、依赖装配 | `main.py` |
 | 解析结果和上下文契约 | `core/contracts.py` |
 | 登录契约、登录 HTTP 基类和二维码渲染 | `core/platform_login.py` |
-| 安全 HTTP、可信 URL、Cookie、商品网页元数据、媒体和渲染 | `core/http.py`、`core/webpage.py`、`core/product_metadata.py`、`core/media.py`、`core/rendering.py` |
+| 安全 HTTP、可信 URL、Cookie、平台代理、商品网页元数据、媒体和渲染 | `core/http.py`、`core/webpage.py`、`core/product_metadata.py`、`core/media.py`、`core/rendering.py` |
 | 解析器公共流程 | `core/parser.py` |
 | 平台清单及解析器、登录适配器对应关系 | `platforms/registry.py` |
 | 配置读取和解析器创建 | `services/configuration.py` |
@@ -87,7 +87,7 @@ uv run ruff check .
 - 解析器统一返回 `core/contracts.py` 中的契约，保持图文顺序和可读的失败信息。
 - 自动链接解析必须透明传播原消息：`handle_parse`、平台解析器和投递服务只能附加解析结果，不得调用 `event.stop_event()`、不得通过 LLM 禁用状态或主动 LLM 请求接管后续流程、不得修改或消费原消息，也不得因表情回应、解析结果或错误提示的发送副作用阻止后续插件与 AstrBot 默认 LLM 按原规则处理。本规则仅适用于自动链接解析事件；平台登录等显式管理命令按其现有命令语义处理。
 - 若 AstrBot 以事件“是否已发送消息”的状态决定默认 LLM，自动解析完成后必须恢复进入解析处理器前的原状态：既不能把本插件的发送标记遗留给后续流程，也不能固定清空并覆盖更早处理器已有的发送状态。相关变更至少覆盖成功解析、匹配异常、解析异常、未匹配和入口已有发送状态测试。
-- 外部请求复用 `core/http.py` 的安全能力；新增网络路径时检查 URL、重定向、超时和响应大小边界。
+- 外部请求复用 `core/http.py` 的安全能力和平台代理参数；新增网络路径时检查 URL、重定向、超时、响应大小边界，并确保对应平台的代理开关能够覆盖该请求。
 - 登录适配器复用 `HTTPPlatformLoginProvider`、`read_login_response_body` 和公共二维码渲染；可信域、Cookie 值及 CookieJar 白名单序列化复用 `core/http.py`。
 - 平台解析器或登录适配器的增删与顺序只在 `platforms/registry.py` 声明，配置和认证服务从注册表装配，不维护平行清单。
 - 公开 API 和关键异步入口使用准确的中文文档字符串。注释解释边界、顺序、并发和降级原因，不逐行复述代码。

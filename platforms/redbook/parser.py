@@ -73,6 +73,7 @@ class RedBookParser(
             follow_redirects=True,
             headers=self.HEADERS,
             cookies=cookies,
+            **self.http_client_options,
         ) as client:
             url = match.group(0)
             if (urlparse(url).hostname or "") == "xhslink.com":

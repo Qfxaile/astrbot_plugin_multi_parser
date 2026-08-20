@@ -25,6 +25,7 @@ from ...core.platform_login import (
 class WeiboLoginProvider(HTTPPlatformLoginProvider):
     """通过微博官方 Web 二维码接口建立管理员登录态。"""
 
+    name = "weibo"
     display_name = "微博"
     cookie_config_key = "weibo_cookies"
     QR_GENERATE_URL = "https://login.sina.com.cn/sso/qrcode/image"

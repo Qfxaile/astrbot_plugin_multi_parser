@@ -62,6 +62,7 @@ class TiebaParser(TiebaThreadContent, BaseParser):
             timeout=self.request_timeout,
             follow_redirects=False,
             headers=self.HEADERS,
+            **self.http_client_options,
         ) as client:
             response = await client.get(
                 page_url,

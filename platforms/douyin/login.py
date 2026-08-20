@@ -27,6 +27,7 @@ from ...core.platform_login import (
 class DouyinLoginProvider(HTTPPlatformLoginProvider):
     """通过抖音官方网页二维码接口建立管理员登录态。"""
 
+    name = "douyin"
     display_name = "抖音"
     cookie_config_key = "douyin_cookies"
     QR_GENERATE_URL = "https://sso.douyin.com/get_qrcode/"

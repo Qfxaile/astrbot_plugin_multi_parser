@@ -29,6 +29,7 @@ class BilibiliVideoContent:
             timeout=self.request_timeout,
             headers=self._headers(referer),
             cookies=self._cookies(),
+            **self.http_client_options,
         ) as client:
             return await self.materialize_images(result, client, referer)
 
@@ -56,6 +57,7 @@ class BilibiliVideoContent:
         async with httpx.AsyncClient(
             timeout=self.request_timeout,
             cookies=self._cookies(),
+            **self.http_client_options,
         ) as client:
             response = await client.get(
                 api_url, headers=self._headers("https://www.bilibili.com")
@@ -93,6 +95,7 @@ class BilibiliVideoContent:
         async with httpx.AsyncClient(
             timeout=self.request_timeout,
             cookies=self._cookies(),
+            **self.http_client_options,
         ) as client:
             response = await client.get(
                 api_url, headers=self._headers("https://www.bilibili.com")

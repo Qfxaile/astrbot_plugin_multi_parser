@@ -2,10 +2,12 @@ import httpx
 import pytest
 from astrbot_multi_parser.core.http import (
     CookieAccessError,
+    ProxyConfigurationError,
     build_cookie_access_error,
     build_cookies,
     cookie_header_from_jar,
     host_matches,
+    http_client_proxy_options,
     is_trusted_https_url,
     parse_cookie_header,
     raise_for_cookie_access,
@@ -88,6 +90,75 @@ def test_cookie_header_from_jar_requires_declared_credentials():
 def test_request_timeout_accepts_numeric_config():
     assert request_timeout({"request_timeout_seconds": "12.5"}) == 12.5
     assert request_timeout({}) == 30.0
+
+
+@pytest.mark.parametrize(
+    "proxy_url",
+    [
+        "http://proxy.example.com:8080",
+        "https://user:password@proxy.example.com:8443",
+    ],
+)
+def test_proxy_options_apply_enabled_platform_proxy(proxy_url):
+    config = {
+        "proxy_url": proxy_url,
+        "proxy_switches": {"pixiv": True, "github": False},
+    }
+
+    assert http_client_proxy_options(config, "pixiv") == {
+        "proxy": proxy_url,
+        "trust_env": False,
+    }
+    assert http_client_proxy_options(config, "github") == {"trust_env": False}
+
+
+def test_proxy_options_require_explicit_boolean_platform_switch():
+    config = {
+        "proxy_url": "http://proxy.example.com:8080",
+        "proxy_switches": {"pixiv": "true"},
+    }
+
+    assert http_client_proxy_options(config, "pixiv") == {"trust_env": False}
+
+
+@pytest.mark.parametrize(
+    "proxy_url",
+    [
+        "",
+        "socks5://proxy.example.com:1080",
+        "http://proxy.example.com:invalid",
+        "http://user:top-secret@proxy.example.com/path",
+        "http://proxy.example.com:8080/?token=top-secret",
+    ],
+)
+def test_proxy_options_reject_invalid_enabled_proxy_without_leaking_value(proxy_url):
+    config = {
+        "proxy_url": proxy_url,
+        "proxy_switches": {"pixiv": True},
+    }
+
+    with pytest.raises(ProxyConfigurationError) as error:
+        http_client_proxy_options(config, "pixiv")
+
+    if proxy_url:
+        assert proxy_url not in str(error.value)
+
+
+def test_base_parser_uses_its_platform_proxy_options():
+    class TestParser(BaseParser):
+        name = "pixiv"
+
+    parser = TestParser(
+        {
+            "proxy_url": "http://proxy.example.com:8080",
+            "proxy_switches": {"pixiv": True},
+        }
+    )
+
+    assert parser.http_client_options == {
+        "proxy": "http://proxy.example.com:8080",
+        "trust_env": False,
+    }
 
 
 @pytest.mark.parametrize(

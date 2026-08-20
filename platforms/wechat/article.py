@@ -220,6 +220,7 @@ class WeChatArticleContent:
         async with httpx.AsyncClient(
             timeout=self.request_timeout,
             headers=headers,
+            **self.http_client_options,
         ) as client:
             response = await client.get(url)
             response.raise_for_status()

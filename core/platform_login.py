@@ -9,7 +9,7 @@ from io import BytesIO
 import httpx
 import qrcode
 
-from .http import request_timeout
+from .http import http_client_proxy_options, request_timeout
 
 
 class PlatformLoginError(ValueError):
@@ -53,6 +53,7 @@ class LoginPollResult:
 class PlatformLoginProvider(ABC):
     """声明单个平台通过私聊完成登录所需的最小能力。"""
 
+    name = ""
     display_name = ""
     qr_scanner_name = ""
     cookie_config_key = ""
@@ -86,10 +87,14 @@ class HTTPPlatformLoginProvider(PlatformLoginProvider):
         **client_options,
     ) -> None:
         self._owns_client = client is None
-        self._client = client or httpx.AsyncClient(
-            timeout=request_timeout(config),
-            **client_options,
-        )
+        if client is not None:
+            self._client = client
+        else:
+            self._client = httpx.AsyncClient(
+                timeout=request_timeout(config),
+                **http_client_proxy_options(config, self.name),
+                **client_options,
+            )
 
     async def close(self) -> None:
         """关闭由登录适配器创建的 HTTP 客户端。"""

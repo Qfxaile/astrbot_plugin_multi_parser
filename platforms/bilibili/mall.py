@@ -346,6 +346,7 @@ class BilibiliMallContent:
                 timeout=self.request_timeout,
                 headers=self._headers(target.url),
                 cookies=self._cookies(),
+                **self.http_client_options,
             ) as client:
                 payload = await self._request_mall_payload(client, target)
                 self._raise_for_api_cookie_error(payload)

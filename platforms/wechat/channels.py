@@ -232,6 +232,7 @@ class WeChatChannelsContent:
         async with httpx.AsyncClient(
             timeout=self.request_timeout,
             cookies=cookies,
+            **self.http_client_options,
         ) as client:
             result = await resolve_channels_share(
                 client,

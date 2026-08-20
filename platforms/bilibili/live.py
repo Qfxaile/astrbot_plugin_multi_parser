@@ -16,6 +16,7 @@ class BilibiliLiveContent:
             timeout=self.request_timeout,
             headers=self._headers(referer),
             cookies=self._cookies(),
+            **self.http_client_options,
         ) as client:
             response = await client.get(self.LIVE_API, params={"room_id": room_id})
             self.raise_for_response_status(response)

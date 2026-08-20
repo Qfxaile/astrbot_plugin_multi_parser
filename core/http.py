@@ -1,4 +1,4 @@
-"""提供 HTTP 配置、Cookie 构造和鉴权失败识别能力。"""
+"""提供 HTTP 配置、平台代理、Cookie 构造和鉴权失败识别能力。"""
 
 from collections.abc import (
     Callable,
@@ -33,6 +33,44 @@ class CookieAccessError(ValueError):
                 "请在插件配置中填写后重试。"
             )
         super().__init__(message)
+
+
+class ProxyConfigurationError(ValueError):
+    """表示已启用的平台代理配置无法安全使用。"""
+
+
+def http_client_proxy_options(
+    config: Mapping[str, object],
+    platform_name: str,
+) -> dict[str, object]:
+    """按平台开关返回 httpx 代理参数，且不读取进程环境代理。"""
+    switches = config.get("proxy_switches")
+    if not isinstance(switches, Mapping) or switches.get(platform_name) is not True:
+        return {"trust_env": False}
+
+    proxy_url = str(config.get("proxy_url") or "").strip()
+    try:
+        parsed = urlsplit(proxy_url)
+        port = parsed.port
+    except (TypeError, ValueError):
+        raise ProxyConfigurationError(
+            "已启用平台代理，但代理地址不是有效的 HTTP/HTTPS URL。"
+        ) from None
+
+    if (
+        not proxy_url
+        or any(ord(character) < 32 for character in proxy_url)
+        or parsed.scheme.lower() not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+        or port == 0
+    ):
+        raise ProxyConfigurationError(
+            "已启用平台代理，但代理地址不是有效的 HTTP/HTTPS URL。"
+        )
+    return {"proxy": proxy_url, "trust_env": False}
 
 
 def host_matches(hostname: str, suffixes: Collection[str]) -> bool:

@@ -16,6 +16,7 @@ class BilibiliDynamicContent:
             timeout=self.request_timeout,
             headers=self._headers(referer),
             cookies=self._cookies(),
+            **self.http_client_options,
         ) as client:
             response = await client.get(self.DYNAMIC_API, params={"id": dynamic_id})
             self.raise_for_response_status(response)
@@ -82,6 +83,7 @@ class BilibiliDynamicContent:
             timeout=self.request_timeout,
             headers=self._headers(referer),
             cookies=self._cookies(),
+            **self.http_client_options,
         ) as client:
             response = await client.get(self.OPUS_API, params={"id": opus_id})
             self.raise_for_response_status(response)

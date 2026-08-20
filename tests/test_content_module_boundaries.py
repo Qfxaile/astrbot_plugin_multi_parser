@@ -1,7 +1,10 @@
+import ast
 from importlib import import_module
 from importlib.util import find_spec
+from pathlib import Path
 
 import pytest
+from astrbot_multi_parser.platforms.registry import PLATFORM_REGISTRY
 
 
 @pytest.mark.parametrize(
@@ -113,3 +116,47 @@ def test_zhihu_result_helpers_use_descriptive_module_name():
 
     assert find_spec(f"{module_prefix}._result_builder") is not None
     assert find_spec(f"{module_prefix}._handler_common") is None
+
+
+def test_all_production_http_clients_include_proxy_options():
+    def is_proxy_options(keyword: ast.keyword) -> bool:
+        value = keyword.value
+        return keyword.arg is None and (
+            (isinstance(value, ast.Attribute) and value.attr == "http_client_options")
+            or (
+                isinstance(value, ast.Call)
+                and isinstance(value.func, ast.Name)
+                and value.func.id == "http_client_proxy_options"
+            )
+        )
+
+    project_root = Path(__file__).parents[1]
+    missing_proxy_options = []
+    source_paths = [
+        *(project_root / "core").rglob("*.py"),
+        *(project_root / "services").rglob("*.py"),
+        *(
+            source_path
+            for registration in PLATFORM_REGISTRY
+            for source_path in (
+                project_root / "platforms" / registration.parser_type.name
+            ).rglob("*.py")
+        ),
+    ]
+    for source_path in source_paths:
+        tree = ast.parse(source_path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "AsyncClient"
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "httpx"
+            ):
+                continue
+            if not any(is_proxy_options(keyword) for keyword in node.keywords):
+                missing_proxy_options.append(
+                    f"{source_path.relative_to(project_root)}:{node.lineno}"
+                )
+
+    assert missing_proxy_options == []

@@ -22,6 +22,7 @@ from ...core.platform_login import (
 class ZhihuLoginProvider(HTTPPlatformLoginProvider):
     """通过知乎官方网页二维码接口建立管理员登录态。"""
 
+    name = "zhihu"
     display_name = "知乎"
     cookie_config_key = "zhihu_cookies"
     BOOTSTRAP_URL = "https://www.zhihu.com/signin"

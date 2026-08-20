@@ -86,6 +86,7 @@ class DouyinParser(
             follow_redirects=True,
             headers=self.IOS_HEADERS,
             cookies=cookies,
+            **self.http_client_options,
         ) as client:
             url = match.group(0)
             hostname = urlparse(url).hostname or ""

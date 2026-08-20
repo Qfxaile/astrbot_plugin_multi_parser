@@ -70,6 +70,7 @@ class WeiboArticleContent:
             follow_redirects=False,
             headers=headers,
             cookies=self._cookies(),
+            **self.http_client_options,
         ) as client:
             response = await client.post(
                 "https://card.weibo.com/article/m/aj/detail",

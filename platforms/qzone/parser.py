@@ -60,6 +60,7 @@ class QzoneParser(QzonePageContent, BaseParser):
                 timeout=self.request_timeout,
                 follow_redirects=False,
                 headers=self.HEADERS,
+                **self.http_client_options,
             ) as client:
                 html_text = await self._request_page(client, url)
                 if self._is_universal_url(url):

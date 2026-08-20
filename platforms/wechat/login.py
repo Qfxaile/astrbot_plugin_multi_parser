@@ -57,6 +57,7 @@ class _QRImageParser(HTMLParser):
 class WeChatLoginProvider(HTTPPlatformLoginProvider):
     """通过微信开放平台扫码建立腾讯元宝解析登录态。"""
 
+    name = "wechat"
     display_name = "微信"
     cookie_config_key = "wechat_yuanbao_cookies"
     OAUTH_APP_ID = "wx12b75947931a04ec"

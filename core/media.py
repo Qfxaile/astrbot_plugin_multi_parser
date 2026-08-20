@@ -10,7 +10,7 @@ import httpx
 from astrbot.api import logger
 
 from .contracts import ParseResult
-from .http import is_trusted_https_url, request_timeout
+from .http import http_client_proxy_options, is_trusted_https_url, request_timeout
 
 FORBIDDEN_MEDIA_HEADERS = {"authorization", "cookie", "proxy-authorization"}
 
@@ -327,6 +327,7 @@ class VideoMaterializer:
             timeout=request_timeout(self.config),
             headers=headers,
             follow_redirects=False,
+            **http_client_proxy_options(self.config, result.platform),
         ) as client:
             video_path = await self._download(client, result.video_url)
         result.temporary_files.append(video_path)

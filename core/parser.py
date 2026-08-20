@@ -10,6 +10,7 @@ from .http import (
     CookieAccessError,
     build_cookie_access_error,
     cookie_config_value,
+    http_client_proxy_options,
     raise_for_cookie_access,
     request_timeout,
 )
@@ -32,6 +33,11 @@ class BaseParser:
     @property
     def request_timeout(self) -> float:
         return request_timeout(self.config)
+
+    @property
+    def http_client_options(self) -> dict[str, object]:
+        """返回当前平台创建 HTTP 客户端时使用的代理参数。"""
+        return http_client_proxy_options(self.config, self.name)
 
     async def match(self, context: ParseContext) -> bool:
         raise NotImplementedError
@@ -81,5 +87,6 @@ class BaseParser:
             timeout=self.request_timeout,
             follow_redirects=False,
             headers=headers,
+            **self.http_client_options,
         ) as client:
             return await self.materialize_images(result, client, referer)

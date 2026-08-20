@@ -130,6 +130,79 @@
     "default": 30,
     "hint": "解析接口请求超时时间，单位为秒。"
   },
+  "proxy_url": {
+    "description": "代理地址",
+    "type": "text",
+    "default": "",
+    "hint": "选填，支持 HTTP/HTTPS 代理；包含认证信息时请勿泄露。"
+  },
+  "proxy_switches": {
+    "description": "平台代理",
+    "type": "object",
+    "hint": "开启后，该平台的解析、登录和媒体请求使用代理。",
+    "items": {
+      "bilibili": {
+        "description": "B站",
+        "type": "bool",
+        "default": false
+      },
+      "douyin": {
+        "description": "抖音",
+        "type": "bool",
+        "default": false
+      },
+      "fanqie": {
+        "description": "番茄小说",
+        "type": "bool",
+        "default": false
+      },
+      "redbook": {
+        "description": "小红书",
+        "type": "bool",
+        "default": false
+      },
+      "tieba": {
+        "description": "贴吧",
+        "type": "bool",
+        "default": false
+      },
+      "weibo": {
+        "description": "微博",
+        "type": "bool",
+        "default": false
+      },
+      "wechat": {
+        "description": "微信",
+        "type": "bool",
+        "default": false
+      },
+      "xiaoheihe": {
+        "description": "小黑盒",
+        "type": "bool",
+        "default": false
+      },
+      "zhihu": {
+        "description": "知乎",
+        "type": "bool",
+        "default": false
+      },
+      "github": {
+        "description": "GitHub",
+        "type": "bool",
+        "default": false
+      },
+      "qzone": {
+        "description": "QQ空间",
+        "type": "bool",
+        "default": false
+      },
+      "pixiv": {
+        "description": "Pixiv",
+        "type": "bool",
+        "default": false
+      }
+    }
+  },
   "image_download_concurrency": {
     "description": "图片下载并发数",
     "type": "int",

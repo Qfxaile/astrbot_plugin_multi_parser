@@ -17,7 +17,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 插件注册、命令权限和服务装配：`main.py`
 - 解析结果和上下文契约：`core/contracts.py`
 - 登录契约、HTTP 登录基类和二维码渲染：`core/platform_login.py`
-- 安全 HTTP、媒体和结果渲染：`core/http.py`、`core/media.py`、`core/rendering.py`
+- 安全 HTTP、平台代理、媒体和结果渲染：`core/http.py`、`core/media.py`、`core/rendering.py`
 - 解析器公共流程：`core/parser.py`
 - 配置、登录、会话历史、消息投递和视频策略编排：`services/`
 - 平台清单以及解析器、登录适配器对应关系：`platforms/registry.py`
@@ -31,7 +31,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 ### 修改解析器
 
-复用 `BaseParser`、统一契约、安全 HTTP、媒体和投递服务。保持内容顺序，区分鉴权失败、网络失败、内容不存在和部分媒体失败。新增平台时更新平台包导出、`platforms/registry.py`、`platforms/__init__.py`、`_conf_schema.json`、README、项目事实文档和测试，并按用户可见程度更新 CHANGELOG；`services/configuration.py` 与 `services/authentication.py` 从注册表装配，只有装配语义变化时才修改。
+复用 `BaseParser`、统一契约、安全 HTTP、平台代理、媒体和投递服务。新增请求客户端时接入 `core/http.py` 的平台代理参数，确保解析、登录和插件侧媒体请求遵循同一平台开关。保持内容顺序，区分鉴权失败、网络失败、内容不存在和部分媒体失败。新增平台时更新平台包导出、`platforms/registry.py`、`platforms/__init__.py`、`_conf_schema.json`、README、项目事实文档和测试，并按用户可见程度更新 CHANGELOG；`services/configuration.py` 与 `services/authentication.py` 从注册表装配，只有装配语义变化时才修改。
 
 修改自动链接解析入口、平台解析器、表情回应或投递流程时，先核对 AstrBot 的事件传播和默认 LLM 触发条件。自动解析只能附加解析输出，禁止停止事件、修改或消费原消息、设置 LLM 禁用状态，或主动请求 LLM 接管后续流程；发送解析结果后仍须让后续插件与 AstrBot 默认流程按原规则处理。若发送副作用会改变事件状态，恢复进入解析处理器前的原值，并用成功解析、匹配异常、解析异常、未匹配和入口已有发送状态测试防止回归。
 

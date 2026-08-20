@@ -22,6 +22,7 @@ class WeiboPostContent:
             timeout=self._timeout(),
             follow_redirects=False,
             headers=headers,
+            **self.http_client_options,
         ) as client:
             response = await client.get(
                 "https://m.weibo.cn/statuses/show",

@@ -79,8 +79,9 @@ class MultiParserPlugin(Star):
         self,
         url: str,
         headers: dict[str, str] | None = None,
+        platform_name: str = "",
     ) -> VideoSizeInfo:
-        return await VideoSizeProbe(self.config).probe(url, headers)
+        return await VideoSizeProbe(self.config, platform_name).probe(url, headers)
 
     def _video_send_decision(self, size_info: VideoSizeInfo) -> tuple[bool, str]:
         return VideoSendPolicy(self.config).decide(size_info)
@@ -159,9 +160,13 @@ class MultiParserPlugin(Star):
                         video_size_info = await self._probe_video_size(
                             result.video_url,
                             result.video_download_headers,
+                            parser.name,
                         )
                     else:
-                        video_size_info = await self._probe_video_size(result.video_url)
+                        video_size_info = await self._probe_video_size(
+                            result.video_url,
+                            platform_name=parser.name,
+                        )
                     should_send_video, video_reason = self._video_send_decision(
                         video_size_info
                     )

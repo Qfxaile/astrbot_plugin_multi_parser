@@ -9,6 +9,7 @@ from ...core.http import (
     build_cookie_access_error,
     build_cookies,
     cookie_config_value,
+    http_client_proxy_options,
     raise_for_cookie_access,
     request_timeout,
 )
@@ -42,6 +43,7 @@ class ZhihuRequest:
             follow_redirects=True,
             headers=self.HEADERS,
             cookies=self._cookies(),
+            **http_client_proxy_options(self.config, "zhihu"),
         )
 
     def _cookies(self) -> httpx.Cookies:

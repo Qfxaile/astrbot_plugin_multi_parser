@@ -24,6 +24,7 @@ class BilibiliBangumiContent:
             timeout=self.request_timeout,
             headers=self._headers(page_url),
             cookies=self._cookies(),
+            **self.http_client_options,
         ) as client:
             response = await client.get(
                 self.BANGUMI_API,
