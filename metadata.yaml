@@ -2,6 +2,6 @@ name: astrbot_plugin_multi_parser
 display_name: 多平台内容解析
 desc: B站、抖音、番茄小说、小红书、贴吧、微博、微信、小黑盒、知乎、GitHub、腾讯频道、QQ空间和 Pixiv 多平台内容解析插件。
 short_desc: 自动解析主流内容、社区、电商与小说平台的分享链接。
-version: v1.1.1
+version: v1.2.0
 author: Qfxaile
-repo: "https://github.com/Qfxaile/astrbot_multi_parser"
+repo: "https://github.com/Qfxaile/astrbot_plugin_multi_parser"

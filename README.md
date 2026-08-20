@@ -7,7 +7,7 @@
 <p align="center">自动识别聊天消息中的内容链接，并发送作品信息、图文、视频或音频。</p>
 
 <p align="center">
-  <a href="https://github.com/Qfxaile/astrbot_multi_parser/releases"><img src="https://img.shields.io/badge/version-v1.1.1-2f6f5e" alt="Version v1.1.1"></a>
+  <a href="https://github.com/Qfxaile/astrbot_plugin_multi_parser/releases"><img src="https://img.shields.io/badge/version-v1.2.0-2f6f5e" alt="Version v1.2.0"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-%3E%3D3.10-3776ab" alt="Python 3.10+"></a>
   <a href="https://astrbot.app/"><img src="https://img.shields.io/badge/AstrBot-plugin-4c78a8" alt="AstrBot Plugin"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2f6f5e" alt="MIT License"></a>
@@ -78,7 +78,7 @@
 
 ```powershell
 Set-Location data/plugins
-git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_multi_parser
+git clone https://github.com/Qfxaile/astrbot_plugin_multi_parser.git astrbot_plugin_multi_parser
 ```
 
 随后参考 [AstrBot 插件指南](https://docs.astrbot.app/dev/star/plugin-new.html) 完成依赖安装，并在 WebUI 中重载插件。
@@ -280,8 +280,8 @@ astrbot_plugin_multi_parser/
 
 解析器统一继承 `core/parser.py` 中的 `BaseParser`，返回 `core/contracts.py` 中的 `ParseResult`。新增平台时应复用 `core/` 和 `services/` 的公共能力，并同步注册、配置和测试。
 
-- 普通缺陷、功能建议和新平台适配请使用 [GitHub Issues](https://github.com/Qfxaile/astrbot_multi_parser/issues)。
-- 安全漏洞或凭据泄漏风险请通过 [GitHub Security Advisories](https://github.com/Qfxaile/astrbot_multi_parser/security/advisories/new) 私下报告。
+- 普通缺陷、功能建议和新平台适配请使用 [GitHub Issues](https://github.com/Qfxaile/astrbot_plugin_multi_parser/issues)。
+- 安全漏洞或凭据泄漏风险请通过 [GitHub Security Advisories](https://github.com/Qfxaile/astrbot_plugin_multi_parser/security/advisories/new) 私下报告。
 - 涉及插件加载、协议端媒体发送或表情回应的修改，需要通过 AstrBot 本地实例进行集成验证。
 
 ## 参考与致谢
