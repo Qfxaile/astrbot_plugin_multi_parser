@@ -9,6 +9,7 @@ from .douyin import DouyinLoginProvider, DouyinParser
 from .fanqie import FanqieParser
 from .github import GitHubParser
 from .pixiv import PixivParser
+from .qqchannel import QQChannelParser
 from .qzone import QzoneParser
 from .redbook import RedBookLoginProvider, RedBookParser
 from .tieba import TiebaLoginProvider, TiebaParser
@@ -43,6 +44,7 @@ PLATFORM_REGISTRY: tuple[PlatformRegistration, ...] = (
     PlatformRegistration(XiaoheiheParser, XiaoheiheLoginProvider),
     PlatformRegistration(ZhihuParser, ZhihuLoginProvider),
     PlatformRegistration(GitHubParser, None),
+    PlatformRegistration(QQChannelParser, None),
     PlatformRegistration(QzoneParser, None),
     PlatformRegistration(PixivParser, None, enabled_by_default=False),
 )

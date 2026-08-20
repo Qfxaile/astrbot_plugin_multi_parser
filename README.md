@@ -50,6 +50,7 @@
 | 小黑盒 | 帖子和游戏视频 | 社区帖子、游戏截图 | BBS/API 分享链接、游戏信息 |
 | 知乎 | 正文内视频 | 问题、回答、文章、想法 | `link.zhihu.com`、页面数据回退 |
 | GitHub | 不支持 | 公开仓库 OpenGraph 卡片 | 仅仓库主页，不解析 Issue、PR、文件等子路径 |
+| 腾讯频道 | 不支持 | QQ 分享卡片标题与封面 | 仅解析 QQ 中的帖子 JSON 分享卡片 |
 | QQ空间 | 公开说说视频 | 公开说说正文与图片 | `h5.qzone.qq.com/ugc/share/`，无需登录 |
 | Pixiv（默认关闭） | 不支持 | 公开插画作品 | `pixiv.net/artworks/<作品ID>`、旧版 `illust_id` 链接 |
 
@@ -90,7 +91,7 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 
 | 配置项 | 默认值 | 作用 |
 | --- | --- | --- |
-| `platform_switches` | 十一个平台启用，Pixiv 关闭 | 分别控制各平台的解析器；Pixiv 需显式开启 |
+| `platform_switches` | 十二个平台启用，Pixiv 关闭 | 分别控制各平台的解析器；Pixiv 需显式开启 |
 | `filter_output_links` | `false` | 替换解析结果中的网页链接，不修改用户原消息 |
 | `filtered_link_text` | `[详细内容请打开原链接查看]` | 链接过滤后的替换文案 |
 | `enable_conversation_history` | `false` | 是否将解析结果写入当前 AstrBot LLM 会话 |
@@ -143,6 +144,8 @@ GitHub 默认启用，仅解析公开仓库主页，不需要 Token；Issue、PR
 番茄小说仅解析 `changdunovel.com/t/...` 公开分享链接，展示小说标题、作者、简介和封面，不抓取章节正文，也不需要 Cookie。
 
 QQ空间仅解析匿名可访问的公开说说分享页，不读取或保存 QQ Cookie；私密说说、日志和相册暂不支持。
+
+腾讯频道仅解析 QQ/OneBot 上报的帖子 JSON 分享卡片，展示卡片自带的标题和封面。直接发送 `pd.qq.com` 链接不会触发解析；帖子正文、评论和完整媒体依赖腾讯网页的 JavaScript 反自动化校验，当前不支持，也不会尝试绕过或保存卡片令牌。
 
 Bilibili 会员购解析覆盖可唯一定位 ID 的新旧票务、普通或商家商品、UP 主工房商品和魔力赏市集商品详情；首页、分类页、兑换列表、购物车和订单页不会触发解析。摘要展示价格、店铺或主办方及类型专属信息，并最多发送 6 张可信详情图。
 

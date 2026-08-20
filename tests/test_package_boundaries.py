@@ -18,7 +18,7 @@ def test_platform_login_contract_uses_explicit_core_module():
 def test_platform_registry_is_owned_by_platform_package():
     module = import_module("astrbot_multi_parser.platforms.registry")
 
-    assert len(module.PLATFORM_REGISTRY) == 12
+    assert len(module.PLATFORM_REGISTRY) == 13
 
 
 @pytest.mark.parametrize(
@@ -72,6 +72,11 @@ def test_package_initializers_do_not_eagerly_import_implementation_modules(
             "astrbot_multi_parser.platforms",
             "ZhihuParser",
             "astrbot_multi_parser.platforms.zhihu",
+        ),
+        (
+            "astrbot_multi_parser.platforms",
+            "QQChannelParser",
+            "astrbot_multi_parser.platforms.qqchannel",
         ),
         (
             "astrbot_multi_parser.platforms",

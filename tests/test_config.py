@@ -12,6 +12,7 @@ PLATFORMS = (
     "xiaoheihe",
     "zhihu",
     "github",
+    "qqchannel",
     "qzone",
     "pixiv",
 )

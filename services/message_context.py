@@ -19,6 +19,7 @@ def extract_context(event: AstrMessageEvent) -> ParseContext:
     text_parts = [event.message_str]
     json_urls: list[str] = []
     json_previews: list[str] = []
+    json_titles: list[str] = []
 
     for segment in raw_message:
         if isinstance(segment, dict):
@@ -41,41 +42,56 @@ def extract_context(event: AstrMessageEvent) -> ParseContext:
                 if isinstance(data, dict)
                 else getattr(data, "data", "")
             )
-            url, preview = _extract_json_url_and_preview(str(json_data))
+            url, title, preview = _extract_json_card(str(json_data))
             if url:
                 json_urls.append(url)
-            if preview:
                 json_previews.append(preview)
+                json_titles.append(title)
 
     return ParseContext(
         text="\n".join(part for part in text_parts if part).strip(),
         json_urls=json_urls,
         json_previews=json_previews,
+        json_titles=json_titles,
     )
 
 
-def _extract_json_url_and_preview(data: str) -> tuple[str, str]:
-    """从 QQ JSON 分享卡片中提取跳转链接和预览文本。"""
+def _extract_json_card(data: str) -> tuple[str, str, str]:
+    """从 QQ JSON 分享卡片中提取跳转链接、标题和预览图。"""
     try:
         payload = json.loads(data)
     except json.JSONDecodeError:
-        return "", ""
+        return "", "", ""
     if not isinstance(payload, dict):
-        return "", ""
+        return "", "", ""
     meta = payload.get("meta", {})
     if not isinstance(meta, dict):
-        return "", ""
+        return "", "", ""
     detail = meta.get("detail_1", {})
     news = meta.get("news", {})
     miniapp = meta.get("miniapp", {})
+    feed = meta.get("feed", {})
     detail = detail if isinstance(detail, dict) else {}
     news = news if isinstance(news, dict) else {}
     miniapp = miniapp if isinstance(miniapp, dict) else {}
+    feed = feed if isinstance(feed, dict) else {}
     url = (
         detail.get("qqdocurl", "")
         or news.get("jumpUrl", "")
         or miniapp.get("pcJumpUrl", "")
         or miniapp.get("legacyUrl", "")
+        or feed.get("jumpUrl", "")
     )
-    preview = news.get("preview", "") or miniapp.get("preview", "")
-    return str(url or ""), str(preview or "")
+    title = feed.get("title", "")
+    if not title:
+        title = str(payload.get("prompt", "")).removeprefix("[分享帖子]").strip()
+    preview = (
+        news.get("preview", "") or miniapp.get("preview", "") or feed.get("cover", "")
+    )
+    return str(url or ""), str(title or ""), str(preview or "")
+
+
+def _extract_json_url_and_preview(data: str) -> tuple[str, str]:
+    """兼容现有调用，只返回 QQ JSON 分享卡片的链接和预览图。"""
+    url, _, preview = _extract_json_card(data)
+    return url, preview

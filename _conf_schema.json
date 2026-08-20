@@ -64,6 +64,12 @@
         "type": "bool",
         "default": true
       },
+      "qqchannel": {
+        "description": "腾讯频道",
+        "hint": "解析 QQ 中的帖子分享卡片。",
+        "type": "bool",
+        "default": true
+      },
       "qzone": {
         "description": "QQ空间",
         "hint": "解析公开说说、图片和视频。",
@@ -188,6 +194,11 @@
       },
       "github": {
         "description": "GitHub",
+        "type": "bool",
+        "default": false
+      },
+      "qqchannel": {
+        "description": "腾讯频道",
         "type": "bool",
         "default": false
       },

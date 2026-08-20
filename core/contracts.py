@@ -8,6 +8,7 @@ class ParseContext:
     text: str
     json_urls: list[str] = field(default_factory=list)
     json_previews: list[str] = field(default_factory=list)
+    json_titles: list[str] = field(default_factory=list)
 
     @property
     def combined_text(self) -> str:
