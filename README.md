@@ -34,7 +34,7 @@
 - 支持常见视频、直播、图文、文章、帖子及短链接。
 - 图片保持源文件质量，不主动缩放或转码。
 - 支持普通消息、阈值合并与始终合并三种图文发送策略。
-- 发送视频前探测体积，超限时可提示、发送直链或尝试上传群文件。
+- 发送视频前探测体积，超限或发送失败时可提示、发送直链或尝试上传群文件。
 - 可过滤解析结果中的网页链接，不修改用户发送的原消息。
 - 可选将解析结果写入当前 AstrBot 会话，并选择仅保留文字或同时保留图片；默认关闭。
 
@@ -108,7 +108,7 @@ git clone https://github.com/Qfxaile/astrbot_multi_parser.git astrbot_plugin_mul
 | --- | --- | --- |
 | `send_video_by_url` | `true` | 通过远程 URL 发送视频 |
 | `max_video_size_mb` | `50` | 视频直发上限；小于等于 `0` 表示不限制 |
-| `video_over_limit_action` | `direct_link` | 超限时仅提示、发送直链或尝试发送群文件 |
+| `video_over_limit_action` | `direct_link` | 超限或发送失败时仅提示、发送直链或尝试发送群文件 |
 | `allow_unknown_video_size` | `false` | 大小未知时是否仍尝试直发 |
 | `size_check_timeout_seconds` | `10` | 视频大小探测超时，单位为秒 |
 
@@ -202,9 +202,10 @@ Pixiv 仅解析匿名可访问的公开插画作品，不需要 Cookie；动图�
 
 | 检查结果 | 处理方式 |
 | --- | --- |
-| 未超过上限 | 通过远程 URL 发送视频 |
+| 未超过上限或不限制 | 通过远程 URL 发送视频 |
 | 超过上限 | 按配置提示、发送直链或尝试群文件 |
 | 大小未知 | 根据 `allow_unknown_video_size` 决定直发或执行超限策略 |
+| 视频发送失败 | 按 `video_over_limit_action` 执行同一回退策略 |
 | 群文件不可用或上传失败 | 自动降级为视频直链 |
 
 插件先发送作品信息，再处理视频。关闭 `send_video_by_url` 时，视频地址只在作品摘要中出现一次。
@@ -216,14 +217,14 @@ Pixiv 仅解析匿名可访问的公开插画作品，不需要 Cookie；动图�
 <details>
 <summary><strong>解析成功后为什么没有直接发送视频？</strong></summary>
 
-视频可能超过 `max_video_size_mb`，也可能无法探测大小。插件会按 `video_over_limit_action` 处理；群文件仅适用于 OneBot 群聊，其他场景自动发送直链。
+视频可能超过 `max_video_size_mb`，也可能无法探测大小或由协议端发送失败。插件会按 `video_over_limit_action` 处理；群文件仅适用于 OneBot 群聊，其他场景自动发送直链。
 
 </details>
 
 <details>
 <summary><strong>为什么远程视频或图片发送失败？</strong></summary>
 
-协议端通常无法携带插件请求使用的 Cookie 或 Referer。带有防盗链、时效限制或地区限制的 CDN 地址可能由插件成功解析，却无法被协议端拉取。
+协议端通常无法携带插件请求使用的 Cookie 或 Referer。带有防盗链、时效限制或地区限制的 CDN 地址可能由插件成功解析，却无法被协议端拉取。视频发送失败时会按 `video_over_limit_action` 回退。
 
 </details>
 

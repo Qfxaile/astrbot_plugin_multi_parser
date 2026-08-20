@@ -89,25 +89,24 @@ class DeliveryService:
         )
         return results
 
-    async def prepare_video_chain(
+    async def send_video(
         self,
         event: AstrMessageEvent,
         result: ParseResult,
-    ) -> list:
-        """为需要本地上传的适配器准备视频组件。"""
+    ) -> None:
+        """准备并发送视频，让调用方可以捕获协议端发送失败。"""
         video_chain = result.video_chain()
-        if self._platform_name(event) != self.KOOK_PLATFORM or not video_chain:
-            return video_chain
-
-        if result.video_download_host_suffixes:
-            video_path = await VideoMaterializer(
-                self.config,
-                result.video_download_host_suffixes,
-            ).materialize(result)
-        else:
-            video_path = Path(await video_chain[0].convert_to_file_path()).resolve()
-            result.temporary_files.append(video_path)
-        return [Video.fromFileSystem(video_path)]
+        if self._platform_name(event) == self.KOOK_PLATFORM and video_chain:
+            if result.video_download_host_suffixes:
+                video_path = await VideoMaterializer(
+                    self.config,
+                    result.video_download_host_suffixes,
+                ).materialize(result)
+            else:
+                video_path = Path(await video_chain[0].convert_to_file_path()).resolve()
+                result.temporary_files.append(video_path)
+            video_chain = [Video.fromFileSystem(video_path)]
+        await event.send(MessageChain(video_chain))
 
     def build_content_delivery(
         self,
@@ -530,7 +529,7 @@ class DeliveryService:
         result: ParseResult,
         reason: str,
     ) -> None:
-        """按配置处理超限视频，并让群文件失败稳定降级为直链。"""
+        """按配置回退未直接送达的视频，群文件失败时降级为直链。"""
         action = self.video_over_limit_action()
         if action == "notice":
             await event.send(MessageChain([Plain(reason or "视频未直接发送。")]))
@@ -556,7 +555,7 @@ class DeliveryService:
         await self.send_forward_links(event, result, reason)
 
     def video_over_limit_action(self) -> str:
-        """读取视频超限处理方式，无效值按发送直链处理。"""
+        """读取视频回退处理方式，无效值按发送直链处理。"""
         value = (
             str(
                 self.config.get(

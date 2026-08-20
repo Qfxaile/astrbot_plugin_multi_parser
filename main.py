@@ -185,6 +185,13 @@ class MultiParserPlugin(Star):
                         yield event.plain_result(
                             f"{parser.name} 合并转发发送失败: {exc}"
                         )
+                        if video_embedded:
+                            async for fallback in self._forward_with_fallback(
+                                event,
+                                result,
+                                f"合并转发中的视频发送失败: {type(exc).__name__}",
+                            ):
+                                yield fallback
                         return
                 else:
                     for message in content_results:
@@ -196,21 +203,18 @@ class MultiParserPlugin(Star):
                 if send_video_by_url and result.video_url:
                     if should_send_video and not video_embedded:
                         try:
-                            video_chain = await delivery.prepare_video_chain(
-                                event, result
-                            )
+                            await delivery.send_video(event, result)
                         except Exception as exc:
                             logger.warning(
-                                f"{parser.name} 视频发送准备失败: {type(exc).__name__}"
+                                f"{parser.name} 视频发送失败，执行配置回退: "
+                                f"{type(exc).__name__}"
                             )
                             async for fallback in self._forward_with_fallback(
                                 event,
                                 result,
-                                f"视频发送准备失败: {type(exc).__name__}",
+                                f"视频发送失败: {type(exc).__name__}",
                             ):
                                 yield fallback
-                        else:
-                            yield event.chain_result(video_chain)
                     elif not should_send_video:
                         async for fallback in self._forward_with_fallback(
                             event,

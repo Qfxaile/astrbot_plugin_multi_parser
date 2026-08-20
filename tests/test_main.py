@@ -253,13 +253,18 @@ async def collect_results(monkeypatch, result, event=None, **config):
     )
     plugin = make_plugin(result, **config)
     target_event = event or FakeEvent()
-    yielded = [item async for item in plugin.handle_parse(target_event)]
-    return [*target_event.sent, *yielded]
+    return await collect_plugin_results(plugin, target_event)
 
 
 async def collect_plugin_results(plugin, event):
-    yielded = [item async for item in plugin.handle_parse(event)]
-    return [*event.sent, *yielded]
+    messages = []
+    sent_count = 0
+    async for item in plugin.handle_parse(event):
+        messages.extend(event.sent[sent_count:])
+        sent_count = len(event.sent)
+        messages.append(item)
+    messages.extend(event.sent[sent_count:])
+    return messages
 
 
 @pytest.mark.asyncio
@@ -1564,6 +1569,76 @@ async def test_main_uses_notice_action_for_over_limit_video(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("forward_mode", "failed_component_type"),
+    [("never", Video), ("always", Nodes)],
+    ids=["direct", "forward"],
+)
+async def test_main_uses_group_file_action_when_video_send_fails(
+    monkeypatch,
+    forward_mode,
+    failed_component_type,
+):
+    class VideoSendFailEvent(FakeEvent):
+        async def send(self, message):
+            if any(
+                isinstance(component, failed_component_type)
+                for component in message.chain
+            ):
+                raise RuntimeError("video send failed")
+            await super().send(message)
+
+    result = ParseResult(
+        platform="test",
+        title="摘要",
+        video_url="https://example.com/video.mp4",
+    )
+    plugin = make_plugin(
+        result,
+        forward_mode=forward_mode,
+        max_video_size_mb=0,
+        video_over_limit_action="group_file",
+    )
+    monkeypatch.setattr(
+        main, "extract_context", lambda event: SimpleNamespace(combined_text="url")
+    )
+
+    async def fake_probe(url):
+        return VideoSizeInfo(size_bytes=100 * 1024 * 1024)
+
+    monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
+    bot = FakeBot()
+    event = VideoSendFailEvent(
+        bot=bot,
+        raw_message={"group_id": 456, "sender": {}},
+    )
+
+    messages = await collect_plugin_results(plugin, event)
+
+    assert bot.actions == [
+        (
+            "upload_group_file",
+            {
+                "group_id": 456,
+                "file": result.video_url,
+                "name": "摘要.mp4",
+            },
+        )
+    ]
+    assert not any(
+        isinstance(component, Video) for message in messages for component in message
+    )
+    if failed_component_type is Nodes:
+        assert any(
+            "合并转发发送失败" in component.text
+            for message in messages
+            for component in message
+            if isinstance(component, Plain)
+        )
+    assert event._has_send_oper is False
+
+
+@pytest.mark.asyncio
 async def test_notice_delivery_failure_still_hides_video_url():
     class SendFailEvent(FakeEvent):
         async def send(self, message):
@@ -2041,7 +2116,7 @@ async def test_kook_video_materialization_failure_falls_back_to_direct_link(
     )
     texts = [component.text for message in messages for component in message]
     assert "summary" in texts
-    assert any("视频发送准备失败: ConnectError" in text for text in texts)
+    assert any("视频发送失败: ConnectError" in text for text in texts)
     assert any(result.video_url in text for text in texts)
 
 

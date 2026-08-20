@@ -146,15 +146,15 @@
     "description": "视频大小上限",
     "type": "float",
     "default": 50,
-    "hint": "直接发送视频的最大体积，单位 MB；小于等于 0 表示不限制。超过后按视频超限处理方式执行。"
+    "hint": "直接发送视频的最大体积，单位 MB；小于等于 0 表示不限制。超过后按视频回退处理方式执行。"
   },
   "video_over_limit_action": {
-    "description": "视频超限处理",
+    "description": "视频回退处理",
     "type": "string",
     "default": "direct_link",
     "options": ["notice", "direct_link", "group_file"],
     "labels": ["仅发送提示", "发送直链", "发送群文件"],
-    "hint": "视频超过大小上限或大小未知且不允许直接发送时的处理方式。群文件仅支持 OneBot 群聊，其他场景或上传失败时自动降级为发送直链。"
+    "hint": "视频超限、大小未知且不允许直发或发送失败时的处理方式。群文件仅支持 OneBot 群聊，其他场景或上传失败时自动降级为发送直链。"
   },
   "allow_unknown_video_size": {
     "description": "允许未知大小",
