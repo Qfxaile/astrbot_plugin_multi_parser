@@ -1,7 +1,7 @@
 # AstrBot 多平台内容解析器
 
 <p align="center">
-  <img src="logo.png" alt="AstrBot 多平台内容解析器" width="180">
+  <img src="https://github.com/Qfxaile/astrbot_plugin_multi_parser/blob/main/logo.png" alt="AstrBot 多平台内容解析器" width="180">
 </p>
 
 <p align="center">自动识别聊天消息中的内容链接，并发送作品信息、图文、视频或音频。</p>
