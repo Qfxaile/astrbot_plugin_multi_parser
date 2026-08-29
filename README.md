@@ -43,7 +43,7 @@
 | Bilibili | BV、AV | Opus、动态、专栏、会员购详情 | `b23.tv`、`bili2233.cn`、直播间、番剧/电影/纪录片介绍、会员购票务/商品/工房/市集链接 |
 | 抖音 | 视频、直播 | 普通图文、Slides、商城商品标题与主图 | `v.douyin.com`、`jx.douyin.com`、抖音商城长链、汽水音乐 |
 | 番茄小说 | 不支持 | 小说标题、作者、简介与封面 | `changdunovel.com/t/...` 公开分享链接 |
-| 小红书 | 视频笔记 | 图文笔记 | `xhslink.com`、部分 JSON 分享卡片 |
+| 小红书 | 视频笔记 | 图文笔记 | `xhslink.com`、`xhslink.cn`、部分 JSON 分享卡片 |
 | 贴吧 | 首帖视频 | 楼主首帖正文 | `tieba.baidu.com/p/<帖子ID>` |
 | 微博 | 普通视频、视频页、TV | 微博、转发、长文章 | 桌面端、移动端及 API 分享链接 |
 | 微信 | 视频号 | 公众号文章 | 视频号短链及已带令牌的预览长链 |
@@ -109,6 +109,7 @@ git clone https://github.com/Qfxaile/astrbot_plugin_multi_parser.git astrbot_plu
 | --- | --- | --- |
 | `proxy_url` | 空 | 全平台共用的 HTTP/HTTPS 代理地址，可包含用户名和密码 |
 | `proxy_switches` | 全部关闭 | 分别控制各平台是否使用代理 |
+| `github_token` | 空 | 选填的 GitHub Token，用于提高仓库页面请求的速率限制 |
 
 平台代理开启后，该平台的链接解析、接口请求、登录、图片下载、视频大小探测和插件侧视频下载都会使用 `proxy_url`。代理地址为空或格式无效时会停止对应请求，不会静默改为直连；插件不会自动读取进程的代理环境变量，代理配置校验错误不会回显地址或认证信息。
 
@@ -139,7 +140,7 @@ git clone https://github.com/Qfxaile/astrbot_plugin_multi_parser.git astrbot_plu
 | `cookies.xiaoheihe_cookies` | 否 | 配置后用于游戏详情请求，未配置时使用公开接口 |
 | `cookies.zhihu_cookies` | 是 | 用于知乎内容解析 |
 
-GitHub 默认启用，仅解析公开仓库主页，不需要 Token；Issue、PR、文件、提交等仓库子路径不会触发解析。
+GitHub 默认启用，仅解析公开仓库主页；Issue、PR、文件、提交等仓库子路径不会触发解析。可在 `github_token` 中填写 GitHub Token 以提高请求速率限制。Token 仅用于请求 `github.com` 仓库页面，不会发送到 OpenGraph 图片地址。
 
 番茄小说仅解析 `changdunovel.com/t/...` 公开分享链接，展示小说标题、作者、简介和封面，不抓取章节正文，也不需要 Cookie。
 

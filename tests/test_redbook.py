@@ -23,8 +23,11 @@ def test_redbook_security_page_reports_missing_cookie():
     "url",
     [
         "https://xhslink.com/a1b2c3",
+        "https://xhslink.cn/a1b2c3",
         "https://www.xiaohongshu.com/explore/note123?xsec_token=token",
+        "https://www.xiaohongshu.cn/explore/note123?xsec_token=token",
         "https://www.xiaohongshu.com/discovery/item/note123?xsec_token=token",
+        "https://www.xiaohongshu.cn/discovery/item/note123?xsec_token=token",
     ],
 )
 async def test_matches_supported_redbook_urls(url):
@@ -32,15 +35,17 @@ async def test_matches_supported_redbook_urls(url):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("short_host", ["xhslink.com", "xhslink.cn"])
+@pytest.mark.parametrize("site_host", ["www.xiaohongshu.com", "www.xiaohongshu.cn"])
 async def test_parse_short_link_keeps_scheme_and_stops_after_first_redirect(
     monkeypatch,
+    short_host,
+    site_host,
 ):
-    short_url = "http://xhslink.com/o/8ReowhzV8oo"
-    discovery_url = (
-        "https://www.xiaohongshu.com/discovery/item/note123?xsec_token=token"
-    )
-    explore_url = "https://www.xiaohongshu.com/explore/note123?xsec_token=token"
-    security_url = "https://www.xiaohongshu.com/404/security-check"
+    short_url = f"http://{short_host}/o/8ReowhzV8oo"
+    discovery_url = f"https://{site_host}/discovery/item/note123?xsec_token=token"
+    explore_url = f"https://{site_host}/explore/note123?xsec_token=token"
+    security_url = f"https://{site_host}/404/security-check"
     state = {
         "note": {
             "noteDetailMap": {
@@ -58,11 +63,14 @@ async def test_parse_short_link_keeps_scheme_and_stops_after_first_redirect(
 
     def handler(request: httpx.Request) -> httpx.Response:
         requested_urls.append(str(request.url))
-        if request.url.host == "xhslink.com":
+        if request.url.host in {"xhslink.com", "xhslink.cn"}:
             return httpx.Response(
                 302, headers={"Location": discovery_url}, request=request
             )
-        if request.url.path == "/discovery/item/note123":
+        if (
+            request.url.host == site_host
+            and request.url.path == "/discovery/item/note123"
+        ):
             return httpx.Response(
                 302, headers={"Location": security_url}, request=request
             )
@@ -634,7 +642,8 @@ async def test_parse_explore_materializes_video_cover_with_session(
     assert "web_session=explore-session" in page_request.headers["Cookie"]
     assert constructor_kwargs["headers"] == redbook.RedBookParser.HEADERS
     assert [cookie.domain for cookie in constructor_kwargs["cookies"].jar] == [
-        ".xiaohongshu.com"
+        ".xiaohongshu.com",
+        ".xiaohongshu.cn",
     ]
 
 
@@ -703,7 +712,8 @@ async def test_parse_discovery_materializes_video_cover_with_session(
     )
     assert constructor_kwargs["headers"] == redbook.RedBookParser.HEADERS
     assert [cookie.domain for cookie in constructor_kwargs["cookies"].jar] == [
-        ".xiaohongshu.com"
+        ".xiaohongshu.com",
+        ".xiaohongshu.cn",
     ]
 
 
