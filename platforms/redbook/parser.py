@@ -27,11 +27,14 @@ class RedBookParser(
     display_name = "小红书"
     cookie_config_key = "redbook_cookies"
     image_host_suffixes = ("xhscdn.com", "xiaohongshu.com")
+    OFFICIAL_HOSTS = frozenset({"www.xiaohongshu.com", "www.xiaohongshu.cn"})
+    SHORT_LINK_HOSTS = frozenset({"xhslink.com", "xhslink.cn"})
+    COOKIE_DOMAINS = (".xiaohongshu.com", ".xiaohongshu.cn")
     INVALID_IMAGE_URL = "unsafe-image-url"
     PATTERN = (
         r"https?://(?:"
-        r"www\.xiaohongshu\.com/(?:explore|discovery/item)/[^/?\s]+"
-        r"|xhslink\.com(?:/[^/?\s]+)+"
+        r"www\.xiaohongshu\.(?:com|cn)/(?:explore|discovery/item)/[^/?\s]+"
+        r"|xhslink\.(?:com|cn)(?:/[^/?\s]+)+"
         r")(?:\?[^\s#]*)?"
     )
     NOTE_PATH_PATTERN = r"/(?:explore|discovery/item)/(?P<note_id>[^/?]+)"
@@ -66,7 +69,7 @@ class RedBookParser(
 
         cookies = build_cookies(
             cookie_config_value(self.config, "redbook_cookies"),
-            (".xiaohongshu.com",),
+            self.COOKIE_DOMAINS,
         )
         async with httpx.AsyncClient(
             timeout=self.request_timeout,
@@ -76,7 +79,7 @@ class RedBookParser(
             **self.http_client_options,
         ) as client:
             url = match.group(0)
-            if (urlparse(url).hostname or "") == "xhslink.com":
+            if (urlparse(url).hostname or "").lower() in self.SHORT_LINK_HOSTS:
                 response = await client.get(url, follow_redirects=False)
                 if not response.has_redirect_location:
                     self.raise_for_response_status(response)
@@ -84,19 +87,22 @@ class RedBookParser(
                 url = str(response.url.join(response.headers["Location"]))
                 if self._is_auth_url(url):
                     raise self.cookie_access_error()
-                if (urlparse(url).hostname or "") != "www.xiaohongshu.com":
+                if (urlparse(url).hostname or "").lower() not in self.OFFICIAL_HOSTS:
                     raise ValueError("小红书短链重定向到不受支持的地址")
 
             parsed_url = urlparse(url)
+            site_host = (parsed_url.hostname or "").lower()
+            if site_host not in self.OFFICIAL_HOSTS:
+                raise ValueError("小红书链接指向不受支持的地址")
+            client.headers["Origin"] = f"https://{site_host}"
             note_match = re.search(self.NOTE_PATH_PATTERN, parsed_url.path)
             if not note_match:
                 raise ValueError("无法从小红书链接中提取笔记 ID")
             note_id = note_match.group("note_id")
             query = f"?{parsed_url.query}" if parsed_url.query else ""
-            explore_url = f"https://www.xiaohongshu.com/explore/{note_id}{query}"
-            discovery_url = (
-                f"https://www.xiaohongshu.com/discovery/item/{note_id}{query}"
-            )
+            site_origin = f"https://{site_host}"
+            explore_url = f"{site_origin}/explore/{note_id}{query}"
+            discovery_url = f"{site_origin}/discovery/item/{note_id}{query}"
 
             try:
                 original_headers = client.headers.copy()
