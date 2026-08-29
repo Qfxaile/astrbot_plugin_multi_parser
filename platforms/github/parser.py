@@ -102,12 +102,7 @@ class GitHubParser(BaseParser):
             async with client.stream(
                 "GET",
                 current_url,
-                headers={
-                    "Accept": (
-                        "text/html,application/xhtml+xml,application/xml;q=0.9,"
-                        "*/*;q=0.8"
-                    )
-                },
+                headers=self._repository_request_headers(),
             ) as response:
                 if 300 <= response.status_code < 400:
                     location = response.headers.get("Location")
@@ -135,6 +130,16 @@ class GitHubParser(BaseParser):
             return parser.image_url
 
         raise httpx.InvalidURL("too many repository redirects")
+
+    def _repository_request_headers(self) -> dict[str, str]:
+        """构造仓库页面请求头，按需附加 GitHub Token。"""
+        headers = {
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+        }
+        token = str(self.config.get("github_token") or "").strip()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        return headers
 
     async def _read_repository_html(self, response: httpx.Response) -> bytes:
         """在固定大小上限内读取仓库页面，避免异常响应耗尽内存。"""

@@ -70,6 +70,10 @@ def test_schema_uses_platform_switches_without_legacy_settings():
         assert proxy_switches["items"][platform]["type"] == "bool"
         assert proxy_switches["items"][platform]["default"] is False
 
+    github_token = schema["github_token"]
+    assert github_token["type"] == "text"
+    assert github_token["default"] == ""
+
     over_limit_action = schema["video_over_limit_action"]
     assert over_limit_action["type"] == "string"
     assert over_limit_action["default"] == "direct_link"
