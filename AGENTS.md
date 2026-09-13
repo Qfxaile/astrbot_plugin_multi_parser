@@ -25,7 +25,7 @@
 先确定仓库路径；以下命令中的 `<repo>` 是 `git rev-parse --show-toplevel` 返回的路径：
 
 ```bash
-uv sync --project <repo> --locked
+uv sync --project <repo>
 uv run --project <repo> pytest <repo>/tests
 uv run --project <repo> ruff check <repo>
 ```
@@ -33,14 +33,14 @@ uv run --project <repo> ruff check <repo>
 在仓库根目录工作时可省略 `--project <repo>` 和测试路径前缀：
 
 ```bash
-uv sync --locked
+uv sync
 uv run pytest
 uv run ruff check .
 ```
 
 - 不使用裸 `python`、`pip` 或已激活环境来代替 `uv run` 和 `uv sync`。
 - 不硬编码 `.venv` 的绝对路径，也不假定虚拟环境已激活；环境位置由 `uv` 配置决定。
-- `uv.lock` 应随依赖声明提交。正常验证使用 `--locked`，依赖确需变化时更新声明后运行 `uv lock`。
+- 依赖声明变更后，使用 `uv sync` 同步开发环境。
 - `requirements.txt` 仍是 AstrBot 安装插件运行依赖的入口；改变运行依赖时同步维护它和 `pyproject.toml` 的开发依赖。
 - 进入仓库后若发现 `mise.toml`、`.mise.toml` 或 `.tool-versions`，先遵循其中的运行时版本；当前仓库没有这些文件。
 

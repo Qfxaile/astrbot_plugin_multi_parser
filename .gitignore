@@ -27,3 +27,5 @@ temp/
 data/
 docs/
 .worktrees/
+
+uv.lock

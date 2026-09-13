@@ -41,7 +41,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 ### 修改配置或依赖
 
-配置变化同步 `_conf_schema.json`、README 和测试，并检查配置服务是否需要调整。项目环境统一通过 `uv` 管理，不假设仓库、AstrBot 或虚拟环境位于固定目录。改变依赖时同步 `pyproject.toml`、`uv.lock`，运行依赖还需同步 `requirements.txt`。
+配置变化同步 `_conf_schema.json`、README 和测试，并检查配置服务是否需要调整。项目环境统一通过 `uv` 管理，不假设仓库、AstrBot 或虚拟环境位于固定目录。改变依赖时同步 `pyproject.toml`，运行依赖还需同步 `requirements.txt`。
 
 ### 修改版本或发布资料
 
