@@ -136,3 +136,17 @@ def test_schema_exposes_optional_conversation_history_modes():
     assert mode["default"] == "text_only"
     assert mode["options"] == ["text_only", "text_and_images"]
     assert mode["labels"] == ["仅保存文字", "保存文字和图片"]
+
+
+def test_schema_uses_native_provider_selectors_for_ai_summary_models():
+    schema_path = Path(__file__).parents[1] / "_conf_schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+
+    for key in (
+        "ai_summary_text_provider_id",
+        "ai_summary_vision_provider_id",
+        "ai_summary_subtitle_provider_id",
+    ):
+        assert schema[key]["type"] == "string"
+        assert schema[key]["_special"] == "select_provider"
+        assert schema[key]["default"] == ""

@@ -46,6 +46,8 @@ class ParseResult:
     split_media_for_onebot: bool = False
     keep_video_in_forward: bool = False
     audio_url: str = ""
+    subtitle_text: str = ""
+    subtitle_language: str = ""
 
     @property
     def image_count(self) -> int:

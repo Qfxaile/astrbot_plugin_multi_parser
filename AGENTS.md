@@ -58,6 +58,7 @@ uv run ruff check .
 | 登录编排、取消和凭据持久化 | `services/authentication.py` |
 | 消息上下文、文本处理和投递 | `services/message_context.py`、`services/text_processing.py`、`services/delivery.py` |
 | LLM 会话历史写入与媒体序列化 | `services/conversation_history.py` |
+| AI 总结、Provider 选择和多模态输入 | `services/ai_summary.py` |
 | 视频大小探测与发送策略 | `services/video.py` |
 | 平台请求、签名、登录和载荷转换 | `platforms/<platform>/` |
 

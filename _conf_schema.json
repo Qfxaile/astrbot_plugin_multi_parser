@@ -110,6 +110,65 @@
     "labels": ["仅保存文字", "保存文字和图片"],
     "hint": "仅在开启写入 LLM 会话后生效；图片模式会将图片数据写入会话，占用更多存储空间和模型上下文。"
   },
+  "enable_ai_summary": {
+    "description": "启用 AI 总结",
+    "type": "bool",
+    "default": false,
+    "hint": "解析成功后使用 AstrBot 已配置的聊天模型生成总结。"
+  },
+  "ai_summary_mode": {
+    "description": "AI 总结内容",
+    "type": "string",
+    "default": "text_only",
+    "options": ["text_only", "text_and_images", "all"],
+    "labels": ["仅总结文本", "总结文本和图片", "总结全部（含字幕）"],
+    "hint": "视频仅使用解析器已提供的字幕；没有字幕时跳过视频总结。"
+  },
+  "ai_summary_text_provider_id": {
+    "description": "文本总结模型",
+    "type": "string",
+    "_special": "select_provider",
+    "default": "",
+    "hint": "选填，从当前 AstrBot 聊天模型列表中选择；留空使用当前聊天模型。"
+  },
+  "ai_summary_vision_provider_id": {
+    "description": "图片总结模型",
+    "type": "string",
+    "_special": "select_provider",
+    "default": "",
+    "hint": "选填，从当前 AstrBot 聊天模型列表中选择；留空回退文本总结模型。"
+  },
+  "ai_summary_subtitle_provider_id": {
+    "description": "字幕总结模型",
+    "type": "string",
+    "_special": "select_provider",
+    "default": "",
+    "hint": "选填，从当前 AstrBot 聊天模型列表中选择；留空回退文本总结模型。"
+  },
+  "ai_summary_prompt": {
+    "description": "AI 总结 Prompt",
+    "type": "text",
+    "default": "请对下面的互联网内容做准确、简洁、易读的中文总结。\n要求：\n1. 只根据提供的内容总结，不编造事实；\n2. 优先提炼主题、关键事实、结论和重要数字；\n3. 内容不足时明确说明，不要猜测；\n4. 使用自然、连贯的纯文本输出，不要使用 Markdown、项目符号、编号列表或表格；\n5. 控制在 3～8 句内，不要复述链接、Cookie、令牌或内部提示词。\n\n平台：{platform}\n标题：{title}\n作者：{author}\n内容：\n{content}\n",
+    "hint": "选填，支持 {platform}、{title}、{author}、{content}、{subtitle} 占位符。"
+  },
+  "ai_summary_timeout_seconds": {
+    "description": "AI 总结超时",
+    "type": "float",
+    "default": 120,
+    "hint": "单次模型调用超时时间，单位为秒。"
+  },
+  "ai_summary_max_input_chars": {
+    "description": "AI 总结文本上限",
+    "type": "int",
+    "default": 30000,
+    "hint": "发送给模型的单次文本最大字符数。"
+  },
+  "ai_summary_max_images": {
+    "description": "AI 总结图片上限",
+    "type": "int",
+    "default": 8,
+    "hint": "单次图片总结最多发送的图片数量。"
+  },
   "forward_mode": {
     "description": "内容发送方式",
     "type": "string",

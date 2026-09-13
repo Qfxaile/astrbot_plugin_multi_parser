@@ -5,6 +5,7 @@ from astrbot.api.star import Context, Star
 
 from .core.contracts import ParseResult
 from .core.http import CookieAccessError
+from .services.ai_summary import AISummaryService
 from .services.authentication import AuthenticationService
 from .services.configuration import build_parsers, enabled_parsers
 from .services.conversation_history import ConversationHistoryService
@@ -28,6 +29,7 @@ class MultiParserPlugin(Star):
         self.parsers = build_parsers(config)
         self._authentication = AuthenticationService(config)
         self._delivery = DeliveryService(config)
+        self._ai_summary = AISummaryService(context, config)
 
     def _delivery_service(self) -> DeliveryService:
         delivery = getattr(self, "_delivery", None)
@@ -52,6 +54,13 @@ class MultiParserPlugin(Star):
 
     def _enabled_parsers(self):
         return enabled_parsers(self.config, self.parsers)
+
+    def _ai_summary_service(self) -> AISummaryService:
+        service = getattr(self, "_ai_summary", None)
+        if service is None:
+            service = AISummaryService(self.context, self.config)
+            self._ai_summary = service
+        return service
 
     @staticmethod
     async def _call_onebot(event: AstrMessageEvent, action: str, **params):
@@ -237,6 +246,10 @@ class MultiParserPlugin(Star):
                         result,
                         include_images=history_mode == "text_and_images",
                     )
+                for summary in await self._ai_summary_service().summarize(
+                    event, result
+                ):
+                    yield event.plain_result(f"AI总结：\n{summary}")
                 return
             except CookieAccessError as exc:
                 restore_send_state = True

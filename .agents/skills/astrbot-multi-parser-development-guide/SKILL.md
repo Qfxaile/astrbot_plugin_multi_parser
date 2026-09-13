@@ -19,7 +19,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 登录契约、HTTP 登录基类和二维码渲染：`core/platform_login.py`
 - 安全 HTTP、平台代理、媒体和结果渲染：`core/http.py`、`core/media.py`、`core/rendering.py`
 - 解析器公共流程：`core/parser.py`
-- 配置、登录、会话历史、消息投递和视频策略编排：`services/`
+- 配置、登录、会话历史、消息投递、视频策略和 AI 总结编排：`services/`
 - 平台清单以及解析器、登录适配器对应关系：`platforms/registry.py`
 - 平台入口和协议实现：`platforms/<platform>/parser.py`、支持登录平台的 `platforms/<platform>/login.py` 及同目录内容模块
 - 配置声明：`_conf_schema.json`

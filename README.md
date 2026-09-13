@@ -96,6 +96,10 @@ git clone https://github.com/Qfxaile/astrbot_plugin_multi_parser.git astrbot_plu
 | `filtered_link_text` | `[详细内容请打开原链接查看]` | 链接过滤后的替换文案 |
 | `enable_conversation_history` | `false` | 是否将解析结果写入当前 AstrBot LLM 会话 |
 | `conversation_history_mode` | `text_only` | `text_only` 仅保留文字，`text_and_images` 同时保留图片 |
+| `enable_ai_summary` | `false` | 解析成功后使用 AstrBot 已配置模型生成 AI 总结 |
+| `ai_summary_mode` | `text_only` | `text_only` 仅总结文本，`text_and_images` 总结文本和图片，`all` 追加字幕总结 |
+| `ai_summary_*_provider_id` | 空 | 从下拉列表按文本、图片、字幕分别选择 AstrBot 聊天模型；为空使用当前聊天模型 |
+| `ai_summary_prompt` | 内置 Prompt | 自定义总结模板，支持 `{platform}`、`{title}`、`{author}`、`{content}`、`{subtitle}` |
 | `forward_mode` | `threshold` | `always`、`threshold` 或 `never` |
 | `forward_image_threshold` | `2` | 图片数严格超过该值时合并发送 |
 | `forward_text_threshold` | `260` | 可见文字严格超过该字符数时合并发送 |
