@@ -15,6 +15,7 @@ from .content_assembly import ContentAssembler
 from .delivery_policy import DeliveryPolicy
 from .event_identity import EventIdentity
 from .link_filter import LinkFilter
+from .onebot_forward import OneBotForwardSerializer
 from .onebot_gateway import OneBotGateway
 from .video_delivery import VideoDeliveryService
 from .video_fallback import VideoFallbackService
@@ -204,34 +205,7 @@ class DeliveryService:
         image_source_urls: Mapping[str, str],
     ) -> list[dict]:
         """构造使用远程图片 URL 的 OneBot 节点，避免 WebSocket 携带 Base64。"""
-        messages = []
-        for node in nodes:
-            content = []
-            for component in node.content:
-                if isinstance(component, Image):
-                    content.append(
-                        {
-                            "type": "image",
-                            "data": {
-                                "file": cls._remote_image_url(
-                                    component, image_source_urls
-                                )
-                            },
-                        }
-                    )
-                else:
-                    content.append(await component.to_dict())
-            messages.append(
-                {
-                    "type": "node",
-                    "data": {
-                        "user_id": str(node.uin),
-                        "nickname": node.name,
-                        "content": content,
-                    },
-                }
-            )
-        return messages
+        return await OneBotForwardSerializer.serialize(nodes, image_source_urls)
 
     @classmethod
     async def _download_onebot_forward_images(
@@ -314,18 +288,11 @@ class DeliveryService:
 
     @staticmethod
     def _remote_image_file_name(url: str, index: int) -> str:
-        source_name = PurePosixPath(urlparse(url).path).name
-        source_name = re.sub(r"[^0-9A-Za-z._-]", "_", source_name).strip("._")
-        return source_name[-100:] or f"image-{index}.jpg"
+        return OneBotForwardSerializer.remote_image_file_name(url, index)
 
     @staticmethod
     def _remote_image_url(image: Image, image_source_urls: Mapping[str, str]) -> str:
-        if image.path and (source_url := image_source_urls.get(str(image.path))):
-            return source_url
-        image_file = str(image.file or "")
-        if image_file.startswith(("http://", "https://")):
-            return image_file
-        return ""
+        return OneBotForwardSerializer.remote_image_url(image, image_source_urls)
 
     async def _send_onebot_forward_nodes(
         self, event: AstrMessageEvent, messages: list[dict]
