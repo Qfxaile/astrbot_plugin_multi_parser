@@ -1,6 +1,8 @@
 import asyncio
 import ipaddress
 import mimetypes
+import os
+import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
@@ -243,7 +245,14 @@ class ImageMaterializer:
             if configured_dir
             else Path(__file__).resolve().parents[1] / "data" / "temp" / "images"
         )
-        temp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            if not os.access(temp_dir, os.W_OK):
+                raise OSError("image temp directory is not writable")
+        except OSError:
+            # 插件目录可能由只读容器或其他用户创建，回退到当前进程临时目录。
+            temp_dir = Path(tempfile.gettempdir()) / "astrbot_multi_parser" / "images"
+            temp_dir.mkdir(parents=True, exist_ok=True)
 
         suffix = Path(urlparse(image_url).path).suffix.lower()
         allowed_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}

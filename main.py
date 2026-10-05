@@ -4,13 +4,13 @@ from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star
 
 from .core.contracts import ParseResult
-from .core.http import CookieAccessError
 from .services.ai_summary import AISummaryService
 from .services.authentication import AuthenticationService
 from .services.configuration import build_parsers, enabled_parsers
 from .services.conversation_history import ConversationHistoryService
 from .services.delivery import DeliveryService
 from .services.message_context import extract_context
+from .services.parsing import ParseCoordinator
 from .services.video import (
     VideoSendPolicy,
     VideoSizeInfo,
@@ -54,6 +54,61 @@ class MultiParserPlugin(Star):
 
     def _enabled_parsers(self):
         return enabled_parsers(self.config, self.parsers)
+
+    def enabled_parsers(self):
+        """返回当前启用的平台解析器，供自动解析用例调用。"""
+        return self._enabled_parsers()
+
+    # ParseCoordinator 只依赖这些窄接口；保留方法名便于平台和测试替换单项能力。
+    async def react_success(self, event: AstrMessageEvent) -> None:
+        await self._react_success(event)
+
+    async def probe_video_size(self, url, headers=None, platform_name=""):
+        return await self._probe_video_size(url, headers, platform_name)
+
+    def video_send_decision(self, size_info):
+        return self._video_send_decision(size_info)
+
+    def build_content_delivery(
+        self, event, result, *, include_video_url, include_video
+    ):
+        return self._delivery_service().build_content_delivery(
+            event,
+            result,
+            include_video_url=include_video_url,
+            include_video=include_video,
+        )
+
+    async def send_forward_results(self, event, content_results, result):
+        await self._delivery_service().send_forward_results(
+            event, content_results, result
+        )
+
+    def is_forward_delivery(self, content_results):
+        return self._delivery_service().is_forward_delivery(content_results)
+
+    async def send_video(self, event, result):
+        await self._delivery_service().send_video(event, result)
+
+    async def forward_with_fallback(self, event, result, reason):
+        async for item in self._forward_with_fallback(event, result, reason):
+            yield item
+
+    async def record_history(self, event, source_text, result):
+        if not bool(self.config.get("enable_conversation_history", False)):
+            return
+        history_mode = str(
+            self.config.get("conversation_history_mode", "text_only")
+        ).strip()
+        await self._conversation_history_service().record_parse_result(
+            event,
+            source_text,
+            result,
+            include_images=history_mode == "text_and_images",
+        )
+
+    async def summarize(self, event, result):
+        return await self._ai_summary_service().summarize(event, result)
 
     def _ai_summary_service(self) -> AISummaryService:
         service = getattr(self, "_ai_summary", None)
@@ -147,125 +202,11 @@ class MultiParserPlugin(Star):
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def handle_parse(self, event: AstrMessageEvent):
-        original_has_send_oper = getattr(event, "_has_send_oper", None)
         context = extract_context(event)
         if not context.combined_text:
             return
-
-        for parser in self._enabled_parsers():
-            result: ParseResult | None = None
-            restore_send_state = False
-            try:
-                if not await parser.match(context):
-                    continue
-                restore_send_state = True
-                await self._react_success(event)
-                result = await parser.parse(context)
-                send_video_by_url = bool(self.config.get("send_video_by_url", True))
-                should_send_video = False
-                video_reason = ""
-                if send_video_by_url and result.video_url:
-                    if result.video_download_headers:
-                        video_size_info = await self._probe_video_size(
-                            result.video_url,
-                            result.video_download_headers,
-                            parser.name,
-                        )
-                    else:
-                        video_size_info = await self._probe_video_size(
-                            result.video_url,
-                            platform_name=parser.name,
-                        )
-                    should_send_video, video_reason = self._video_send_decision(
-                        video_size_info
-                    )
-
-                content_results, video_embedded = (
-                    self._delivery_service().build_content_delivery(
-                        event,
-                        result,
-                        include_video_url=not send_video_by_url,
-                        include_video=should_send_video,
-                    )
-                )
-                delivery = self._delivery_service()
-                if delivery.is_forward_delivery(content_results):
-                    try:
-                        await delivery.send_forward_results(
-                            event, content_results, result
-                        )
-                    except Exception as exc:
-                        logger.warning(f"{parser.name} 合并转发发送失败: {exc}")
-                        yield event.plain_result(
-                            f"{parser.name} 合并转发发送失败: {exc}"
-                        )
-                        if video_embedded:
-                            async for fallback in self._forward_with_fallback(
-                                event,
-                                result,
-                                f"合并转发中的视频发送失败: {type(exc).__name__}",
-                            ):
-                                yield fallback
-                        return
-                else:
-                    for message in content_results:
-                        yield message
-
-                if result.audio_url:
-                    yield event.chain_result(result.audio_chain())
-
-                if send_video_by_url and result.video_url:
-                    if should_send_video and not video_embedded:
-                        try:
-                            await delivery.send_video(event, result)
-                        except Exception as exc:
-                            logger.warning(
-                                f"{parser.name} 视频发送失败，执行配置回退: "
-                                f"{type(exc).__name__}"
-                            )
-                            async for fallback in self._forward_with_fallback(
-                                event,
-                                result,
-                                f"视频发送失败: {type(exc).__name__}",
-                            ):
-                                yield fallback
-                    elif not should_send_video:
-                        async for fallback in self._forward_with_fallback(
-                            event,
-                            result,
-                            video_reason,
-                        ):
-                            yield fallback
-                if bool(self.config.get("enable_conversation_history", False)):
-                    history_mode = str(
-                        self.config.get("conversation_history_mode", "text_only")
-                    ).strip()
-                    await self._conversation_history_service().record_parse_result(
-                        event,
-                        context.combined_text,
-                        result,
-                        include_images=history_mode == "text_and_images",
-                    )
-                for summary in await self._ai_summary_service().summarize(
-                    event, result
-                ):
-                    yield event.plain_result(f"AI总结：\n{summary}")
-                return
-            except CookieAccessError as exc:
-                restore_send_state = True
-                logger.warning(f"{parser.name} Cookie 访问失败: {exc}")
-                yield event.plain_result(str(exc))
-                return
-            except Exception as exc:
-                restore_send_state = True
-                logger.warning(f"{parser.name} 解析失败: {exc}")
-                yield event.plain_result(f"{parser.name} 解析失败: {exc}")
-                return
-            finally:
-                if result is not None:
-                    result.cleanup_temporary_files()
-                if restore_send_state and original_has_send_oper is not None:
-                    event._has_send_oper = original_has_send_oper
+        async for item in ParseCoordinator(self).run(event, context):
+            yield item
 
     async def _forward_with_fallback(
         self,

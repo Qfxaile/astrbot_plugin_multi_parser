@@ -1,5 +1,6 @@
 """定义平台解析器契约及跨平台共用流程。"""
 
+from abc import ABC, abstractmethod
 from collections.abc import Mapping
 
 import httpx
@@ -17,7 +18,7 @@ from .http import (
 from .media import ImageMaterializer
 
 
-class BaseParser:
+class BaseParser(ABC):
     """平台解析器的稳定契约。"""
 
     name = "base"
@@ -39,10 +40,14 @@ class BaseParser:
         """返回当前平台创建 HTTP 客户端时使用的代理参数。"""
         return http_client_proxy_options(self.config, self.name)
 
+    @abstractmethod
     async def match(self, context: ParseContext) -> bool:
+        """判断当前消息是否属于本平台。"""
         raise NotImplementedError
 
+    @abstractmethod
     async def parse(self, context: ParseContext) -> ParseResult:
+        """解析消息并返回统一结果。"""
         raise NotImplementedError
 
     def cookie_access_error(self) -> CookieAccessError:
