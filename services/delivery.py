@@ -13,6 +13,7 @@ from ..core.contracts import ParseResult
 from ..core.media import VideoMaterializer
 from ..core.settings import PluginSettings
 from .delivery_policy import DeliveryPolicy
+from .event_identity import EventIdentity
 from .text_processing import replace_links
 
 
@@ -48,13 +49,10 @@ class DeliveryService:
 
     @staticmethod
     def raw_message(event: AstrMessageEvent):
-        return getattr(event.message_obj, "raw_message", None)
+        return EventIdentity.raw_message(event)
 
     def message_id(self, event: AstrMessageEvent) -> str:
-        raw = self.raw_message(event) or {}
-        message_id = raw.get("message_id") if isinstance(raw, dict) else ""
-        fallback = getattr(event.message_obj, "message_id", "")
-        return str(message_id or fallback or "")
+        return EventIdentity.message_id(event)
 
     async def react_success(self, event: AstrMessageEvent) -> None:
         if not self.settings.boolean("enable_parse_reaction", True):
@@ -638,22 +636,9 @@ class DeliveryService:
         *,
         prefer_raw_nickname: bool = False,
     ) -> tuple[str, str]:
-        sender_id = str(event.get_sender_id() or "0")
-        try:
-            public_name = event.get_sender_name()
-        except Exception:
-            public_name = ""
-        sender_name = str(public_name) if public_name else sender_id
-
-        raw = self.raw_message(event)
-        raw_sender = raw.get("sender") or {} if isinstance(raw, dict) else {}
-        if isinstance(raw_sender, dict):
-            raw_name = raw_sender.get("card")
-            if prefer_raw_nickname:
-                raw_name = raw_name or raw_sender.get("nickname")
-            if raw_name:
-                sender_name = str(raw_name)
-        return sender_name, sender_id
+        return EventIdentity.sender_identity(
+            event, prefer_raw_nickname=prefer_raw_nickname
+        )
 
     @classmethod
     def _supports_forward_nodes(cls, event: AstrMessageEvent) -> bool:
@@ -661,10 +646,7 @@ class DeliveryService:
 
     @staticmethod
     def _platform_name(event: AstrMessageEvent) -> str:
-        try:
-            return str(event.get_platform_name() or "")
-        except Exception:
-            return ""
+        return EventIdentity.platform_name(event)
 
     @staticmethod
     def _raw_forward_node(name: str, user_id: str, text: str) -> dict:
