@@ -3,6 +3,8 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from ..core.settings import PluginSettings
+
 
 @dataclass(frozen=True)
 class DeliveryPolicy:
@@ -14,16 +16,13 @@ class DeliveryPolicy:
     default_text_threshold: int = 200
     default_video_action: str = "direct_link"
 
+    @property
+    def settings(self) -> PluginSettings:
+        return PluginSettings(self.config)
+
     def forward_mode(self) -> str:
-        value = (
-            str(self.config.get("forward_mode", self.default_forward_mode))
-            .strip()
-            .lower()
-        )
-        return (
-            value
-            if value in {"always", "threshold", "never"}
-            else self.default_forward_mode
+        return self.settings.choice(
+            "forward_mode", {"always", "threshold", "never"}, self.default_forward_mode
         )
 
     def should_forward(self, image_count: int, text_length: int) -> bool:
@@ -33,32 +32,31 @@ class DeliveryPolicy:
         if mode == "never":
             return False
         image_threshold = self.non_negative_int(
-            self.config.get("forward_image_threshold", self.default_image_threshold),
+            self.settings.integer(
+                "forward_image_threshold", self.default_image_threshold
+            ),
             self.default_image_threshold,
         )
         text_threshold = self.non_negative_int(
-            self.config.get("forward_text_threshold", self.default_text_threshold),
+            self.settings.integer(
+                "forward_text_threshold", self.default_text_threshold
+            ),
             self.default_text_threshold,
         )
         return image_count > image_threshold or text_length > text_threshold
 
     def video_over_limit_action(self) -> str:
-        value = (
-            str(self.config.get("video_over_limit_action", self.default_video_action))
-            .strip()
-            .lower()
-        )
-        return (
-            value
-            if value in {"notice", "direct_link", "group_file"}
-            else self.default_video_action
+        return self.settings.choice(
+            "video_over_limit_action",
+            {"notice", "direct_link", "group_file"},
+            self.default_video_action,
         )
 
     def filter_links_enabled(self) -> bool:
-        return bool(self.config.get("filter_output_links", False))
+        return self.settings.boolean("filter_output_links")
 
     def filtered_link_text(self, default: str) -> str:
-        return str(self.config.get("filtered_link_text", default) or default)
+        return self.settings.text("filtered_link_text", default) or default
 
     @staticmethod
     def non_negative_int(value: object, default: int) -> int:
