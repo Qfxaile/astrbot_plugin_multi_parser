@@ -19,6 +19,7 @@ __all__ = [
     "VideoFallbackService",
     "LoginAttempt",
     "LoginSessionRegistry",
+    "ServiceContainer",
 ]
 
 _EXPORT_MODULES = {
@@ -38,6 +39,7 @@ _EXPORT_MODULES = {
     "VideoFallbackService": ".video_fallback",
     "LoginAttempt": ".login_sessions",
     "LoginSessionRegistry": ".login_sessions",
+    "ServiceContainer": ".container",
 }
 
 
