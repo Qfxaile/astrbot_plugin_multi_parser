@@ -723,3 +723,18 @@ def test_info_chain_skips_legacy_empty_url_without_error_but_counts_slot():
     assert [type(item) for item in chain] == [Plain]
     assert chain[0].text == "标题"
     assert result.image_count == 1
+
+
+def test_image_materializer_normalizes_download_concurrency():
+    from astrbot_multi_parser.core.media import ImageMaterializer
+
+    assert (
+        ImageMaterializer(
+            {"image_download_concurrency": "invalid"}
+        )._download_concurrency()
+        == 4
+    )
+    assert (
+        ImageMaterializer({"image_download_concurrency": 100})._download_concurrency()
+        == 16
+    )

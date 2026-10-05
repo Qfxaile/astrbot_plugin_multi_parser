@@ -11,6 +11,7 @@ from astrbot.api.message_components import Image, Node, Nodes, Plain, Video
 
 from ..core.contracts import ParseResult
 from ..core.media import VideoMaterializer
+from ..core.settings import PluginSettings
 from .delivery_policy import DeliveryPolicy
 from .text_processing import replace_links
 
@@ -33,6 +34,7 @@ class DeliveryService:
     def __init__(self, config: Mapping[str, object]) -> None:
         self.config = config
         self.policy = DeliveryPolicy(config)
+        self.settings = PluginSettings(config)
         self._onebot_names: dict[str, str] = {}
 
     @staticmethod
@@ -55,7 +57,7 @@ class DeliveryService:
         return str(message_id or fallback or "")
 
     async def react_success(self, event: AstrMessageEvent) -> None:
-        if not bool(self.config.get("enable_parse_reaction", True)):
+        if not self.settings.boolean("enable_parse_reaction", True):
             return
         if self._platform_name(event) != self.ONEBOT_PLATFORM:
             return
@@ -65,8 +67,8 @@ class DeliveryService:
             logger.info("解析成功表情回应失败: 未获取到 message_id")
             return
 
-        action = str(self.config.get("reaction_action", "set_msg_emoji_like")).strip()
-        emoji_id = str(self.config.get("reaction_emoji_id", "124")).strip()
+        action = self.settings.text("reaction_action", "set_msg_emoji_like")
+        emoji_id = self.settings.text("reaction_emoji_id", "124")
         if not action or not emoji_id:
             return
 

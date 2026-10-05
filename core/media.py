@@ -13,6 +13,7 @@ from astrbot.api import logger
 
 from .contracts import ParseResult
 from .http import http_client_proxy_options, is_trusted_https_url, request_timeout
+from .settings import PluginSettings
 
 FORBIDDEN_MEDIA_HEADERS = {"authorization", "cookie", "proxy-authorization"}
 
@@ -72,6 +73,7 @@ class ImageMaterializer:
     ) -> None:
         self.config = config
         self.allowed_host_suffixes = allowed_host_suffixes
+        self.settings = PluginSettings(config)
 
     async def materialize(
         self,
@@ -193,14 +195,14 @@ class ImageMaterializer:
         return outcomes
 
     def _download_concurrency(self) -> int:
-        value = self.config.get(
-            "image_download_concurrency", self.DEFAULT_DOWNLOAD_CONCURRENCY
+        return min(
+            self.settings.integer(
+                "image_download_concurrency",
+                self.DEFAULT_DOWNLOAD_CONCURRENCY,
+                minimum=1,
+            ),
+            self.MAX_DOWNLOAD_CONCURRENCY,
         )
-        try:
-            concurrency = int(value)
-        except (TypeError, ValueError):
-            concurrency = self.DEFAULT_DOWNLOAD_CONCURRENCY
-        return min(max(concurrency, 1), self.MAX_DOWNLOAD_CONCURRENCY)
 
     async def _download_image(
         self,
@@ -328,6 +330,7 @@ class VideoMaterializer:
     ) -> None:
         self.config = config
         self.allowed_host_suffixes = allowed_host_suffixes
+        self.settings = PluginSettings(config)
 
     async def materialize(self, result: ParseResult) -> Path:
         """下载视频、登记临时文件并返回本地路径。"""
@@ -393,7 +396,7 @@ class VideoMaterializer:
             raise httpx.InvalidURL("unsafe video URL")
 
     def _max_size_bytes(self) -> int | None:
-        max_size_mb = float(self.config.get("max_video_size_mb", 50))
+        max_size_mb = self.settings.decimal("max_video_size_mb", 50.0)
         return None if max_size_mb <= 0 else int(max_size_mb * 1024 * 1024)
 
     @staticmethod
