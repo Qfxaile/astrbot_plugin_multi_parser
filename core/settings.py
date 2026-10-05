@@ -46,7 +46,14 @@ class PluginSettings:
         return value if value in options else default
 
     def platform_enabled(self, name: str, default: bool = True) -> bool:
-        switches = self.values.get("platform_switches")
+        return self._platform_switch("platform_switches", name, default)
+
+    def platform_proxy_enabled(self, name: str, default: bool = False) -> bool:
+        """返回指定平台是否启用代理。"""
+        return self._platform_switch("proxy_switches", name, default)
+
+    def _platform_switch(self, key: str, name: str, default: bool) -> bool:
+        switches = self.values.get(key)
         if not isinstance(switches, Mapping):
             return default
         value = switches.get(name, default)

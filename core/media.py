@@ -241,7 +241,7 @@ class ImageMaterializer:
         raise httpx.InvalidURL("too many image redirects")
 
     def _new_image_path(self, image_url: str, content_type: str) -> Path:
-        configured_dir = self.config.get("image_temp_dir")
+        configured_dir = self.settings.text("image_temp_dir")
         temp_dir = (
             Path(str(configured_dir))
             if configured_dir

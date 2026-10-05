@@ -97,6 +97,13 @@ def test_request_timeout_uses_safe_default_for_invalid_value():
     assert request_timeout({"request_timeout_seconds": -2}) == 0.1
 
 
+def test_proxy_options_ignore_empty_proxy_configuration():
+    with pytest.raises(ProxyConfigurationError):
+        http_client_proxy_options(
+            {"proxy_url": "  ", "proxy_switches": {"pixiv": True}}, "pixiv"
+        )
+
+
 @pytest.mark.parametrize(
     "proxy_url",
     [
