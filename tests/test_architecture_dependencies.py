@@ -35,3 +35,25 @@ def test_core_modules_do_not_depend_on_platform_implementations():
             ):
                 violations.append(str(path.relative_to(root)))
     assert violations == []
+
+
+def test_simple_platforms_use_base_parser_http_client():
+    root = Path(__file__).parents[1]
+    simple_platforms = (
+        root / "platforms" / "github" / "parser.py",
+        root / "platforms" / "pixiv" / "parser.py",
+        root / "platforms" / "fanqie" / "parser.py",
+        root / "platforms" / "qzone" / "parser.py",
+        root / "platforms" / "qqchannel" / "parser.py",
+    )
+    violations = []
+    for path in simple_platforms:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "AsyncClient"
+            ):
+                violations.append(str(path.relative_to(root)))
+    assert violations == []
