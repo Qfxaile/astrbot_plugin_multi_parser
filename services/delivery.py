@@ -7,15 +7,15 @@ from urllib.parse import urlparse
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, MessageChain
-from astrbot.api.message_components import Image, Node, Nodes, Plain, Video
+from astrbot.api.message_components import Image, Node, Nodes, Plain
 
 from ..core.contracts import ParseResult
-from ..core.media import VideoMaterializer
 from ..core.settings import PluginSettings
 from .delivery_policy import DeliveryPolicy
 from .event_identity import EventIdentity
 from .onebot_gateway import OneBotGateway
 from .text_processing import replace_links
+from .video_delivery import VideoDeliveryService
 
 
 class DeliveryService:
@@ -37,6 +37,7 @@ class DeliveryService:
         self.config = config
         self.policy = DeliveryPolicy(config)
         self.settings = PluginSettings(config)
+        self.video_delivery = VideoDeliveryService(config)
         self._onebot_names: dict[str, str] = {}
 
     @staticmethod
@@ -93,18 +94,7 @@ class DeliveryService:
         result: ParseResult,
     ) -> None:
         """准备并发送视频，让调用方可以捕获协议端发送失败。"""
-        video_chain = result.video_chain()
-        if self._platform_name(event) == self.KOOK_PLATFORM and video_chain:
-            if result.video_download_host_suffixes:
-                video_path = await VideoMaterializer(
-                    self.config,
-                    result.video_download_host_suffixes,
-                ).materialize(result)
-            else:
-                video_path = Path(await video_chain[0].convert_to_file_path()).resolve()
-                result.temporary_files.append(video_path)
-            video_chain = [Video.fromFileSystem(video_path)]
-        await event.send(MessageChain(video_chain))
+        await self.video_delivery.send(event, result)
 
     def build_content_delivery(
         self,
