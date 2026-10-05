@@ -8,6 +8,7 @@ from astrbot.api.event import AstrMessageEvent
 from astrbot.core.utils.media_utils import MediaResolver
 
 from ..core.contracts import ParseResult
+from ..core.settings import PluginSettings
 
 DEFAULT_PROMPT = """请对下面的互联网内容做准确、简洁、易读的中文总结。
 要求：
@@ -31,13 +32,15 @@ class AISummaryService:
     def __init__(self, context, config: Mapping[str, object]):
         self.context = context
         self.config = config
+        self.settings = PluginSettings(config)
 
     def enabled(self) -> bool:
-        return bool(self.config.get("enable_ai_summary", False))
+        return self.settings.boolean("enable_ai_summary")
 
     def mode(self) -> str:
-        mode = str(self.config.get("ai_summary_mode", "text_only")).strip()
-        return mode if mode in {"text_only", "text_and_images", "all"} else "text_only"
+        return self.settings.choice(
+            "ai_summary_mode", {"text_only", "text_and_images", "all"}, "text_only"
+        )
 
     async def summarize(
         self, event: AstrMessageEvent, result: ParseResult
@@ -84,10 +87,7 @@ class AISummaryService:
         return "\n".join(line for line in [*lines] if line).strip()[: self._max_chars()]
 
     def _max_chars(self) -> int:
-        try:
-            return max(1000, int(self.config.get("ai_summary_max_input_chars", 30000)))
-        except (TypeError, ValueError):
-            return 30000
+        return self.settings.integer("ai_summary_max_input_chars", 30000, minimum=1000)
 
     async def _image_inputs(self, result: ParseResult) -> list[str]:
         refs: list[str] = []
@@ -97,10 +97,7 @@ class AISummaryService:
             ]
         else:
             refs = [*result.cover_urls, *result.image_urls]
-        try:
-            limit = max(0, int(self.config.get("ai_summary_max_images", 8)))
-        except (TypeError, ValueError):
-            limit = 8
+        limit = self.settings.integer("ai_summary_max_images", 8, minimum=0)
         images: list[str] = []
         for index, ref in enumerate(refs[:limit], 1):
             try:
@@ -120,11 +117,9 @@ class AISummaryService:
             "vision": "ai_summary_vision_provider_id",
             "subtitle": "ai_summary_subtitle_provider_id",
         }[modality]
-        provider_id = str(self.config.get(key, "")).strip()
+        provider_id = self.settings.text(key)
         if not provider_id and modality != "text":
-            provider_id = str(
-                self.config.get("ai_summary_text_provider_id", "")
-            ).strip()
+            provider_id = self.settings.text("ai_summary_text_provider_id")
         if provider_id:
             return self.context.get_provider_by_id(provider_id)
         return await self.context.get_using_provider_async(event.unified_msg_origin)
@@ -136,9 +131,7 @@ class AISummaryService:
             provider = await self._provider(event, modality)
             if provider is None or not hasattr(provider, "text_chat"):
                 return ""
-            prompt = (
-                str(self.config.get("ai_summary_prompt", "")).strip() or DEFAULT_PROMPT
-            )
+            prompt = self.settings.text("ai_summary_prompt") or DEFAULT_PROMPT
             values = {
                 "platform": result.platform,
                 "title": result.title,
@@ -158,7 +151,9 @@ class AISummaryService:
                     "\n以下是视频字幕，请仅依据字幕总结视频内容；字幕为空时不要生成总结。\n字幕：\n"
                     + values["subtitle"]
                 )
-            timeout = float(self.config.get("ai_summary_timeout_seconds", 60))
+            timeout = self.settings.decimal(
+                "ai_summary_timeout_seconds", 60.0, minimum=1.0
+            )
             response = await asyncio.wait_for(
                 provider.text_chat(prompt=prompt, image_urls=image_urls or None),
                 timeout=max(1.0, timeout),

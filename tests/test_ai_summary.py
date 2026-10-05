@@ -118,5 +118,26 @@ async def test_invalid_prompt_and_provider_failure_are_silent():
     )
     assert await service.summarize(FakeEvent(), ParseResult(platform="测试")) == []
 
+
+@pytest.mark.asyncio
+async def test_invalid_summary_configuration_uses_safe_defaults():
+    provider = FakeProvider()
+    service = AISummaryService(
+        FakeContext(provider),
+        {
+            "enable_ai_summary": "true",
+            "ai_summary_mode": "invalid",
+            "ai_summary_max_input_chars": "invalid",
+            "ai_summary_timeout_seconds": "invalid",
+        },
+    )
+
+    assert service.enabled() is True
+    assert service.mode() == "text_only"
+    assert service._max_chars() == 30000
+    assert await service.summarize(FakeEvent(), ParseResult(platform="测试")) == [
+        "总结内容"
+    ]
+
     service.context = FakeContext(None)
     assert await service.summarize(FakeEvent(), ParseResult(platform="测试")) == []
