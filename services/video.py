@@ -7,6 +7,7 @@ from astrbot.api import logger
 
 from ..core.http import http_client_proxy_options
 from ..core.media import sanitize_media_headers
+from ..core.settings import PluginSettings
 
 
 @dataclass
@@ -30,6 +31,7 @@ class VideoSizeProbe:
         platform_name: str = "",
     ) -> None:
         self.config = config
+        self.settings = PluginSettings(config)
         self.platform_name = platform_name
 
     async def probe(
@@ -37,11 +39,10 @@ class VideoSizeProbe:
         url: str,
         headers: Mapping[str, str] | None = None,
     ) -> VideoSizeInfo:
-        timeout = float(
-            self.config.get(
-                "size_check_timeout_seconds",
-                self.config.get("request_timeout_seconds", 30),
-            )
+        timeout = self.settings.decimal(
+            "size_check_timeout_seconds",
+            self.settings.decimal("request_timeout_seconds", 30.0, minimum=1.0),
+            minimum=1.0,
         )
         request_headers = {
             "User-Agent": (
@@ -101,14 +102,15 @@ class VideoSendPolicy:
 
     def __init__(self, config: Mapping[str, object]) -> None:
         self.config = config
+        self.settings = PluginSettings(config)
 
     def decide(self, size_info: VideoSizeInfo) -> tuple[bool, str]:
-        max_size_mb = float(self.config.get("max_video_size_mb", 50))
+        max_size_mb = self.settings.decimal("max_video_size_mb", 50.0)
         if max_size_mb <= 0:
             return True, "未启用大小限制"
 
         if size_info.size_mb is None:
-            if bool(self.config.get("allow_unknown_video_size", False)):
+            if self.settings.boolean("allow_unknown_video_size"):
                 return True, "视频大小未知，已按配置允许发送"
             reason = size_info.reason or "视频大小未知"
             return False, f"{reason}，未直接发送视频"

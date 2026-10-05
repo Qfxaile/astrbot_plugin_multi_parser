@@ -26,6 +26,24 @@ def test_video_size_policy_accepts_files_within_limit():
     assert reason == "视频大小 0.50 MB，未超过限制"
 
 
+def test_video_size_policy_uses_defaults_for_invalid_values():
+    should_send, reason = VideoSendPolicy(
+        {"max_video_size_mb": "invalid", "allow_unknown_video_size": "false"}
+    ).decide(VideoSizeInfo(size_bytes=51 * 1024 * 1024))
+
+    assert should_send is False
+    assert "超过限制 50.00 MB" in reason
+
+
+def test_video_size_policy_accepts_explicit_boolean_text_for_unknown_size():
+    should_send, reason = VideoSendPolicy({"allow_unknown_video_size": "true"}).decide(
+        VideoSizeInfo(reason="服务端未返回视频大小")
+    )
+
+    assert should_send is True
+    assert reason == "视频大小未知，已按配置允许发送"
+
+
 @pytest.mark.asyncio
 async def test_video_size_probe_uses_platform_proxy(monkeypatch):
     captured_options = {}
