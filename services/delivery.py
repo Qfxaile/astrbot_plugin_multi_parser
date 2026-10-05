@@ -17,6 +17,7 @@ from .event_identity import EventIdentity
 from .link_filter import LinkFilter
 from .onebot_forward import OneBotForwardSerializer
 from .onebot_gateway import OneBotGateway
+from .onebot_image_downloader import OneBotImageDownloader
 from .video_delivery import VideoDeliveryService
 from .video_fallback import VideoFallbackService
 
@@ -43,6 +44,7 @@ class DeliveryService:
         self.video_delivery = VideoDeliveryService(config)
         self.video_fallback = VideoFallbackService(config, self.send_forward_links)
         self.link_filter = LinkFilter(config)
+        self.onebot_image_downloader = OneBotImageDownloader()
         self._onebot_names: dict[str, str] = {}
 
     @staticmethod
@@ -209,6 +211,19 @@ class DeliveryService:
 
     @classmethod
     async def _download_onebot_forward_images(
+        cls,
+        event: AstrMessageEvent,
+        nodes: list[Node],
+        image_source_urls: Mapping[str, str],
+        headers: Mapping[str, str],
+    ) -> dict[str, str]:
+        """兼容入口，委托给独立图片预下载服务。"""
+        return await OneBotImageDownloader().download(
+            event, nodes, image_source_urls, headers
+        )
+
+    @classmethod
+    async def _download_onebot_forward_images_legacy(
         cls,
         event: AstrMessageEvent,
         nodes: list[Node],
