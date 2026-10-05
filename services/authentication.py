@@ -20,7 +20,7 @@ from ..core.platform_login import (
     PlatformLoginProvider,
     PlatformUser,
 )
-from ..platforms.registry import PLATFORM_REGISTRY
+from ..platforms.registry import login_platforms
 
 ProviderFactory = Callable[[], PlatformLoginProvider]
 
@@ -53,16 +53,14 @@ class AuthenticationService:
                     registration.login_provider_type,
                     self.config,
                 )
-                for registration in PLATFORM_REGISTRY
-                if registration.login_provider_type is not None
+                for registration in login_platforms()
             }
         )
         self._cookie_keys = {
             registration.login_provider_type.display_name: (
                 registration.login_provider_type.cookie_config_key
             )
-            for registration in PLATFORM_REGISTRY
-            if registration.login_provider_type is not None
+            for registration in login_platforms()
         }
         self._active_logins: dict[str, _ActiveLogin] = {}
         self._lock = asyncio.Lock()

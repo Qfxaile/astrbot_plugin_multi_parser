@@ -1,7 +1,7 @@
 from collections.abc import Mapping
 
 from ..core.parser import BaseParser
-from ..platforms.registry import PLATFORM_REGISTRY
+from ..platforms.registry import parser_platforms
 
 
 def build_parsers(config) -> dict[str, BaseParser]:
@@ -9,8 +9,7 @@ def build_parsers(config) -> dict[str, BaseParser]:
     return {
         registration.parser_type.name: registration.parser_type(config)
         for registration in sorted(
-            PLATFORM_REGISTRY,
-            key=lambda registration: registration.parser_priority,
+            parser_platforms(), key=lambda item: item.parser_priority
         )
     }
 
@@ -19,8 +18,8 @@ def enabled_parsers(config, parsers: Mapping[str, BaseParser]) -> list[BaseParse
     """按注册顺序返回当前启用的平台解析器。"""
     switches = config.get("platform_switches")
     defaults = {
-        registration.parser_type.name: registration.enabled_by_default
-        for registration in PLATFORM_REGISTRY
+        registration.key: registration.enabled_by_default
+        for registration in parser_platforms()
     }
     return [
         parser

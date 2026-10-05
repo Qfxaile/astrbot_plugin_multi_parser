@@ -1,9 +1,14 @@
 import pytest
-from astrbot_multi_parser.platforms.registry import PLATFORM_REGISTRY
+from astrbot_multi_parser.platforms.registry import (
+    PLATFORM_REGISTRY,
+    login_platforms,
+    parser_platforms,
+    validate_platform_registry,
+)
 
 
 def test_platform_registry_has_stable_parser_and_login_order():
-    assert [registration.parser_type.name for registration in PLATFORM_REGISTRY] == [
+    assert [registration.key for registration in parser_platforms()] == [
         "bilibili",
         "douyin",
         "fanqie",
@@ -20,16 +25,14 @@ def test_platform_registry_has_stable_parser_and_login_order():
     ]
     assert [
         registration.login_provider_type.display_name
-        for registration in PLATFORM_REGISTRY
-        if registration.login_provider_type is not None
+        for registration in login_platforms()
     ] == ["B站", "抖音", "小红书", "贴吧", "微博", "微信", "小黑盒", "知乎"]
 
 
 def test_platform_registry_login_providers_declare_cookie_keys():
     assert [
         registration.login_provider_type.cookie_config_key
-        for registration in PLATFORM_REGISTRY
-        if registration.login_provider_type is not None
+        for registration in login_platforms()
     ] == [
         "bilibili_cookies",
         "douyin_cookies",
@@ -56,6 +59,10 @@ def test_pixiv_registration_is_parser_only_and_disabled_by_default():
     assert registration.parser_type.name == "pixiv"
     assert registration.login_provider_type is None
     assert registration.enabled_by_default is False
+
+
+def test_platform_registry_is_self_consistent():
+    validate_platform_registry()
 
 
 @pytest.mark.parametrize("platform", ["fanqie", "qqchannel", "qzone"])
