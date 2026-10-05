@@ -16,6 +16,7 @@ from .event_identity import EventIdentity
 from .onebot_gateway import OneBotGateway
 from .text_processing import replace_links
 from .video_delivery import VideoDeliveryService
+from .video_fallback import VideoFallbackService
 
 
 class DeliveryService:
@@ -38,6 +39,7 @@ class DeliveryService:
         self.policy = DeliveryPolicy(config)
         self.settings = PluginSettings(config)
         self.video_delivery = VideoDeliveryService(config)
+        self.video_fallback = VideoFallbackService(config, self.send_forward_links)
         self._onebot_names: dict[str, str] = {}
 
     @staticmethod
@@ -496,29 +498,7 @@ class DeliveryService:
         reason: str,
     ) -> None:
         """按配置回退未直接送达的视频，群文件失败时降级为直链。"""
-        action = self.video_over_limit_action()
-        if action == "notice":
-            await event.send(MessageChain([Plain(reason or "视频未直接发送。")]))
-            return
-
-        if action == "group_file" and self._onebot_group_id(event):
-            try:
-                group_id = self._onebot_group_id(event)
-                await self.call_onebot(
-                    event,
-                    "upload_group_file",
-                    group_id=group_id,
-                    file=result.video_url,
-                    name=self._video_file_name(result),
-                )
-                return
-            except Exception as exc:
-                # 协议端远程下载、文件限制和平台配额都可能失败，直链是最可靠的回退。
-                logger.warning(
-                    f"视频群文件发送失败，已降级为直链: {type(exc).__name__}"
-                )
-
-        await self.send_forward_links(event, result, reason)
+        await self.video_fallback.send(event, result, reason)
 
     def video_over_limit_action(self) -> str:
         """读取视频回退处理方式，无效值按发送直链处理。"""
