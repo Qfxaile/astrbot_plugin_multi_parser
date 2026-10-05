@@ -56,12 +56,7 @@ class QzoneParser(QzonePageContent, BaseParser):
             return ParseResult(platform=self.name, error="未找到QQ空间说说链接。")
         res_uin = self._uin_from_share_url(url)
         try:
-            async with httpx.AsyncClient(
-                timeout=self.request_timeout,
-                follow_redirects=False,
-                headers=self.HEADERS,
-                **self.http_client_options,
-            ) as client:
+            async with self.http_client(headers=self.HEADERS) as client:
                 html_text = await self._request_page(client, url)
                 if self._is_universal_url(url):
                     result = self._parse_universal_page(html_text)

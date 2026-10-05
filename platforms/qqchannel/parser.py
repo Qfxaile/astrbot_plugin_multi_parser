@@ -82,12 +82,7 @@ class QQChannelParser(BaseParser):
                 headers=self.HEADERS,
             )
 
-        async with httpx.AsyncClient(
-            timeout=self.request_timeout,
-            follow_redirects=False,
-            headers=self.HEADERS,
-            **self.http_client_options,
-        ) as client:
+        async with self.http_client(headers=self.HEADERS) as client:
             try:
                 feed = await self._request_feed(client, share_url, feed_id)
                 result = build_result(feed, fallback_title=title)
