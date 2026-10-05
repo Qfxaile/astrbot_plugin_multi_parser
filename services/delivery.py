@@ -14,6 +14,7 @@ from ..core.media import VideoMaterializer
 from ..core.settings import PluginSettings
 from .delivery_policy import DeliveryPolicy
 from .event_identity import EventIdentity
+from .onebot_gateway import OneBotGateway
 from .text_processing import replace_links
 
 
@@ -40,12 +41,7 @@ class DeliveryService:
 
     @staticmethod
     async def call_onebot(event: AstrMessageEvent, action: str, **params):
-        bot = getattr(event, "bot", None)
-        if bot and hasattr(bot, "call_action"):
-            return await bot.call_action(action, **params)
-        if bot and hasattr(bot, "call_api"):
-            return await bot.call_api(action, **params)
-        raise RuntimeError("当前事件没有可用的 OneBot 客户端")
+        return await OneBotGateway.call(event, action, **params)
 
     @staticmethod
     def raw_message(event: AstrMessageEvent):
