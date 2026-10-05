@@ -9,6 +9,7 @@ from ..core.settings import PluginSettings
 from .content_assembly import ContentAssembler
 from .delivery_policy import DeliveryPolicy
 from .event_identity import EventIdentity
+from .forward_link_delivery import ForwardLinkDeliveryService
 from .link_filter import LinkFilter
 from .onebot_forward import OneBotForwardSerializer
 from .onebot_forward_sender import OneBotForwardSender
@@ -41,6 +42,12 @@ class DeliveryService:
         self.video_delivery = VideoDeliveryService(config)
         self.video_fallback = VideoFallbackService(config, self.send_forward_links)
         self.link_filter = LinkFilter(config)
+        self.forward_link_delivery = ForwardLinkDeliveryService(
+            lambda event: self.resolve_forward_node_identity(
+                event, prefer_raw_nickname=True
+            ),
+            self._supports_forward_nodes,
+        )
         self._onebot_names: dict[str, str] = {}
 
     @staticmethod
@@ -281,61 +288,7 @@ class DeliveryService:
         self, event: AstrMessageEvent, result: ParseResult, reason: str
     ) -> None:
         """按适配器能力发送视频链接，非转发平台降级为普通文本。"""
-        sender_name, sender_id = await self.resolve_forward_node_identity(
-            event,
-            prefer_raw_nickname=True,
-        )
-        summary_lines = [
-            f"{result.platform} 解析链接",
-            f"标题: {result.title or '未命名内容'}",
-        ]
-        if result.author:
-            summary_lines.append(f"作者: {result.author}")
-        if reason:
-            summary_lines.append(f"说明: {reason}")
-
-        summary_text = "\n".join(summary_lines)
-        video_text = f"视频直链:\n{result.video_url}"
-        platform_name = self._platform_name(event)
-        if platform_name != self.ONEBOT_PLATFORM and self._supports_forward_nodes(
-            event
-        ):
-            message_nodes = [
-                Node(content=[Plain(text)], name=sender_name, uin=sender_id)
-                for text in (summary_text, video_text)
-            ]
-            await event.send(MessageChain([Nodes(message_nodes)]))
-            return
-
-        if platform_name != self.ONEBOT_PLATFORM:
-            text = "\n".join([*summary_lines, f"视频链接: {result.video_url}"])
-            await event.send(MessageChain([Plain(text)]))
-            return
-
-        # OneBot 原生接口允许发送文本节点，并能保留现有的群聊/私聊路由行为。
-        nodes = [
-            self._raw_forward_node(sender_name, sender_id, summary_text),
-            self._raw_forward_node(sender_name, sender_id, video_text),
-        ]
-        raw = self.raw_message(event)
-        raw = raw if isinstance(raw, dict) else {}
-        group_id = raw.get("group_id")
-        if group_id:
-            await self.call_onebot(
-                event,
-                "send_group_forward_msg",
-                group_id=int(group_id),
-                messages=nodes,
-            )
-            return
-
-        user_id = raw.get("user_id") or sender_id
-        await self.call_onebot(
-            event,
-            "send_private_forward_msg",
-            user_id=int(user_id),
-            messages=nodes,
-        )
+        await self.forward_link_delivery.send(event, result, reason)
 
     async def send_video_over_limit(
         self,
