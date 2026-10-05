@@ -1,4 +1,5 @@
 import pytest
+from astrbot_multi_parser.core.parser import BaseParser
 from astrbot_multi_parser.platforms.registry import (
     PLATFORM_REGISTRY,
     login_platforms,
@@ -63,6 +64,13 @@ def test_pixiv_registration_is_parser_only_and_disabled_by_default():
 
 def test_platform_registry_is_self_consistent():
     validate_platform_registry()
+
+
+def test_registered_parsers_implement_parser_contract():
+    for registration in PLATFORM_REGISTRY:
+        parser_type = registration.parser_type
+        assert parser_type.match is not BaseParser.match
+        assert parser_type.parse is not BaseParser.parse
 
 
 @pytest.mark.parametrize("platform", ["fanqie", "qqchannel", "qzone"])
