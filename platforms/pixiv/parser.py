@@ -52,12 +52,7 @@ class PixivParser(BaseParser):
 
         artwork_url = f"https://www.pixiv.net/artworks/{artwork_id}"
         try:
-            async with httpx.AsyncClient(
-                timeout=self.request_timeout,
-                follow_redirects=False,
-                headers=self.HEADERS,
-                **self.http_client_options,
-            ) as client:
+            async with self.http_client(headers=self.HEADERS) as client:
                 metadata = await self._request_body(
                     client, f"{self.AJAX_BASE_URL}/{artwork_id}"
                 )

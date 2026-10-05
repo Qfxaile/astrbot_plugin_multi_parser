@@ -68,12 +68,7 @@ class GitHubParser(BaseParser):
         owner, repo = repository
         repository_url = f"https://github.com/{owner}/{repo}"
         try:
-            async with httpx.AsyncClient(
-                timeout=self.request_timeout,
-                follow_redirects=False,
-                headers=self.HEADERS,
-                **self.http_client_options,
-            ) as client:
+            async with self.http_client(headers=self.HEADERS) as client:
                 card_url = await self._fetch_opengraph_url(client, repository_url)
                 result = ParseResult(
                     platform=self.name,

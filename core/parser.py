@@ -1,6 +1,7 @@
 """定义平台解析器契约及跨平台共用流程。"""
 
 from collections.abc import Mapping
+from contextlib import asynccontextmanager
 
 import httpx
 
@@ -42,6 +43,22 @@ class BaseParser:
     def http_client_options(self) -> dict[str, object]:
         """返回当前平台创建 HTTP 客户端时使用的代理参数。"""
         return http_client_proxy_options(self.config, self.name)
+
+    @asynccontextmanager
+    async def http_client(
+        self,
+        *,
+        headers: Mapping[str, str] | None = None,
+        follow_redirects: bool = False,
+    ):
+        """创建遵循统一超时、代理和重定向策略的异步客户端。"""
+        async with httpx.AsyncClient(
+            timeout=self.request_timeout,
+            follow_redirects=follow_redirects,
+            headers=headers,
+            **self.http_client_options,
+        ) as client:
+            yield client
 
     async def match(self, context: ParseContext) -> bool:
         """判断当前消息是否属于本平台。"""
