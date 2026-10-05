@@ -13,7 +13,10 @@ from astrbot_multi_parser.platforms.xiaoheihe.game import (
     format_yuan_from_coin,
     parse_game_state,
 )
-from astrbot_multi_parser.platforms.xiaoheihe.post import parse_post_payload
+from astrbot_multi_parser.platforms.xiaoheihe.post import (
+    _extract_original_image_url,
+    parse_post_payload,
+)
 from astrbot_multi_parser.platforms.xiaoheihe.signing import RequestSigner
 
 
@@ -175,6 +178,21 @@ def test_post_payload_rejects_missing_link():
         parse_post_payload({"status": "ok"})
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        "https://imgheybox.max-c.com/bbs/original.jpg",
+        '["https://imgheybox.max-c.com/bbs/original.jpg"]',
+        {"url": "https://imgheybox1.max-c.com/bbs/original.jpg"},
+    ],
+)
+def test_extracts_original_image_url_from_api_shapes(value):
+    assert (
+        _extract_original_image_url(value)
+        == "https://imgheybox.max-c.com/bbs/original.jpg"
+    )
+
+
 def install_mock_client(monkeypatch, handler):
     real_async_client = httpx.AsyncClient
 
@@ -195,6 +213,21 @@ async def test_parse_post_requests_signed_tree_and_materializes_images(
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         if request.url.host == "api.xiaoheihe.cn":
+            if request.url.path == "/bbs/app/api/original/image":
+                assert request.url.params["url"] == (
+                    "https://imgheybox.max-c.com/bbs/a.jpg"
+                )
+                assert request.url.params["hkey"]
+                return httpx.Response(
+                    200,
+                    json={
+                        "status": "ok",
+                        "result": {
+                            "imgs": "https://imgheybox.max-c.com/bbs/a-original.jpg"
+                        },
+                    },
+                    request=request,
+                )
             assert request.url.path == "/bbs/app/link/tree"
             assert request.url.params["link_id"] == "4e0f72248cb0"
             assert request.url.params["hkey"]
@@ -233,6 +266,7 @@ async def test_parse_post_requests_signed_tree_and_materializes_images(
                 request=request,
             )
         assert request.url.host == "imgheybox.max-c.com"
+        assert request.url.path == "/bbs/a-original.jpg"
         assert "Cookie" not in request.headers
         return httpx.Response(200, content=image_bytes, request=request)
 
@@ -257,7 +291,7 @@ async def test_parse_post_requests_signed_tree_and_materializes_images(
     assert result.title == "接口帖子"
     assert result.author == "接口作者"
     assert_temporary_image(result, result.ordered_contents[0].value, image_bytes)
-    assert len(requests) == 2
+    assert len(requests) == 3
 
 
 @pytest.mark.asyncio

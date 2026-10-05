@@ -171,4 +171,84 @@ class XiaoheihePostContent:
             if not isinstance(result_root, dict):
                 raise ValueError("小黑盒 link/tree 结果为空")
             result = parse_post_payload(result_root)
+            await self._replace_post_images_with_originals(result, client)
             return await self.materialize_images(result, client, referer)
+
+    async def _replace_post_images_with_originals(
+        self,
+        result: ParseResult,
+        client: httpx.AsyncClient,
+    ) -> None:
+        """将正文缩略图换成原图，接口失败时保留可用的缩略图。"""
+        cache: dict[str, str] = {}
+        for item in result.ordered_contents:
+            if item.kind != "image" or not item.value:
+                continue
+            thumbnail_url = item.value
+            if thumbnail_url in cache:
+                item.value = cache[thumbnail_url]
+                continue
+            original_url = await self._request_original_image_url(
+                thumbnail_url,
+                client,
+            )
+            cache[thumbnail_url] = original_url or thumbnail_url
+            item.value = cache[thumbnail_url]
+
+    async def _request_original_image_url(
+        self,
+        thumbnail_url: str,
+        client: httpx.AsyncClient,
+    ) -> str:
+        """请求小黑盒原图接口并提取其返回的图片地址。"""
+        params = {
+            "app": "heybox",
+            "os_type": "web",
+            "x_app": "heybox_website",
+            "x_client_type": "web",
+            "x_os_type": "Windows",
+            "x_client_version": "",
+            "client_type": "web",
+            "web_version": "3.0",
+            "version": "999.0.4",
+            "url": thumbnail_url,
+            **self._sign_path("/bbs/app/api/original/image"),
+        }
+        try:
+            response = await client.get(
+                "https://api.xiaoheihe.cn/bbs/app/api/original/image",
+                params=params,
+                headers=self._request_cookie_headers(),
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except (httpx.HTTPError, ValueError, json.JSONDecodeError):
+            return ""
+        if not isinstance(payload, dict) or payload.get("status") != "ok":
+            return ""
+        result = payload.get("result")
+        if not isinstance(result, dict):
+            return ""
+        return _extract_original_image_url(result.get("imgs"))
+
+
+def _extract_original_image_url(value: object) -> str:
+    """兼容原图接口返回单个 URL、JSON 数组或 URL 字段对象。"""
+    if isinstance(value, str):
+        text = value.strip()
+        if text.startswith(("[", "{")):
+            try:
+                return _extract_original_image_url(json.loads(text))
+            except json.JSONDecodeError:
+                return ""
+        return normalize_image_url(text)
+    if isinstance(value, list):
+        for item in value:
+            if image_url := _extract_original_image_url(item):
+                return image_url
+        return ""
+    if isinstance(value, dict):
+        for key in ("url", "original", "src", "image"):
+            if image_url := _extract_original_image_url(value.get(key)):
+                return image_url
+    return ""
