@@ -28,6 +28,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 视频直链摘要与路由：`services/forward_link_delivery.py` 的 `ForwardLinkDeliveryService`
 - 配置、登录、会话历史、消息投递、视频策略、OneBot 适配和 AI 总结编排：`services/`
 - 自动解析事件编排：`services/parsing.py` 的 `ParseCoordinator`
+- 插件级服务装配：`services/container.py` 的 `ServiceContainer`
 - 平台清单以及解析器、登录适配器对应关系：`platforms/registry.py`
 - 平台入口和协议实现：`platforms/<platform>/parser.py`、支持登录平台的 `platforms/<platform>/login.py` 及同目录内容模块
 - 配置声明：`_conf_schema.json`
