@@ -277,13 +277,13 @@ Pixiv 仅解析匿名可访问的公开插画作品，不需要 Cookie；动图�
 astrbot_plugin_multi_parser/
 ├── main.py          # 插件装配与事件调度
 ├── core/            # 领域契约、HTTP、媒体与渲染
-├── services/        # 配置、登录、消息适配与投递策略
+├── services/        # 配置、登录、解析编排、消息适配与投递策略
 ├── platforms/       # 平台适配器
 ├── tests/           # pytest 单元测试
 └── _conf_schema.json
 ```
 
-解析器统一继承 `core/parser.py` 中的 `BaseParser`，实现 `match` 和 `parse` 两个抽象接口，返回 `core/contracts.py` 中的 `ParseResult`。平台能力元数据使用 `core/platform.py` 的 `PlatformSpec`，自动解析编排位于 `services/parsing.py`。新增平台时应复用 `core/` 和 `services/` 的公共能力，并同步注册、配置和测试。京东、淘宝、拼多多源码仍保留用于后续维护，但当前不注册、不接入自动解析。
+解析器统一继承 `core/parser.py` 中的 `BaseParser`，平台注册实现必须覆写 `match` 和 `parse` 两个方法，返回 `core/contracts.py` 中的 `ParseResult`。`BaseParser` 本身保留公共 HTTP、Cookie 和媒体能力，供基础能力复用。平台能力元数据使用 `core/platform.py` 的 `PlatformSpec`，自动解析编排位于 `services/parsing.py`。新增平台时应复用 `core/` 和 `services/` 的公共能力，并同步注册、配置和测试。京东、淘宝、拼多多源码仍保留用于后续维护，但当前不注册、不接入自动解析。
 
 - 普通缺陷、功能建议和新平台适配请使用 [GitHub Issues](https://github.com/Qfxaile/astrbot_plugin_multi_parser/issues)。
 - 安全漏洞或凭据泄漏风险请通过 [GitHub Security Advisories](https://github.com/Qfxaile/astrbot_plugin_multi_parser/security/advisories/new) 私下报告。

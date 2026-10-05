@@ -56,14 +56,15 @@ uv run ruff check .
 | 平台扩展接口与能力描述 | `core/platform.py` |
 | 平台清单及解析器、登录适配器对应关系 | `platforms/registry.py` |
 | 配置读取和解析器创建 | `services/configuration.py` |
-| 登录编排、取消和凭据持久化 | `services/authentication.py` |
-| 消息上下文、自动解析编排、文本处理和投递 | `services/message_context.py`、`services/parsing.py`、`services/text_processing.py`、`services/delivery.py` |
+| 登录编排、取消和凭据持久化 | `services/authentication.py`、`services/cookie_store.py` |
+| 消息上下文、分享卡片、自动解析编排、文本处理和投递 | `services/message_context.py`、`services/share_card.py`、`services/parsing.py`、`services/text_processing.py`、`services/delivery.py` |
+| 投递策略、内容组装、链接过滤、事件身份和 OneBot 适配 | `services/delivery_policy.py`、`services/content_assembly.py`、`services/link_filter.py`、`services/event_identity.py`、`services/onebot_*.py` |
 | LLM 会话历史写入与媒体序列化 | `services/conversation_history.py` |
-| AI 总结、Provider 选择和多模态输入 | `services/ai_summary.py` |
-| 视频大小探测与发送策略 | `services/video.py` |
+| AI 总结、Provider 选择和多模态输入 | `services/ai_summary.py`、`services/summary_provider.py` |
+| 视频大小探测、发送和回退策略 | `services/video.py`、`services/video_delivery.py`、`services/video_fallback.py` |
 | 平台请求、签名、登录和载荷转换 | `platforms/<platform>/` |
 
-跨平台规则放入 `core/` 或 `services/`；平台协议细节留在对应平台目录。Controller/命令入口只做权限与参数检查、调用服务并返回结果。自动解析由 `services/parsing.py` 的 `ParseCoordinator` 编排；平台实现必须实现 `BaseParser` 的抽象 `match` 和 `parse` 接口，并通过 `PlatformSpec` 注册。京东、淘宝、拼多多源码和测试保留，但不注册、不出现在配置开关和自动解析主流程中。
+跨平台规则放入 `core/` 或 `services/`；平台协议细节留在对应平台目录。Controller/命令入口只做权限与参数检查、调用服务并返回结果。自动解析由 `services/parsing.py` 的 `ParseCoordinator` 编排；平台注册的解析器必须覆写 `BaseParser` 的 `match` 和 `parse` 方法，并通过 `PlatformSpec` 注册。`BaseParser` 本身保留可实例化的公共 HTTP、Cookie 和媒体能力，供基础能力复用。京东、淘宝、拼多多源码和测试保留，但不注册、不出现在配置开关和自动解析主流程中。
 
 每个平台只保留一个顶层解析入口，当前平台清单以 `platforms/registry.py` 中的 `PLATFORM_REGISTRY` 为准。平台实现使用 `platforms/<platform>/` 目录，`parser.py` 负责顶层入口和路由，内容逻辑按职责拆入同目录模块；支持登录的平台另有 `login.py`。各平台从自己的 `__init__.py` 导出解析器或登录提供者。新增平台或调整导出时，同步检查：
 
