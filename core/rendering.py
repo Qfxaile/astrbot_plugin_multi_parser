@@ -88,6 +88,6 @@ def render_audio_chain(result: ParseResult) -> list:
 
 
 def _image_component(result: ParseResult, value: str) -> Image:
-    if any(value == str(path) for path in result.temporary_files):
+    if any(value == str(path) for path in result.media_metadata.temporary_files):
         return Image.fromFileSystem(value)
     return Image(file=value)
