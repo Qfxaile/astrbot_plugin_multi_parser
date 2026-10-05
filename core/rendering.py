@@ -3,6 +3,33 @@ from astrbot.api.message_components import Image, Plain, Record, Video
 from .contracts import ParseResult
 
 
+class ParseResultRenderer:
+    """将统一解析结果渲染为 AstrBot 消息组件。"""
+
+    @staticmethod
+    def info_chain(
+        result: ParseResult,
+        *,
+        include_video_url: bool = False,
+        include_summary: bool = True,
+        include_content: bool = True,
+    ) -> list:
+        return render_info_chain(
+            result,
+            include_video_url=include_video_url,
+            include_summary=include_summary,
+            include_content=include_content,
+        )
+
+    @staticmethod
+    def video_chain(result: ParseResult) -> list:
+        return render_video_chain(result)
+
+    @staticmethod
+    def audio_chain(result: ParseResult) -> list:
+        return render_audio_chain(result)
+
+
 def render_info_chain(
     result: ParseResult,
     *,

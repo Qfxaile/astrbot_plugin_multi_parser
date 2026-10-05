@@ -9,6 +9,7 @@ __all__ = [
     "ParseResult",
     "PlatformSpec",
     "PluginSettings",
+    "ParseResultRenderer",
 ]
 
 _EXPORT_MODULES = {
@@ -18,6 +19,7 @@ _EXPORT_MODULES = {
     "ParseResult": ".contracts",
     "PlatformSpec": ".platform",
     "PluginSettings": ".settings",
+    "ParseResultRenderer": ".rendering",
 }
 
 

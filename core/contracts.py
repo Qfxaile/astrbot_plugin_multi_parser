@@ -89,9 +89,9 @@ class ParseResult:
         include_content: bool = True,
     ) -> list:
         """构建 AstrBot 消息组件，保留旧版公开调用方式。"""
-        from .rendering import render_info_chain
+        from .rendering import ParseResultRenderer
 
-        return render_info_chain(
+        return ParseResultRenderer.info_chain(
             self,
             include_video_url=include_video_url,
             include_summary=include_summary,
@@ -106,12 +106,12 @@ class ParseResult:
 
     def video_chain(self) -> list:
         """构建视频消息组件，保留旧版公开调用方式。"""
-        from .rendering import render_video_chain
+        from .rendering import ParseResultRenderer
 
-        return render_video_chain(self)
+        return ParseResultRenderer.video_chain(self)
 
     def audio_chain(self) -> list:
         """构建音频消息组件。"""
-        from .rendering import render_audio_chain
+        from .rendering import ParseResultRenderer
 
-        return render_audio_chain(self)
+        return ParseResultRenderer.audio_chain(self)
