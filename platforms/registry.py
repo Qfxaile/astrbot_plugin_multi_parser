@@ -1,5 +1,7 @@
 """集中声明平台解析器与登录适配器的对应关系。"""
 
+from collections.abc import Mapping
+
 from ..core.platform import PlatformSpec
 from .bilibili import BilibiliLoginProvider, BilibiliParser
 from .douyin import DouyinLoginProvider, DouyinParser
@@ -62,6 +64,35 @@ def validate_platform_registry() -> None:
     cookie_keys = [item.cookie_config_key for item in login_platforms()]
     if any(not key for key in cookie_keys) or len(cookie_keys) != len(set(cookie_keys)):
         raise ValueError("平台注册表包含无效或重复的 Cookie 配置键")
+
+
+def validate_platform_configuration(schema: Mapping[str, object]) -> None:
+    """校验配置 Schema 的平台开关和登录 Cookie 键与注册表一致。"""
+    switches = schema.get("platform_switches")
+    switch_items = switches.get("items") if isinstance(switches, Mapping) else None
+    registered_keys = {item.key for item in parser_platforms()}
+    configured_keys = set(switch_items) if isinstance(switch_items, Mapping) else set()
+    if configured_keys != registered_keys:
+        raise ValueError(
+            "平台开关配置与平台注册表不一致: "
+            f"缺少={sorted(registered_keys - configured_keys)}, "
+            f"多余={sorted(configured_keys - registered_keys)}"
+        )
+
+    cookies = schema.get("cookies")
+    cookie_items = cookies.get("items") if isinstance(cookies, Mapping) else None
+    configured_cookies = (
+        set(cookie_items) if isinstance(cookie_items, Mapping) else set()
+    )
+    registered_cookies = {
+        item.cookie_config_key for item in login_platforms() if item.cookie_config_key
+    }
+    if configured_cookies != registered_cookies:
+        raise ValueError(
+            "平台 Cookie 配置与平台注册表不一致: "
+            f"缺少={sorted(registered_cookies - configured_cookies)}, "
+            f"多余={sorted(configured_cookies - registered_cookies)}"
+        )
 
 
 validate_platform_registry()

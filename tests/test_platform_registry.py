@@ -1,9 +1,13 @@
+import json
+from pathlib import Path
+
 import pytest
 from astrbot_multi_parser.core.parser import BaseParser
 from astrbot_multi_parser.platforms.registry import (
     PLATFORM_REGISTRY,
     login_platforms,
     parser_platforms,
+    validate_platform_configuration,
     validate_platform_registry,
 )
 
@@ -64,6 +68,13 @@ def test_pixiv_registration_is_parser_only_and_disabled_by_default():
 
 def test_platform_registry_is_self_consistent():
     validate_platform_registry()
+
+
+def test_platform_registry_matches_configuration_schema():
+    schema = json.loads(
+        (Path(__file__).parents[1] / "_conf_schema.json").read_text(encoding="utf-8")
+    )
+    validate_platform_configuration(schema)
 
 
 def test_registered_parsers_implement_parser_contract():
