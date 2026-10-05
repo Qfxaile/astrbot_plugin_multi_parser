@@ -74,6 +74,11 @@ uv run ruff check .
 - `_conf_schema.json`
 - README 和对应测试
 
+平台注册表提供 `validate_platform_registry()` 和
+`validate_platform_configuration()` 校验入口；调整平台时必须确保注册表、配置 Schema
+和对应测试同时通过。核心与服务公共类型优先从包入口惰性导出，新增公共扩展点时同步
+检查 `core/__init__.py`、`services/__init__.py` 和包边界测试。
+
 `services/configuration.py` 和 `services/authentication.py` 从注册表装配解析器与登录适配器，只有装配语义变化时才修改。
 
 ## 登录与安全边界
