@@ -16,6 +16,7 @@ from .delivery_policy import DeliveryPolicy
 from .event_identity import EventIdentity
 from .link_filter import LinkFilter
 from .onebot_forward import OneBotForwardSerializer
+from .onebot_forward_sender import OneBotForwardSender
 from .onebot_gateway import OneBotGateway
 from .onebot_image_downloader import OneBotImageDownloader
 from .video_delivery import VideoDeliveryService
@@ -313,28 +314,7 @@ class DeliveryService:
         self, event: AstrMessageEvent, messages: list[dict]
     ) -> None:
         """将已序列化的 URL 节点直接交给 OneBot，避免 AstrBot 转为 Base64。"""
-        raw = self.raw_message(event)
-        raw = raw if isinstance(raw, dict) else {}
-        routing = {"messages": messages}
-        if self_id := raw.get("self_id"):
-            routing["self_id"] = self_id
-
-        if group_id := raw.get("group_id"):
-            await self.call_onebot(
-                event,
-                "send_group_forward_msg",
-                group_id=int(group_id),
-                **routing,
-            )
-            return
-
-        user_id = raw.get("user_id") or event.get_sender_id()
-        await self.call_onebot(
-            event,
-            "send_private_forward_msg",
-            user_id=int(user_id),
-            **routing,
-        )
+        await OneBotForwardSender.send(event, messages)
 
     @staticmethod
     def is_forward_delivery(results: list) -> bool:
