@@ -11,6 +11,7 @@ from astrbot.api.message_components import Image, Node, Nodes, Plain
 
 from ..core.contracts import ParseResult
 from ..core.settings import PluginSettings
+from .content_assembly import ContentAssembler
 from .delivery_policy import DeliveryPolicy
 from .event_identity import EventIdentity
 from .link_filter import LinkFilter
@@ -142,16 +143,7 @@ class DeliveryService:
     @classmethod
     def _balanced_forward_batches(cls, nodes: list[Node]) -> list[list[Node]]:
         """均衡拆分超长转发，避免首批贴近上限而尾批过小。"""
-        if not nodes:
-            return []
-        batch_count = (
-            len(nodes) + cls.FORWARD_NODE_LIMIT - 1
-        ) // cls.FORWARD_NODE_LIMIT
-        batch_size = (len(nodes) + batch_count - 1) // batch_count
-        return [
-            nodes[index : index + batch_size]
-            for index in range(0, len(nodes), batch_size)
-        ]
+        return ContentAssembler.balanced_forward_batches(nodes)
 
     async def send_forward_results(
         self,
@@ -372,28 +364,11 @@ class DeliveryService:
     @classmethod
     def _merge_adjacent_plain_components(cls, components: list) -> list:
         """合并相邻文本并保留媒体边界与原始顺序。"""
-        merged: list = []
-        for component in components:
-            if (
-                isinstance(component, Plain)
-                and merged
-                and isinstance(merged[-1], Plain)
-            ):
-                previous = merged[-1]
-                merged[-1] = Plain(cls._join_plain_text(previous.text, component.text))
-                continue
-            merged.append(component)
-        return merged
+        return ContentAssembler.merge_adjacent_plain(components)
 
     @staticmethod
     def _join_plain_text(previous: str, current: str) -> str:
-        previous = previous.rstrip("\r\n")
-        current = current.lstrip("\r\n")
-        if not previous:
-            return current
-        if not current:
-            return previous
-        return f"{previous}\n{current}"
+        return ContentAssembler.join_plain_text(previous, current)
 
     def _should_forward_content(
         self,
