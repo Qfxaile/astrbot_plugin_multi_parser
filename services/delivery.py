@@ -13,8 +13,8 @@ from ..core.contracts import ParseResult
 from ..core.settings import PluginSettings
 from .delivery_policy import DeliveryPolicy
 from .event_identity import EventIdentity
+from .link_filter import LinkFilter
 from .onebot_gateway import OneBotGateway
-from .text_processing import replace_links
 from .video_delivery import VideoDeliveryService
 from .video_fallback import VideoFallbackService
 
@@ -40,6 +40,7 @@ class DeliveryService:
         self.settings = PluginSettings(config)
         self.video_delivery = VideoDeliveryService(config)
         self.video_fallback = VideoFallbackService(config, self.send_forward_links)
+        self.link_filter = LinkFilter(config)
         self._onebot_names: dict[str, str] = {}
 
     @staticmethod
@@ -527,15 +528,7 @@ class DeliveryService:
 
     def _filter_output_links(self, components: list) -> list:
         """仅过滤插件生成的可见文本，不改写媒体组件和主动发送的直链。"""
-        if not self.policy.filter_links_enabled():
-            return components
-        replacement = self.policy.filtered_link_text(self.DEFAULT_FILTERED_LINK_TEXT)
-        return [
-            Plain(replace_links(component.text, replacement))
-            if isinstance(component, Plain)
-            else component
-            for component in components
-        ]
+        return self.link_filter.apply(components)
 
     def forward_node_identity(
         self,
