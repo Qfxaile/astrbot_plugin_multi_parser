@@ -39,7 +39,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 平台解析器和业务服务不直接拼装 AstrBot 消息组件；结果渲染统一通过
 `core/rendering.py` 的 `ParseResultRenderer` 完成。
 
-媒体投递和视频处理优先使用 `ParseResult.media_metadata`，不要重复读取媒体请求字段。
+媒体投递、视频处理和渲染适配优先使用 `ParseResult.media_metadata`，不要重复读取媒体请求字段；`core/media.py` 负责写入临时文件生命周期和来源映射。
 修改媒体元数据访问时运行 `tests/test_media_metadata_boundaries.py`，确保服务层没有绕过统一视图。
 
 复用 `BaseParser`、`PlatformSpec`、`PluginSettings`、统一契约、安全 HTTP、平台代理、媒体和投递服务。新增解析器必须覆写 `BaseParser` 的 `match` 与 `parse`，并只通过平台注册表接入；`BaseParser` 本身提供可复用的 HTTP、Cookie 和媒体基础能力。配置值的布尔、数值、枚举和平台开关读取统一使用 `PluginSettings`，不要在服务或基础设施模块重复转换。AI 总结、会话历史等后处理优先使用 `ParseResult.content_lines` 和 `ParseResult.image_references`，不要重复遍历平台字段。新增请求客户端时接入 `core/http.py` 的平台代理参数，确保解析、登录和插件侧媒体请求遵循同一平台开关。保持内容顺序，区分鉴权失败、网络失败、内容不存在和部分媒体失败。新增平台时更新平台包导出、`platforms/registry.py`、`platforms/__init__.py`、`_conf_schema.json`、README、项目事实文档和测试，并运行注册表的 `validate_platform_registry()`、`validate_platform_configuration()` 校验；按用户可见程度更新 CHANGELOG。核心与服务公共扩展点优先通过 `core/__init__.py`、`services/__init__.py` 惰性导出，并同步包边界测试；`services/configuration.py` 与 `services/authentication.py` 从注册表装配，只有装配语义变化时才修改。
