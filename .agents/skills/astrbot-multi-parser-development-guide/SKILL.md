@@ -24,6 +24,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 平台扩展接口与能力元数据：`core/platform.py`
 - 配置类型读取：`core/settings.py` 的 `PluginSettings`
 - 登录文案格式化：`services/login_messages.py` 的 `LoginMessageFormatter`
+- 活动登录会话管理：`services/login_sessions.py` 的 `LoginSessionRegistry`
 - 配置、登录、会话历史、消息投递、视频策略、OneBot 适配和 AI 总结编排：`services/`
 - 自动解析事件编排：`services/parsing.py` 的 `ParseCoordinator`
 - 平台清单以及解析器、登录适配器对应关系：`platforms/registry.py`
@@ -52,6 +53,8 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 ### 修改平台登录
 
 登录流程编排与用户可见文案分离；状态、错误、过期和用户信息文案统一复用 `LoginMessageFormatter`。
+
+同一平台登录互斥、按私聊取消、活动会话快照和插件卸载清理统一复用 `LoginSessionRegistry`。
 
 复用 `core/platform_login.py` 的契约和 HTTP 基类，以及 `services/authentication.py` 的编排。保留管理员权限边界，以 `main.py` 和测试确认每条命令是否限制私聊。限制二维码与重定向域名，只持久化最小 Cookie；成功、状态和错误输出不得泄漏凭据。遇到风控或设备验证时终止，不尝试绕过。
 

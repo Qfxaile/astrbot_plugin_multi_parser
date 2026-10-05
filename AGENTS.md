@@ -57,7 +57,7 @@ uv run ruff check .
 | 平台扩展接口与能力描述 | `core/platform.py` |
 | 平台清单及解析器、登录适配器对应关系 | `platforms/registry.py` |
 | 配置读取和解析器创建 | `services/configuration.py` |
-| 登录编排、取消、凭据持久化和文案 | `services/authentication.py`、`services/cookie_store.py`、`services/login_messages.py` |
+| 登录编排、会话互斥与取消、凭据持久化和文案 | `services/authentication.py`、`services/login_sessions.py`、`services/cookie_store.py`、`services/login_messages.py` |
 | 消息上下文、分享卡片、自动解析编排、文本处理和投递 | `services/message_context.py`、`services/share_card.py`、`services/parsing.py`、`services/text_processing.py`、`services/delivery.py` |
 | 投递策略、内容组装、链接过滤、事件身份和 OneBot 适配 | `services/delivery_policy.py`、`services/content_assembly.py`、`services/link_filter.py`、`services/event_identity.py`、`services/onebot_*.py` |
 | LLM 会话历史写入与媒体序列化 | `services/conversation_history.py` |
