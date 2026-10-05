@@ -21,6 +21,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 解析器公共流程：`core/parser.py`
 - 解析结果后处理视图：`core/contracts.py` 中 `ParseResult.content_lines`、`ParseResult.image_references`、`ParseResult.media_metadata`
 - 解析结果消息组件渲染：`core/rendering.py` 的 `ParseResultRenderer`
+- 平台统一 HTTP 客户端：`core/parser.py` 的 `BaseParser.http_client()`
 - 平台扩展接口与能力元数据：`core/platform.py`
 - 配置类型读取：`core/settings.py` 的 `PluginSettings`
 - 登录文案格式化：`services/login_messages.py` 的 `LoginMessageFormatter`
@@ -42,6 +43,8 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 平台解析器和业务服务不直接拼装 AstrBot 消息组件；结果渲染统一通过
 `core/rendering.py` 的 `ParseResultRenderer` 完成。
+
+平台请求优先使用 `BaseParser.http_client()`，统一超时、平台代理参数和重定向策略；仅在需要特殊客户端选项时直接创建 `httpx.AsyncClient`。
 
 媒体投递、视频处理和渲染适配优先使用 `ParseResult.media_metadata`，不要重复读取媒体请求字段；`core/media.py` 负责写入临时文件生命周期和来源映射。
 修改媒体元数据访问时运行 `tests/test_media_metadata_boundaries.py`，确保服务层没有绕过统一视图。
