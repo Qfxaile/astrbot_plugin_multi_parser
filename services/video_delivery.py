@@ -28,7 +28,7 @@ class VideoDeliveryService:
                 ).materialize(result)
             else:
                 video_path = Path(await video_chain[0].convert_to_file_path()).resolve()
-                result.temporary_files.append(video_path)
+                result.media_metadata.temporary_files.append(video_path)
             video_chain = [Video.fromFileSystem(video_path)]
         await event.send(MessageChain(video_chain))
 
