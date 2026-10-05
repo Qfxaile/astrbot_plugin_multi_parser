@@ -105,8 +105,10 @@ class ImageMaterializer:
                 ):
                     if isinstance(outcome, Path):
                         image_path = outcome
-                        result.temporary_files.append(image_path)
-                        result.image_source_urls[str(image_path.resolve())] = image_url
+                        result.media_metadata.temporary_files.append(image_path)
+                        result.media_metadata.image_source_urls[
+                            str(image_path.resolve())
+                        ] = image_url
                         item.value = str(image_path)
                     else:
                         detail = self._image_error_detail(outcome)
@@ -146,8 +148,10 @@ class ImageMaterializer:
                 number, index, image_values, field_index, image_url = candidate
                 if isinstance(outcome, Path):
                     image_path = outcome
-                    result.temporary_files.append(image_path)
-                    result.image_source_urls[str(image_path.resolve())] = image_url
+                    result.media_metadata.temporary_files.append(image_path)
+                    result.media_metadata.image_source_urls[
+                        str(image_path.resolve())
+                    ] = image_url
                     image_values[field_index] = str(image_path)
                 else:
                     image_values[field_index] = ""
@@ -334,7 +338,7 @@ class VideoMaterializer:
 
     async def materialize(self, result: ParseResult) -> Path:
         """下载视频、登记临时文件并返回本地路径。"""
-        headers = sanitize_media_headers(result.video_download_headers)
+        headers = sanitize_media_headers(result.media_metadata.video_download_headers)
         async with httpx.AsyncClient(
             timeout=request_timeout(self.config),
             headers=headers,
@@ -342,7 +346,7 @@ class VideoMaterializer:
             **http_client_proxy_options(self.config, result.platform),
         ) as client:
             video_path = await self._download(client, result.video_url)
-        result.temporary_files.append(video_path)
+        result.media_metadata.temporary_files.append(video_path)
         return video_path
 
     async def _download(self, client: httpx.AsyncClient, video_url: str) -> Path:
@@ -412,10 +416,10 @@ class VideoMaterializer:
 
 def cleanup_temporary_files(result: ParseResult) -> None:
     """删除解析结果登记的临时文件，并始终清空登记列表。"""
-    for path in result.temporary_files:
+    for path in result.media_metadata.temporary_files:
         try:
             path.unlink(missing_ok=True)
         except OSError as exc:
             logger.warning(f"清理临时图片失败 ({path.name}): {exc}")
-    result.temporary_files.clear()
-    result.image_source_urls.clear()
+    result.media_metadata.temporary_files.clear()
+    result.media_metadata.image_source_urls.clear()
