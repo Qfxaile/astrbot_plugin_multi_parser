@@ -52,6 +52,7 @@ uv run ruff check .
 | 解析结果和上下文契约 | `core/contracts.py`；`ParseResult.content_lines` 提供可见文本视图，`ParseResult.image_references` 提供有序图片引用 |
 | 登录契约、登录 HTTP 基类和二维码渲染 | `core/platform_login.py` |
 | 安全 HTTP、可信 URL、Cookie、平台代理、商品网页元数据、媒体和渲染 | `core/http.py`、`core/webpage.py`、`core/product_metadata.py`、`core/media.py`、`core/rendering.py` |
+| 配置类型读取与平台开关 | `core/settings.py`；基础设施和服务不得重复实现配置类型转换 |
 | 解析器公共流程 | `core/parser.py` |
 | 平台扩展接口与能力描述 | `core/platform.py` |
 | 平台清单及解析器、登录适配器对应关系 | `platforms/registry.py` |
