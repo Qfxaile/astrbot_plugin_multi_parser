@@ -9,11 +9,7 @@ from functools import partial
 from astrbot.api.event import AstrMessageEvent, MessageChain
 from astrbot.api.message_components import Image, Plain
 
-from ..core.http import (
-    cookie_config_value,
-    parse_cookie_header,
-    set_cookie_config_value,
-)
+from ..core.http import parse_cookie_header
 from ..core.platform_login import (
     LoginPollState,
     PlatformLoginError,
@@ -21,6 +17,7 @@ from ..core.platform_login import (
     PlatformUser,
 )
 from ..platforms.registry import login_platforms
+from .cookie_store import CookieStore
 
 ProviderFactory = Callable[[], PlatformLoginProvider]
 
@@ -46,6 +43,7 @@ class AuthenticationService:
         provider_factories: Mapping[str, ProviderFactory] | None = None,
     ) -> None:
         self.config = config
+        self.cookie_store = CookieStore(config)
         self._provider_factories = dict(
             provider_factories
             or {
@@ -201,7 +199,7 @@ class AuthenticationService:
             attempt = self._active_logins.get(platform_name)
             if attempt is not None:
                 attempt.cancel_event.set()
-            if not parse_cookie_header(cookie_config_value(self.config, cookie_key)):
+            if not parse_cookie_header(self.cookie_store.get(cookie_key)):
                 return f"{platform_name}当前没有已保存的 Cookies。"
             try:
                 self._save_cookie(cookie_key, "")
@@ -238,7 +236,7 @@ class AuthenticationService:
         if platform_name in active_platforms:
             return "登录中"
         cookie_key = self._cookie_keys[platform_name]
-        cookie_header = str(cookie_config_value(self.config, cookie_key) or "")
+        cookie_header = str(self.cookie_store.get(cookie_key) or "")
         if not parse_cookie_header(cookie_header):
             return "未配置"
 
@@ -268,17 +266,7 @@ class AuthenticationService:
             await attempt.provider.close()
 
     def _save_cookie(self, cookie_key: str, cookie_header: str) -> None:
-        # 配置保存失败时恢复内存值，避免解析器使用尚未真正落盘的登录态。
-        previous_value = cookie_config_value(self.config, cookie_key)
-        set_cookie_config_value(self.config, cookie_key, cookie_header)
-        save_config = getattr(self.config, "save_config", None)
-        if not callable(save_config):
-            return
-        try:
-            save_config()
-        except Exception as exc:
-            set_cookie_config_value(self.config, cookie_key, str(previous_value or ""))
-            raise PlatformLoginError("Cookies 保存失败，原配置未被修改。") from exc
+        self.cookie_store.save(cookie_key, cookie_header)
 
     @staticmethod
     async def _get_current_user(
