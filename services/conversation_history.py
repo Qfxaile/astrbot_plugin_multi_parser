@@ -1,5 +1,9 @@
 """将插件解析输出记录到 AstrBot 的 LLM 会话历史。"""
 
+import asyncio
+import base64
+import mimetypes
+from pathlib import Path
 from typing import Any
 
 from astrbot.api import logger
@@ -163,11 +167,7 @@ def _build_media_status(result: ParseResult) -> str:
 async def _build_image_part(image_ref: str, image_number: int) -> dict | None:
     """将发送时可用的图片固化为不会随临时文件失效的 data URI。"""
     try:
-        data_url = await MediaResolver(
-            image_ref,
-            media_type="image",
-            default_suffix=".bin",
-        ).to_data_url(strict=True)
+        data_url = await _image_data_url(image_ref)
     except Exception as exc:
         logger.warning(
             f"第 {image_number} 张解析图片写入 LLM 会话失败: {type(exc).__name__}"
@@ -179,3 +179,19 @@ async def _build_image_part(image_ref: str, image_number: int) -> dict | None:
         "type": "image_url",
         "image_url": {"url": data_url},
     }
+
+
+async def _image_data_url(image_ref: str) -> str | None:
+    """读取本地临时图片，远程资源仍交给 AstrBot 媒体解析器。"""
+    local_path = Path(image_ref)
+    if local_path.is_file():
+        data = await asyncio.to_thread(local_path.read_bytes)
+        media_type = (
+            mimetypes.guess_type(local_path.name)[0] or "application/octet-stream"
+        )
+        return f"data:{media_type};base64,{base64.b64encode(data).decode('ascii')}"
+    return await MediaResolver(
+        image_ref,
+        media_type="image",
+        default_suffix=".bin",
+    ).to_data_url(strict=True)
