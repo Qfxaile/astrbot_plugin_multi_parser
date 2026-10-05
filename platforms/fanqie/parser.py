@@ -126,12 +126,7 @@ class FanqieParser(BaseParser):
             return ParseResult(platform=self.name, error="未找到番茄小说分享链接。")
 
         try:
-            async with httpx.AsyncClient(
-                timeout=self.request_timeout,
-                follow_redirects=False,
-                headers=self.HEADERS,
-                **self.http_client_options,
-            ) as client:
+            async with self.http_client(headers=self.HEADERS) as client:
                 book_id = await self._resolve_book_id(client, url)
                 if not book_id:
                     return ParseResult(
