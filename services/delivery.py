@@ -11,6 +11,7 @@ from astrbot.api.message_components import Image, Node, Nodes, Plain, Video
 
 from ..core.contracts import ParseResult
 from ..core.media import VideoMaterializer
+from .delivery_policy import DeliveryPolicy
 from .text_processing import replace_links
 
 
@@ -31,6 +32,7 @@ class DeliveryService:
 
     def __init__(self, config: Mapping[str, object]) -> None:
         self.config = config
+        self.policy = DeliveryPolicy(config)
         self._onebot_names: dict[str, str] = {}
 
     @staticmethod
@@ -418,24 +420,10 @@ class DeliveryService:
         ):
             return False
 
-        mode = self._forward_mode()
-        if mode == "always":
-            return True
-        if mode == "never":
-            return False
-
-        image_threshold = self._non_negative_int(
-            self.config.get("forward_image_threshold", self.DEFAULT_IMAGE_THRESHOLD),
-            self.DEFAULT_IMAGE_THRESHOLD,
-        )
-        text_threshold = self._non_negative_int(
-            self.config.get("forward_text_threshold", self.DEFAULT_TEXT_THRESHOLD),
-            self.DEFAULT_TEXT_THRESHOLD,
-        )
         text_length = sum(
             len(component.text) for component in chain if isinstance(component, Plain)
         )
-        return result.image_count > image_threshold or text_length > text_threshold
+        return self.policy.should_forward(result.image_count, text_length)
 
     @classmethod
     def _should_split_onebot_content(
@@ -449,19 +437,11 @@ class DeliveryService:
         )
 
     def _forward_mode(self) -> str:
-        mode = (
-            str(self.config.get("forward_mode", self.DEFAULT_FORWARD_MODE))
-            .strip()
-            .lower()
-        )
-        return mode if mode in self.FORWARD_MODES else self.DEFAULT_FORWARD_MODE
+        return self.policy.forward_mode()
 
     @staticmethod
     def _non_negative_int(value: object, default: int) -> int:
-        try:
-            return max(int(value), 0)
-        except (TypeError, ValueError):
-            return default
+        return DeliveryPolicy.non_negative_int(value, default)
 
     async def send_forward_links(
         self, event: AstrMessageEvent, result: ParseResult, reason: str
@@ -556,19 +536,7 @@ class DeliveryService:
 
     def video_over_limit_action(self) -> str:
         """读取视频回退处理方式，无效值按发送直链处理。"""
-        value = (
-            str(
-                self.config.get(
-                    "video_over_limit_action",
-                    self.DEFAULT_VIDEO_OVER_LIMIT_ACTION,
-                )
-            )
-            .strip()
-            .lower()
-        )
-        if value in self.VIDEO_OVER_LIMIT_ACTIONS:
-            return value
-        return self.DEFAULT_VIDEO_OVER_LIMIT_ACTION
+        return self.policy.video_over_limit_action()
 
     def _onebot_group_id(self, event: AstrMessageEvent) -> int | None:
         if self._platform_name(event) != self.ONEBOT_PLATFORM:
@@ -593,12 +561,9 @@ class DeliveryService:
 
     def _filter_output_links(self, components: list) -> list:
         """仅过滤插件生成的可见文本，不改写媒体组件和主动发送的直链。"""
-        if not bool(self.config.get("filter_output_links", False)):
+        if not self.policy.filter_links_enabled():
             return components
-        replacement = str(
-            self.config.get("filtered_link_text", self.DEFAULT_FILTERED_LINK_TEXT)
-            or self.DEFAULT_FILTERED_LINK_TEXT
-        )
+        replacement = self.policy.filtered_link_text(self.DEFAULT_FILTERED_LINK_TEXT)
         return [
             Plain(replace_links(component.text, replacement))
             if isinstance(component, Plain)
