@@ -69,6 +69,16 @@ def test_package_initializers_do_not_eagerly_import_implementation_modules(
             "astrbot_multi_parser.services.authentication",
         ),
         (
+            "astrbot_multi_parser.services",
+            "VideoFallbackService",
+            "astrbot_multi_parser.services.video_fallback",
+        ),
+        (
+            "astrbot_multi_parser.core",
+            "PluginSettings",
+            "astrbot_multi_parser.core.settings",
+        ),
+        (
             "astrbot_multi_parser.platforms",
             "ZhihuParser",
             "astrbot_multi_parser.platforms.zhihu",

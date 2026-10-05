@@ -10,6 +10,13 @@ __all__ = [
     "VideoSizeProbe",
     "build_parsers",
     "enabled_parsers",
+    "CookieStore",
+    "DeliveryPolicy",
+    "EventIdentity",
+    "OneBotGateway",
+    "SummaryProviderResolver",
+    "VideoDeliveryService",
+    "VideoFallbackService",
 ]
 
 _EXPORT_MODULES = {
@@ -20,6 +27,13 @@ _EXPORT_MODULES = {
     "VideoSizeProbe": ".video",
     "build_parsers": ".configuration",
     "enabled_parsers": ".configuration",
+    "CookieStore": ".cookie_store",
+    "DeliveryPolicy": ".delivery_policy",
+    "EventIdentity": ".event_identity",
+    "OneBotGateway": ".onebot_gateway",
+    "SummaryProviderResolver": ".summary_provider",
+    "VideoDeliveryService": ".video_delivery",
+    "VideoFallbackService": ".video_fallback",
 }
 
 

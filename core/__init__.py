@@ -2,13 +2,22 @@
 
 from importlib import import_module
 
-__all__ = ["BaseParser", "OrderedContent", "ParseContext", "ParseResult"]
+__all__ = [
+    "BaseParser",
+    "OrderedContent",
+    "ParseContext",
+    "ParseResult",
+    "PlatformSpec",
+    "PluginSettings",
+]
 
 _EXPORT_MODULES = {
     "BaseParser": ".parser",
     "OrderedContent": ".contracts",
     "ParseContext": ".contracts",
     "ParseResult": ".contracts",
+    "PlatformSpec": ".platform",
+    "PluginSettings": ".settings",
 }
 
 
