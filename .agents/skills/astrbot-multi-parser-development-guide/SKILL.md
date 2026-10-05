@@ -19,7 +19,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 登录契约、HTTP 登录基类和二维码渲染：`core/platform_login.py`
 - 安全 HTTP、平台代理、媒体和结果渲染：`core/http.py`、`core/media.py`、`core/rendering.py`
 - 解析器公共流程：`core/parser.py`
-- 解析结果后处理视图：`core/contracts.py` 中 `ParseResult.content_lines`、`ParseResult.image_references`
+- 解析结果后处理视图：`core/contracts.py` 中 `ParseResult.content_lines`、`ParseResult.image_references`、`ParseResult.media_metadata`
 - 解析结果消息组件渲染：`core/rendering.py` 的 `ParseResultRenderer`
 - 平台扩展接口与能力元数据：`core/platform.py`
 - 配置类型读取：`core/settings.py` 的 `PluginSettings`
@@ -38,6 +38,8 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 平台解析器和业务服务不直接拼装 AstrBot 消息组件；结果渲染统一通过
 `core/rendering.py` 的 `ParseResultRenderer` 完成。
+
+媒体投递和视频处理优先使用 `ParseResult.media_metadata`，不要重复读取媒体请求字段。
 
 复用 `BaseParser`、`PlatformSpec`、`PluginSettings`、统一契约、安全 HTTP、平台代理、媒体和投递服务。新增解析器必须覆写 `BaseParser` 的 `match` 与 `parse`，并只通过平台注册表接入；`BaseParser` 本身提供可复用的 HTTP、Cookie 和媒体基础能力。配置值的布尔、数值、枚举和平台开关读取统一使用 `PluginSettings`，不要在服务或基础设施模块重复转换。AI 总结、会话历史等后处理优先使用 `ParseResult.content_lines` 和 `ParseResult.image_references`，不要重复遍历平台字段。新增请求客户端时接入 `core/http.py` 的平台代理参数，确保解析、登录和插件侧媒体请求遵循同一平台开关。保持内容顺序，区分鉴权失败、网络失败、内容不存在和部分媒体失败。新增平台时更新平台包导出、`platforms/registry.py`、`platforms/__init__.py`、`_conf_schema.json`、README、项目事实文档和测试，并运行注册表的 `validate_platform_registry()`、`validate_platform_configuration()` 校验；按用户可见程度更新 CHANGELOG。核心与服务公共扩展点优先通过 `core/__init__.py`、`services/__init__.py` 惰性导出，并同步包边界测试；`services/configuration.py` 与 `services/authentication.py` 从注册表装配，只有装配语义变化时才修改。
 

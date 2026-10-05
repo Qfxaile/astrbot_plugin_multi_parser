@@ -49,7 +49,7 @@ uv run ruff check .
 | 需求 | 首选位置 |
 | --- | --- |
 | 插件注册、事件入口、依赖装配 | `main.py` |
-| 解析结果和上下文契约 | `core/contracts.py`；`ParseResult.content_lines` 提供可见文本视图，`ParseResult.image_references` 提供有序图片引用 |
+| 解析结果和上下文契约 | `core/contracts.py`；`ParseResult.content_lines` 提供可见文本视图，`ParseResult.image_references` 提供有序图片引用，`ParseResult.media_metadata` 提供媒体请求元数据视图 |
 | 登录契约、登录 HTTP 基类和二维码渲染 | `core/platform_login.py` |
 | 安全 HTTP、可信 URL、Cookie、平台代理、商品网页元数据、媒体和渲染 | `core/http.py`、`core/webpage.py`、`core/product_metadata.py`、`core/media.py`、`core/rendering.py`；`ParseResultRenderer` 负责结果到消息组件的转换 |
 | 配置类型读取与平台开关 | `core/settings.py`；基础设施和服务不得重复实现配置类型转换 |
