@@ -9,6 +9,7 @@ from astrbot.core.utils.media_utils import MediaResolver
 
 from ..core.contracts import ParseResult
 from ..core.settings import PluginSettings
+from .summary_provider import SummaryProviderResolver
 
 DEFAULT_PROMPT = """请对下面的互联网内容做准确、简洁、易读的中文总结。
 要求：
@@ -33,6 +34,7 @@ class AISummaryService:
         self.context = context
         self.config = config
         self.settings = PluginSettings(config)
+        self.provider_resolver = SummaryProviderResolver(context, config)
 
     def enabled(self) -> bool:
         return self.settings.boolean("enable_ai_summary")
@@ -112,17 +114,8 @@ class AISummaryService:
         return images
 
     async def _provider(self, event: AstrMessageEvent, modality: str):
-        key = {
-            "text": "ai_summary_text_provider_id",
-            "vision": "ai_summary_vision_provider_id",
-            "subtitle": "ai_summary_subtitle_provider_id",
-        }[modality]
-        provider_id = self.settings.text(key)
-        if not provider_id and modality != "text":
-            provider_id = self.settings.text("ai_summary_text_provider_id")
-        if provider_id:
-            return self.context.get_provider_by_id(provider_id)
-        return await self.context.get_using_provider_async(event.unified_msg_origin)
+        self.provider_resolver.context = self.context
+        return await self.provider_resolver.resolve(event, modality)
 
     async def _call(
         self, event, result, *, modality, content, image_urls=None, subtitle=""
