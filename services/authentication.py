@@ -18,6 +18,7 @@ from ..core.platform_login import (
 )
 from ..platforms.registry import login_platforms
 from .cookie_store import CookieStore
+from .login_messages import LoginMessageFormatter
 
 ProviderFactory = Callable[[], PlatformLoginProvider]
 
@@ -285,23 +286,16 @@ class AuthenticationService:
 
     @classmethod
     def _format_user(cls, user: PlatformUser) -> str:
-        display_name = cls._clean_user_field(user.display_name)
-        user_id = cls._clean_user_field(user.user_id)
-        if display_name and user_id:
-            return f"{display_name}（UID：{user_id}）"
-        if display_name:
-            return display_name
-        return f"UID：{user_id}"
+        return LoginMessageFormatter.user(user)
 
     @staticmethod
     def _clean_user_field(value: object) -> str:
-        return " ".join(str(value or "").split())[:100]
+        return LoginMessageFormatter.user_field(value)
 
     def _unsupported_platform_message(self, platform_name: str) -> str:
-        supported = "、".join(self.supported_platforms)
-        if not platform_name:
-            return f"请提供平台中文名。当前支持：{supported}。"
-        return f"暂不支持“{platform_name}”登录。当前支持：{supported}。"
+        return LoginMessageFormatter.unsupported(
+            platform_name, self.supported_platforms
+        )
 
     @staticmethod
     def _format_login_error(
@@ -309,22 +303,11 @@ class AuthenticationService:
         error: PlatformLoginError | str,
     ) -> str:
         """在私聊边界统一平台登录错误格式，并去除重复的平台前缀。"""
-        detail = str(error).strip() or "发生未知错误，请稍后重试。"
-        for prefix in (f"{platform_name}登录", platform_name):
-            if detail.startswith(prefix):
-                detail = detail[len(prefix) :].lstrip("：:，, ")
-                break
-        return f"登录失败｜平台：{platform_name}｜原因：{detail}"
+        return LoginMessageFormatter.error(platform_name, error)
 
     @staticmethod
     def _expired_message(provider: PlatformLoginProvider) -> str:
-        message = "二维码已过期，请重新发起登录。"
-        if not provider.sms_fallback_available:
-            message += "该平台短信登录需要额外人机验证，当前私聊流程暂不支持。"
-        return AuthenticationService._format_login_error(
-            provider.display_name,
-            message,
-        )
+        return LoginMessageFormatter.expired(provider)
 
     @staticmethod
     def _session_id(event: AstrMessageEvent) -> str:
