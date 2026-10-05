@@ -161,15 +161,15 @@ class DeliveryService:
                 node.name = sender_name
                 node.uin = sender_id
             if self._can_send_onebot_url_forward(
-                event, nodes, parse_result.image_source_urls
+                event, nodes, parse_result.media_metadata.image_source_urls
             ):
-                image_files = parse_result.image_source_urls
-                if parse_result.image_download_headers:
+                image_files = parse_result.media_metadata.image_source_urls
+                if parse_result.media_metadata.image_download_headers:
                     image_files = await self._download_onebot_forward_images(
                         event,
                         nodes,
-                        parse_result.image_source_urls,
-                        parse_result.image_download_headers,
+                        parse_result.media_metadata.image_source_urls,
+                        parse_result.media_metadata.image_download_headers,
                     )
                 messages = await self._serialize_onebot_nodes(nodes, image_files)
                 await self._send_onebot_forward_nodes(event, messages)

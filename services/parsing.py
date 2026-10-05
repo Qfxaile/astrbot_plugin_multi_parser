@@ -89,7 +89,7 @@ class ParseCoordinator:
                 should_send_video = False
                 video_reason = ""
                 if send_video_by_url and result.video_url:
-                    headers = result.video_download_headers or None
+                    headers = result.media_metadata.video_download_headers or None
                     size_info = await self.runtime.probe_video_size(
                         result.video_url,
                         headers,

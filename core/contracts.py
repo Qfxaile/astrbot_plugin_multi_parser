@@ -22,6 +22,17 @@ class OrderedContent:
     value: str
 
 
+@dataclass(frozen=True)
+class MediaMetadata:
+    """解析结果携带的媒体请求与临时文件元数据视图。"""
+
+    temporary_files: list[Path]
+    image_source_urls: dict[str, str]
+    image_download_headers: dict[str, str]
+    video_download_headers: dict[str, str]
+    video_download_host_suffixes: tuple[str, ...]
+
+
 @dataclass
 class ParseResult:
     platform: str
@@ -81,6 +92,17 @@ class ParseResult:
                 if item.kind == "image" and item.value
             ]
         return [value for value in [*self.cover_urls, *self.image_urls] if value]
+
+    @property
+    def media_metadata(self) -> MediaMetadata:
+        """返回媒体基础设施使用的元数据视图，保持与内容字段分离。"""
+        return MediaMetadata(
+            temporary_files=self.temporary_files,
+            image_source_urls=self.image_source_urls,
+            image_download_headers=self.image_download_headers,
+            video_download_headers=self.video_download_headers,
+            video_download_host_suffixes=self.video_download_host_suffixes,
+        )
 
     def info_chain(
         self,

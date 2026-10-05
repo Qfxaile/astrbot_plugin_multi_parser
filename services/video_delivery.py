@@ -21,10 +21,10 @@ class VideoDeliveryService:
     async def send(self, event: AstrMessageEvent, result: ParseResult) -> None:
         video_chain = result.video_chain()
         if self._platform_name(event) == self.KOOK_PLATFORM and video_chain:
-            if result.video_download_host_suffixes:
+            if result.media_metadata.video_download_host_suffixes:
                 video_path = await VideoMaterializer(
                     self.config,
-                    result.video_download_host_suffixes,
+                    result.media_metadata.video_download_host_suffixes,
                 ).materialize(result)
             else:
                 video_path = Path(await video_chain[0].convert_to_file_path()).resolve()
