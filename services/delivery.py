@@ -1,7 +1,4 @@
-import re
 from collections.abc import Mapping
-from pathlib import PurePosixPath
-from urllib.parse import urlparse
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, MessageChain
@@ -35,6 +32,7 @@ class DeliveryService:
     VIDEO_OVER_LIMIT_ACTIONS = {"notice", "direct_link", "group_file"}
     DEFAULT_VIDEO_OVER_LIMIT_ACTION = "direct_link"
     DEFAULT_FILTERED_LINK_TEXT = "[详细内容请打开原链接查看]"
+    _image_downloader = OneBotImageDownloader()
 
     def __init__(self, config: Mapping[str, object]) -> None:
         self.config = config
@@ -43,7 +41,6 @@ class DeliveryService:
         self.video_delivery = VideoDeliveryService(config)
         self.video_fallback = VideoFallbackService(config, self.send_forward_links)
         self.link_filter = LinkFilter(config)
-        self.onebot_image_downloader = OneBotImageDownloader()
         self._onebot_names: dict[str, str] = {}
 
     @staticmethod
@@ -217,13 +214,9 @@ class DeliveryService:
         headers: Mapping[str, str],
     ) -> dict[str, str]:
         """兼容入口，委托给独立图片预下载服务。"""
-        return await OneBotImageDownloader().download(
+        return await cls._image_downloader.download(
             event, nodes, image_source_urls, headers
         )
-
-    @staticmethod
-    def _remote_image_file_name(url: str, index: int) -> str:
-        return OneBotForwardSerializer.remote_image_file_name(url, index)
 
     @staticmethod
     def _remote_image_url(image: Image, image_source_urls: Mapping[str, str]) -> str:
@@ -283,10 +276,6 @@ class DeliveryService:
 
     def _forward_mode(self) -> str:
         return self.policy.forward_mode()
-
-    @staticmethod
-    def _non_negative_int(value: object, default: int) -> int:
-        return DeliveryPolicy.non_negative_int(value, default)
 
     async def send_forward_links(
         self, event: AstrMessageEvent, result: ParseResult, reason: str
@@ -360,27 +349,6 @@ class DeliveryService:
     def video_over_limit_action(self) -> str:
         """读取视频回退处理方式，无效值按发送直链处理。"""
         return self.policy.video_over_limit_action()
-
-    def _onebot_group_id(self, event: AstrMessageEvent) -> int | None:
-        if self._platform_name(event) != self.ONEBOT_PLATFORM:
-            return None
-        raw = self.raw_message(event)
-        raw_group_id = raw.get("group_id") if isinstance(raw, dict) else None
-        try:
-            group_id = raw_group_id or event.get_group_id()
-            return int(group_id) if group_id else None
-        except (AttributeError, TypeError, ValueError):
-            return None
-
-    @staticmethod
-    def _video_file_name(result: ParseResult) -> str:
-        base_name = (result.title or f"{result.platform}视频").strip()
-        base_name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", base_name)
-        base_name = base_name.strip(" ._")[:80] or "video"
-        suffix = PurePosixPath(urlparse(result.video_url).path).suffix.lower()
-        if suffix not in {".mp4", ".mov", ".mkv", ".webm", ".flv", ".avi"}:
-            suffix = ".mp4"
-        return f"{base_name}{suffix}"
 
     def _filter_output_links(self, components: list) -> list:
         """仅过滤插件生成的可见文本，不改写媒体组件和主动发送的直链。"""
