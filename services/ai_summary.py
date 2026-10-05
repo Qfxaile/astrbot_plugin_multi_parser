@@ -79,26 +79,13 @@ class AISummaryService:
         return summaries
 
     def _content(self, result: ParseResult) -> str:
-        lines = [result.description, *result.extra_lines]
-        if result.ordered_contents:
-            lines.extend(
-                item.value
-                for item in result.ordered_contents
-                if item.value and item.kind in {"text", "image_error"}
-            )
-        return "\n".join(line for line in [*lines] if line).strip()[: self._max_chars()]
+        return "\n".join(result.content_lines).strip()[: self._max_chars()]
 
     def _max_chars(self) -> int:
         return self.settings.integer("ai_summary_max_input_chars", 30000, minimum=1000)
 
     async def _image_inputs(self, result: ParseResult) -> list[str]:
-        refs: list[str] = []
-        if result.ordered_contents:
-            refs = [
-                item.value for item in result.ordered_contents if item.kind == "image"
-            ]
-        else:
-            refs = [*result.cover_urls, *result.image_urls]
+        refs = result.image_references
         limit = self.settings.integer("ai_summary_max_images", 8, minimum=0)
         images: list[str] = []
         for index, ref in enumerate(refs[:limit], 1):

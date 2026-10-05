@@ -59,6 +59,29 @@ class ParseResult:
             )
         )
 
+    @property
+    def content_lines(self) -> list[str]:
+        """返回供总结和会话历史使用的可见文本，保留正文顺序。"""
+        lines = [self.description, *self.extra_lines]
+        if self.ordered_contents:
+            lines.extend(
+                item.value
+                for item in self.ordered_contents
+                if item.value and item.kind in {"text", "image_error"}
+            )
+        return [line for line in lines if line]
+
+    @property
+    def image_references(self) -> list[str]:
+        """返回按展示顺序排列的图片引用。"""
+        if self.ordered_contents:
+            return [
+                item.value
+                for item in self.ordered_contents
+                if item.kind == "image" and item.value
+            ]
+        return [value for value in [*self.cover_urls, *self.image_urls] if value]
+
     def info_chain(
         self,
         include_video_url: bool = False,

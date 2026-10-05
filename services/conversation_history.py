@@ -117,20 +117,15 @@ async def build_parse_history_content(
 def _build_text_only_content(result: ParseResult) -> str:
     """生成仅包含文本、图片数量和媒体发送状态的解析历史。"""
     lines = [_build_summary(result)]
+    base_line_count = sum(
+        bool(line) for line in [result.description, *result.extra_lines]
+    )
+    lines.extend(result.content_lines[base_line_count:])
     if result.ordered_contents:
-        lines.extend(
-            item.value
-            for item in result.ordered_contents
-            if item.value and item.kind in {"text", "image_error"}
-        )
-        image_count = sum(
-            bool(item.value) and item.kind == "image"
-            for item in result.ordered_contents
-        )
+        image_count = len(result.image_references)
     else:
         lines.extend(error for error in result.image_errors.values() if error)
-        image_count = sum(bool(value) for value in result.cover_urls)
-        image_count += sum(bool(value) for value in result.image_urls)
+        image_count = len(result.image_references)
 
     if image_count:
         lines.append(f"图片: {image_count} 张")
