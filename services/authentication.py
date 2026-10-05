@@ -3,7 +3,6 @@
 import asyncio
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
 from functools import partial
 
 from astrbot.api.event import AstrMessageEvent, MessageChain
@@ -19,17 +18,9 @@ from ..core.platform_login import (
 from ..platforms.registry import login_platforms
 from .cookie_store import CookieStore
 from .login_messages import LoginMessageFormatter
+from .login_sessions import LoginAttempt, LoginSessionRegistry
 
 ProviderFactory = Callable[[], PlatformLoginProvider]
-
-
-@dataclass
-class _ActiveLogin:
-    """记录一个平台当前独占的登录流程及其所属私聊。"""
-
-    session_id: str
-    provider: PlatformLoginProvider
-    cancel_event: asyncio.Event
 
 
 class AuthenticationService:
@@ -61,8 +52,7 @@ class AuthenticationService:
             )
             for registration in login_platforms()
         }
-        self._active_logins: dict[str, _ActiveLogin] = {}
-        self._lock = asyncio.Lock()
+        self._sessions = LoginSessionRegistry()
 
     @property
     def supported_platforms(self) -> tuple[str, ...]:
@@ -85,16 +75,14 @@ class AuthenticationService:
             return self._unsupported_platform_message(platform_name)
 
         provider = factory()
-        attempt = _ActiveLogin(
+        attempt = LoginAttempt(
             session_id=self._session_id(event),
             provider=provider,
             cancel_event=asyncio.Event(),
         )
-        async with self._lock:
-            if platform_name in self._active_logins:
-                await provider.close()
-                return f"{platform_name}已有登录流程正在进行，请先取消或等待结束。"
-            self._active_logins[platform_name] = attempt
+        if not await self._sessions.register(platform_name, attempt):
+            await provider.close()
+            return f"{platform_name}已有登录流程正在进行，请先取消或等待结束。"
 
         try:
             challenge = await provider.create_qr_challenge()
@@ -123,16 +111,14 @@ class AuthenticationService:
                         provider,
                         poll_result.cookie_header,
                     )
-                    async with self._lock:
-                        if (
-                            attempt.cancel_event.is_set()
-                            or self._active_logins.get(platform_name) is not attempt
-                        ):
-                            return None
-                        self._save_cookie(
-                            provider.cookie_config_key,
-                            poll_result.cookie_header,
-                        )
+                    if (
+                        attempt.cancel_event.is_set()
+                        or not await self._sessions.is_current(platform_name, attempt)
+                    ):
+                        return None
+                    self._save_cookie(
+                        provider.cookie_config_key, poll_result.cookie_header
+                    )
                     if user is None:
                         return (
                             f"{platform_name}登录成功，Cookies 已保存。"
@@ -170,22 +156,12 @@ class AuthenticationService:
             )
         finally:
             await provider.close()
-            async with self._lock:
-                if self._active_logins.get(platform_name) is attempt:
-                    self._active_logins.pop(platform_name, None)
+            await self._sessions.remove(platform_name, attempt)
 
     async def cancel(self, event: AstrMessageEvent) -> str:
         """取消当前管理员私聊发起的登录流程。"""
         session_id = self._session_id(event)
-        async with self._lock:
-            attempts = [
-                attempt
-                for attempt in self._active_logins.values()
-                if attempt.session_id == session_id
-            ]
-            for attempt in attempts:
-                attempt.cancel_event.set()
-        if not attempts:
+        if not await self._sessions.cancel_session(session_id):
             return "当前私聊没有进行中的平台登录。"
         return "已取消当前私聊中的平台登录。"
 
@@ -196,22 +172,18 @@ class AuthenticationService:
         if cookie_key is None:
             return self._unsupported_platform_message(platform_name)
 
-        async with self._lock:
-            attempt = self._active_logins.get(platform_name)
-            if attempt is not None:
-                attempt.cancel_event.set()
-            if not parse_cookie_header(self.cookie_store.get(cookie_key)):
-                return f"{platform_name}当前没有已保存的 Cookies。"
-            try:
-                self._save_cookie(cookie_key, "")
-            except PlatformLoginError as exc:
-                return str(exc)
+        await self._sessions.cancel_platform(platform_name)
+        if not parse_cookie_header(self.cookie_store.get(cookie_key)):
+            return f"{platform_name}当前没有已保存的 Cookies。"
+        try:
+            self._save_cookie(cookie_key, "")
+        except PlatformLoginError as exc:
+            return str(exc)
         return f"{platform_name}已退出登录，Cookies 已清除。"
 
     async def status(self) -> str:
         """并发查询所有平台的本地配置状态与当前账号。"""
-        async with self._lock:
-            active_platforms = frozenset(self._active_logins)
+        active_platforms = await self._sessions.active_platforms()
         states = await asyncio.gather(
             *(
                 self._platform_status(platform_name, active_platforms)
@@ -259,9 +231,7 @@ class AuthenticationService:
 
     async def close(self) -> None:
         """取消并释放插件卸载时仍在进行的登录流程。"""
-        async with self._lock:
-            attempts = list(self._active_logins.values())
-            self._active_logins.clear()
+        attempts = await self._sessions.drain()
         for attempt in attempts:
             attempt.cancel_event.set()
             await attempt.provider.close()
