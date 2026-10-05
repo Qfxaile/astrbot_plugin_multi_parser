@@ -8,6 +8,7 @@ from .core.settings import PluginSettings
 from .services.ai_summary import AISummaryService
 from .services.authentication import AuthenticationService
 from .services.configuration import build_parsers, enabled_parsers
+from .services.container import ServiceContainer
 from .services.conversation_history import ConversationHistoryService
 from .services.delivery import DeliveryService
 from .services.message_context import extract_context
@@ -28,11 +29,12 @@ class MultiParserPlugin(Star):
         super().__init__(context)
         self.config = config
         self.parsers = build_parsers(config)
-        self._authentication = AuthenticationService(config)
-        self._delivery = DeliveryService(config)
-        self._ai_summary = AISummaryService(context, config)
+        self._services = ServiceContainer(context, config)
 
     def _delivery_service(self) -> DeliveryService:
+        services = getattr(self, "_services", None)
+        if services is not None:
+            return services.delivery
         delivery = getattr(self, "_delivery", None)
         if delivery is None:
             delivery = DeliveryService(self.config)
@@ -40,6 +42,9 @@ class MultiParserPlugin(Star):
         return delivery
 
     def _authentication_service(self) -> AuthenticationService:
+        services = getattr(self, "_services", None)
+        if services is not None:
+            return services.authentication
         authentication = getattr(self, "_authentication", None)
         if authentication is None:
             authentication = AuthenticationService(self.config)
@@ -47,6 +52,9 @@ class MultiParserPlugin(Star):
         return authentication
 
     def _conversation_history_service(self) -> ConversationHistoryService:
+        services = getattr(self, "_services", None)
+        if services is not None:
+            return services.conversation_history
         history = getattr(self, "_conversation_history", None)
         if history is None:
             history = ConversationHistoryService(self.context.conversation_manager)
@@ -113,6 +121,9 @@ class MultiParserPlugin(Star):
         return await self._ai_summary_service().summarize(event, result)
 
     def _ai_summary_service(self) -> AISummaryService:
+        services = getattr(self, "_services", None)
+        if services is not None:
+            return services.ai_summary
         service = getattr(self, "_ai_summary", None)
         if service is None:
             service = AISummaryService(self.context, self.config)
