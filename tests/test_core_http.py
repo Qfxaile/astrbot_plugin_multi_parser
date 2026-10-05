@@ -92,6 +92,11 @@ def test_request_timeout_accepts_numeric_config():
     assert request_timeout({}) == 30.0
 
 
+def test_request_timeout_uses_safe_default_for_invalid_value():
+    assert request_timeout({"request_timeout_seconds": "invalid"}) == 30.0
+    assert request_timeout({"request_timeout_seconds": -2}) == 0.1
+
+
 @pytest.mark.parametrize(
     "proxy_url",
     [

@@ -8,6 +8,7 @@ from astrbot.api.event import AstrMessageEvent
 
 from ..core.contracts import ParseContext, ParseResult
 from ..core.http import CookieAccessError
+from ..core.settings import PluginSettings
 
 
 class ParseRuntime(Protocol):
@@ -82,8 +83,8 @@ class ParseCoordinator:
                 restore_send_state = True
                 await self.runtime.react_success(event)
                 result = await parser.parse(context)
-                send_video_by_url = bool(
-                    self.runtime.config.get("send_video_by_url", True)
+                send_video_by_url = PluginSettings(self.runtime.config).boolean(
+                    "send_video_by_url", True
                 )
                 should_send_video = False
                 video_reason = ""

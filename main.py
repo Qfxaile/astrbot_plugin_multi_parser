@@ -4,6 +4,7 @@ from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star
 
 from .core.contracts import ParseResult
+from .core.settings import PluginSettings
 from .services.ai_summary import AISummaryService
 from .services.authentication import AuthenticationService
 from .services.configuration import build_parsers, enabled_parsers
@@ -95,11 +96,12 @@ class MultiParserPlugin(Star):
             yield item
 
     async def record_history(self, event, source_text, result):
-        if not bool(self.config.get("enable_conversation_history", False)):
+        settings = PluginSettings(self.config)
+        if not settings.boolean("enable_conversation_history"):
             return
-        history_mode = str(
-            self.config.get("conversation_history_mode", "text_only")
-        ).strip()
+        history_mode = settings.choice(
+            "conversation_history_mode", {"text_only", "text_and_images"}, "text_only"
+        )
         await self._conversation_history_service().record_parse_result(
             event,
             source_text,
