@@ -84,7 +84,9 @@ class WeiboParser(
                     "desktop_id"
                 ) or match.groupdict().get("mobile_id")
                 return await self._parse_status_id(str(status_id))
-        return ParseResult(platform=self.name, error="未找到微博链接。")
+        result = ParseResult(platform=self.name)
+        result.diagnostics.error = "未找到微博链接。"
+        return result
 
     async def _parse_share(self, url: str) -> ParseResult:
         async with httpx.AsyncClient(

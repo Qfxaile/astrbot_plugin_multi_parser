@@ -99,12 +99,12 @@ def test_status_payload_keeps_text_images_and_repost_order():
 
     result = WeiboParser({})._parse_status_payload(payload)
 
-    assert result.title == "视频标题"
-    assert result.author == "微博作者"
-    assert result.description == ""
-    assert result.video_url == "https://f.video.weibocdn.com/720.mp4"
-    assert result.cover_urls == ["https://wx1.sinaimg.cn/large/cover.jpg"]
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert result.content.title == "视频标题"
+    assert result.content.author == "微博作者"
+    assert result.content.description == ""
+    assert result.media.video_url == "https://f.video.weibocdn.com/720.mp4"
+    assert result.content.cover_urls == ["https://wx1.sinaimg.cn/large/cover.jpg"]
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("text", "正文\n第二行 & 更多"),
         ("image", "https://wx1.sinaimg.cn/large/a.jpg"),
         ("text", "转发自 @原作者\n原微博"),
@@ -128,8 +128,8 @@ def test_status_payload_uses_repost_video_when_original_has_none():
 
     result = WeiboParser({})._parse_status_payload(payload)
 
-    assert result.video_url == "https://f.video.weibocdn.com/repost.mp4"
-    assert result.cover_urls == ["https://wx1.sinaimg.cn/cover.jpg"]
+    assert result.media.video_url == "https://f.video.weibocdn.com/repost.mp4"
+    assert result.content.cover_urls == ["https://wx1.sinaimg.cn/cover.jpg"]
 
 
 def test_status_payload_rejects_missing_user_data():
@@ -178,8 +178,8 @@ async def test_parse_status_uses_anonymous_mobile_api(monkeypatch):
     )
 
     assert len(requests) == 1
-    assert result.author == "微博作者"
-    assert result.ordered_contents[0].value == "微博正文"
+    assert result.content.author == "微博作者"
+    assert result.content.ordered_contents[0].value == "微博正文"
 
 
 @pytest.mark.asyncio
@@ -251,12 +251,18 @@ async def test_parse_article_keeps_text_and_downloaded_image_order(
         )
     )
 
-    assert result.title == "长文章标题"
-    assert result.author == "文章作者"
-    assert [item.kind for item in result.ordered_contents] == ["text", "image", "text"]
-    assert result.ordered_contents[0].value == "第一段"
-    assert_temporary_image(result, result.ordered_contents[1].value, image_bytes)
-    assert result.ordered_contents[2].value == "第二段"
+    assert result.content.title == "长文章标题"
+    assert result.content.author == "文章作者"
+    assert [item.kind for item in result.content.ordered_contents] == [
+        "text",
+        "image",
+        "text",
+    ]
+    assert result.content.ordered_contents[0].value == "第一段"
+    assert_temporary_image(
+        result, result.content.ordered_contents[1].value, image_bytes
+    )
+    assert result.content.ordered_contents[2].value == "第二段"
 
 
 @pytest.mark.asyncio
@@ -293,11 +299,11 @@ async def test_parse_video_page_extracts_best_available_stream(
         ParseContext(text="https://video.weibo.com/show?fid=1034:5145615399845897")
     )
 
-    assert result.title == "微博视频"
-    assert result.author == "视频作者"
-    assert result.description == "视频简介"
-    assert result.video_url == "https://f.video.weibocdn.com/high.mp4"
-    assert_temporary_image(result, result.cover_urls[0], cover_bytes)
+    assert result.content.title == "微博视频"
+    assert result.content.author == "视频作者"
+    assert result.content.description == "视频简介"
+    assert result.media.video_url == "https://f.video.weibocdn.com/high.mp4"
+    assert_temporary_image(result, result.content.cover_urls[0], cover_bytes)
 
 
 @pytest.mark.asyncio
@@ -328,7 +334,7 @@ async def test_parse_share_follows_only_trusted_weibo_redirect(monkeypatch):
         )
     )
 
-    assert result.author == "分享作者"
+    assert result.content.author == "分享作者"
 
 
 @pytest.mark.asyncio

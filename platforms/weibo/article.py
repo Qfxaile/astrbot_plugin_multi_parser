@@ -95,10 +95,10 @@ class WeiboArticleContent:
         parser = _WeiboArticleParser()
         parser.feed(str(data.get("content") or ""))
         parser.close()
-        return ParseResult(
-            platform=cls.name,
-            title=str(data.get("title") or "微博长文章"),
-            author=str(user["screen_name"]),
-            ordered_contents=parser.contents,
-            extra_lines=[] if parser.contents else ["微博长文章正文为空。"],
-        )
+        result = ParseResult(platform=cls.name)
+        result.content.title = str(data.get("title") or "微博长文章")
+        result.content.author = str(user["screen_name"])
+        result.content.ordered_contents.extend(parser.contents)
+        if not parser.contents:
+            result.content.extra_lines.append("微博长文章正文为空。")
+        return result

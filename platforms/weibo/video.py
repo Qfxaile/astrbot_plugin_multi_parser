@@ -66,12 +66,13 @@ class WeiboVideoContent:
         if not video_url:
             video_url = cls._normalize_url(component.get("stream_url"))
         cover_url = cls._normalize_url(component.get("cover_image"))
-        return ParseResult(
-            platform=cls.name,
-            title=str(component.get("title") or "微博视频"),
-            author=author,
-            description=cls._strip_html(component.get("text")),
-            cover_urls=[cover_url] if cover_url else [],
-            video_url=video_url,
-            extra_lines=[] if video_url else ["无法获取微博视频直链。"],
-        )
+        result = ParseResult(platform=cls.name)
+        result.content.title = str(component.get("title") or "微博视频")
+        result.content.author = author
+        result.content.description = cls._strip_html(component.get("text"))
+        if cover_url:
+            result.content.cover_urls.append(cover_url)
+        result.media.video_url = video_url
+        if not video_url:
+            result.content.extra_lines.append("无法获取微博视频直链。")
+        return result
