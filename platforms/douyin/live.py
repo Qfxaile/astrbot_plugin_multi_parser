@@ -33,13 +33,13 @@ class DouyinLiveContent:
         user_count = room.get("userCount")
         if isinstance(user_count, int) and user_count >= 0:
             extra_lines.append(f"观看人数: {user_count:,}")
-        return ParseResult(
-            platform=self.name,
-            title=str(room.get("title") or "抖音直播间"),
-            author=str(owner.get("nickname") or "未知主播"),
-            cover_urls=[cover_url] if cover_url else [],
-            extra_lines=extra_lines,
-        )
+        result = ParseResult(platform=self.name)
+        result.content.title = str(room.get("title") or "抖音直播间")
+        result.content.author = str(owner.get("nickname") or "未知主播")
+        if cover_url:
+            result.content.cover_urls.append(cover_url)
+        result.content.extra_lines.extend(extra_lines)
+        return result
 
     @classmethod
     def _extract_live_reflow_room(cls, html: str) -> dict:

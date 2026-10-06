@@ -110,15 +110,15 @@ def parse_qishui_track_html(html: str, *, platform: str) -> ParseResult:
         else ""
     )
     extra_lines = [] if audio_url else ["无法获取安全的音频直链。"]
-    return ParseResult(
-        platform=platform,
-        title=parser.title,
-        author=parser.author or "未知歌手",
-        description=parser.description,
-        cover_urls=[parser.cover_url] if parser.cover_url else [],
-        extra_lines=extra_lines,
-        audio_url=audio_url,
-    )
+    result = ParseResult(platform=platform)
+    result.content.title = parser.title
+    result.content.author = parser.author or "未知歌手"
+    result.content.description = parser.description
+    if parser.cover_url:
+        result.content.cover_urls.append(parser.cover_url)
+    result.content.extra_lines.extend(extra_lines)
+    result.media.audio_url = audio_url
+    return result
 
 
 def _audio_url_from_router_data(script_text: str) -> str:

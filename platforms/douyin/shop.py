@@ -48,12 +48,11 @@ class DouyinShopContent:
             return self._shop_metadata_error()
 
         image_url = self._shop_image_url(payload.get("img"))
-        return ParseResult(
-            platform=self.name,
-            title=title,
-            cover_urls=[image_url] if image_url else [],
-            extra_lines=[],
-        )
+        result = ParseResult(platform=self.name)
+        result.content.title = title
+        if image_url:
+            result.content.cover_urls.append(image_url)
+        return result
 
     @classmethod
     def _shop_image_url(cls, value: object) -> str:
@@ -70,7 +69,6 @@ class DouyinShopContent:
         return ""
 
     def _shop_metadata_error(self) -> ParseResult:
-        return ParseResult(
-            platform=self.name,
-            error="未找到抖音商城商品信息，链接可能已失效。",
-        )
+        result = ParseResult(platform=self.name)
+        result.diagnostics.error = "未找到抖音商城商品信息，链接可能已失效。"
+        return result

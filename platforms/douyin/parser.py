@@ -72,7 +72,9 @@ class DouyinParser(
     async def parse(self, context: ParseContext) -> ParseResult:
         match = re.search(self.PATTERN, context.combined_text)
         if not match:
-            return ParseResult(platform=self.name, error="未找到大陆抖音链接。")
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "未找到大陆抖音链接。"
+            return result
 
         cookies = build_cookies(
             cookie_config_value(self.config, "douyin_cookies"),
@@ -99,12 +101,14 @@ class DouyinParser(
                         raise_for_auth=self._raise_for_auth_page,
                     )
                 except DouyinRedirectError as exc:
-                    return ParseResult(platform=self.name, error=str(exc))
+                    result = ParseResult(platform=self.name)
+                    result.diagnostics.error = str(exc)
+                    return result
                 url = str(response.url)
 
             if self._is_shop_url(url):
                 result = self._parse_shop_url(url)
-                if result.error or not result.cover_urls:
+                if result.diagnostics.error or not result.content.cover_urls:
                     return result
                 return await self.materialize_public_images(
                     result,

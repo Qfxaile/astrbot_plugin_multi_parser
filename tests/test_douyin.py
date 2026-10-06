@@ -129,9 +129,9 @@ async def test_parse_shop_long_link_materializes_main_image_without_cookie(
         {"douyin_cookies": "sessionid=shop-session"}
     ).parse(ParseContext(text=shop_url))
 
-    assert result.title == "抖音商城商品"
-    assert result.extra_lines == []
-    assert_temporary_image(result, result.cover_urls[0], b"shop-image")
+    assert result.content.title == "抖音商城商品"
+    assert result.content.extra_lines == []
+    assert_temporary_image(result, result.content.cover_urls[0], b"shop-image")
     assert image_request is not None
     assert image_request.headers["Referer"] == shop_url
     assert "Cookie" not in image_request.headers
@@ -173,8 +173,8 @@ async def test_short_link_redirects_to_shop_and_keeps_cookie_scoped(
         {"douyin_cookies": "sessionid=shop-session"}
     ).parse(ParseContext(text=short_url))
 
-    assert result.title == "短链商城商品"
-    assert_temporary_image(result, result.cover_urls[0], b"short-shop-image")
+    assert result.content.title == "短链商城商品"
+    assert_temporary_image(result, result.content.cover_urls[0], b"short-shop-image")
     assert [request.url.host for request in requests] == [
         "v.douyin.com",
         "haohuo.jinritemai.com",
@@ -197,9 +197,9 @@ async def test_short_link_redirects_to_shop_and_keeps_cookie_scoped(
 def test_shop_url_keeps_title_when_main_image_is_unavailable(payload):
     result = douyin.DouyinParser({})._parse_shop_url(build_douyin_shop_url(payload))
 
-    assert result.title == payload["title"]
-    assert result.cover_urls == []
-    assert result.error == ""
+    assert result.content.title == payload["title"]
+    assert result.content.cover_urls == []
+    assert result.diagnostics.error == ""
 
 
 @pytest.mark.parametrize(
@@ -216,9 +216,9 @@ def test_shop_url_keeps_title_when_main_image_is_unavailable(payload):
 def test_shop_url_reports_missing_or_invalid_metadata(shop_url):
     result = douyin.DouyinParser({})._parse_shop_url(shop_url)
 
-    assert result.error == "未找到抖音商城商品信息，链接可能已失效。"
-    assert result.title == ""
-    assert result.cover_urls == []
+    assert result.diagnostics.error == "未找到抖音商城商品信息，链接可能已失效。"
+    assert result.content.title == ""
+    assert result.content.cover_urls == []
 
 
 @pytest.mark.asyncio
@@ -248,7 +248,7 @@ async def test_short_link_rejects_untrusted_redirect_before_request(monkeypatch)
         ParseContext(text="https://v.douyin.com/unsafe123/")
     )
 
-    assert result.error == "抖音分享链接跳转到不可信域名。"
+    assert result.diagnostics.error == "抖音分享链接跳转到不可信域名。"
     assert requested_hosts == ["v.douyin.com"]
 
 
@@ -270,7 +270,7 @@ async def test_short_link_reports_missing_redirect_location(monkeypatch):
         ParseContext(text="https://v.douyin.com/missing123/")
     )
 
-    assert result.error == "抖音分享链接缺少跳转地址。"
+    assert result.diagnostics.error == "抖音分享链接缺少跳转地址。"
 
 
 @pytest.mark.asyncio
@@ -299,7 +299,7 @@ async def test_short_link_limits_redirect_count(monkeypatch):
         ParseContext(text="https://v.douyin.com/loop123/")
     )
 
-    assert result.error == "抖音分享链接重定向次数超过安全限制。"
+    assert result.diagnostics.error == "抖音分享链接重定向次数超过安全限制。"
     assert request_count == douyin.DouyinParser.MAX_REDIRECTS + 1
 
 
@@ -324,10 +324,12 @@ def test_live_payload_extracts_room_information():
 
     result = douyin.DouyinParser({})._parse_live_data(payload)
 
-    assert result.title == "抖音直播标题"
-    assert result.author == "抖音主播"
-    assert result.cover_urls == ["https://p3-webcast.douyinpic.com/live-cover.webp"]
-    assert result.extra_lines == [
+    assert result.content.title == "抖音直播标题"
+    assert result.content.author == "抖音主播"
+    assert result.content.cover_urls == [
+        "https://p3-webcast.douyinpic.com/live-cover.webp"
+    ]
+    assert result.content.extra_lines == [
         "直播状态: 直播中",
         "观看人数: 1.2万",
     ]
@@ -379,8 +381,8 @@ async def test_parse_live_requests_api_and_materializes_cover(
         ParseContext(text=live_url)
     )
 
-    assert result.title == "抖音直播标题"
-    assert_temporary_image(result, result.cover_urls[0], b"live-cover")
+    assert result.content.title == "抖音直播标题"
+    assert_temporary_image(result, result.content.cover_urls[0], b"live-cover")
     assert api_request is not None
     assert api_request.url.params["web_rid"] == "123456789"
     assert "ttwid=live-session" in api_request.headers["Cookie"]
@@ -434,13 +436,13 @@ async def test_short_link_redirects_to_live_reflow_page(
 
     result = await douyin.DouyinParser({}).parse(ParseContext(text=short_url))
 
-    assert result.title == "回流页直播标题"
-    assert result.author == "回流页主播"
-    assert result.extra_lines == [
+    assert result.content.title == "回流页直播标题"
+    assert result.content.author == "回流页主播"
+    assert result.content.extra_lines == [
         "直播状态: 直播中",
         "观看人数: 321",
     ]
-    assert_temporary_image(result, result.cover_urls[0], b"reflow-cover")
+    assert_temporary_image(result, result.content.cover_urls[0], b"reflow-cover")
     assert page_request is not None
     assert image_request is not None
     assert image_request.headers["Referer"] == room_url
@@ -465,12 +467,12 @@ def test_qishui_track_html_parses_summary_cover_and_audio():
 
     result = douyin_music.parse_qishui_track_html(html, platform="douyin")
 
-    assert result.title == "苏北的北"
-    assert result.author == "小阿娇"
-    assert result.description == "歌曲简介"
-    assert result.cover_urls == ["https://p3-luna.douyinpic.com/cover.jpg"]
-    assert result.audio_url == ("https://v3-luna.douyinvod.com/song.m4a?a=1&b=2")
-    assert result.extra_lines == []
+    assert result.content.title == "苏北的北"
+    assert result.content.author == "小阿娇"
+    assert result.content.description == "歌曲简介"
+    assert result.content.cover_urls == ["https://p3-luna.douyinpic.com/cover.jpg"]
+    assert result.media.audio_url == ("https://v3-luna.douyinvod.com/song.m4a?a=1&b=2")
+    assert result.content.extra_lines == []
 
 
 def test_qishui_track_html_rejects_untrusted_audio_url():
@@ -482,8 +484,8 @@ def test_qishui_track_html_rejects_untrusted_audio_url():
 
     result = douyin_music.parse_qishui_track_html(html, platform="douyin")
 
-    assert result.audio_url == ""
-    assert result.extra_lines == ["无法获取安全的音频直链。"]
+    assert result.media.audio_url == ""
+    assert result.content.extra_lines == ["无法获取安全的音频直链。"]
 
 
 def test_qishui_track_html_parses_audio_from_router_data():
@@ -499,7 +501,7 @@ def test_qishui_track_html_parses_audio_from_router_data():
 
     result = douyin_music.parse_qishui_track_html(html, platform="douyin")
 
-    assert result.audio_url == ("https://v5-se-ex-mc-luna.douyinvod.com/song.m4a")
+    assert result.media.audio_url == ("https://v5-se-ex-mc-luna.douyinvod.com/song.m4a")
 
 
 @pytest.mark.asyncio
@@ -554,11 +556,11 @@ async def test_short_link_redirects_to_qishui_track(
 
     result = await douyin.DouyinParser({}).parse(ParseContext(text=short_url))
 
-    assert result.title == "歌曲标题"
-    assert result.author == "歌手"
-    assert result.description == "歌曲简介"
-    assert result.audio_url == audio_url
-    assert_temporary_image(result, result.cover_urls[0], b"cover-image")
+    assert result.content.title == "歌曲标题"
+    assert result.content.author == "歌手"
+    assert result.content.description == "歌曲简介"
+    assert result.media.audio_url == audio_url
+    assert_temporary_image(result, result.content.cover_urls[0], b"cover-image")
     assert requested_hosts == [
         short_host,
         "music.douyin.com",
@@ -603,13 +605,13 @@ def test_router_data_parses_image_note():
 
     result = douyin.DouyinParser({})._parse_router_data(payload)
 
-    assert result.title == "图文标题"
-    assert result.author == "作者"
-    assert result.image_urls == [
+    assert result.content.title == "图文标题"
+    assert result.content.author == "作者"
+    assert result.content.image_urls == [
         "https://img.example/original-1.webp",
         "https://img.example/fallback-2.webp",
     ]
-    assert result.video_url == ""
+    assert result.media.video_url == ""
 
 
 def test_router_data_falls_back_to_unwatermarked_play_addr():
@@ -639,9 +641,9 @@ def test_router_data_falls_back_to_unwatermarked_play_addr():
 
     result = douyin.DouyinParser({})._parse_router_data(payload)
 
-    assert result.video_url == "https://video.example/play?id=1"
-    assert result.cover_urls == ["https://img.example/cover.jpg"]
-    assert result.extra_lines == ["play_token=video-token"]
+    assert result.media.video_url == "https://video.example/play?id=1"
+    assert result.content.cover_urls == ["https://img.example/cover.jpg"]
+    assert result.content.extra_lines == ["play_token=video-token"]
 
 
 def test_router_data_parses_single_animated_image_as_video():
@@ -677,10 +679,10 @@ def test_router_data_parses_single_animated_image_as_video():
 
     result = douyin.DouyinParser({})._parse_router_data(payload)
 
-    assert result.cover_urls == ["https://img.example/animated-cover.webp"]
-    assert result.image_urls == []
-    assert result.video_url == "https://video.example/animated.mp4"
-    assert result.extra_lines == ["play_token=animated-video-token"]
+    assert result.content.cover_urls == ["https://img.example/animated-cover.webp"]
+    assert result.content.image_urls == []
+    assert result.media.video_url == "https://video.example/animated.mp4"
+    assert result.content.extra_lines == ["play_token=animated-video-token"]
 
 
 def test_slides_data_keeps_static_image_order():
@@ -715,11 +717,11 @@ def test_slides_data_keeps_static_image_order():
 
     result = douyin.DouyinParser({})._parse_slides_data(payload)
 
-    assert result.image_urls == [
+    assert result.content.image_urls == [
         "https://img.example/original-1.webp",
         "https://img.example/fallback-2.webp",
     ]
-    assert result.video_url == ""
+    assert result.media.video_url == ""
 
 
 def test_slides_data_parses_single_animated_image_as_video():
@@ -745,10 +747,10 @@ def test_slides_data_parses_single_animated_image_as_video():
 
     result = douyin.DouyinParser({})._parse_slides_data(payload)
 
-    assert result.cover_urls == ["https://img.example/animated-cover.webp"]
-    assert result.image_urls == []
-    assert result.video_url == "https://video.example/animated.mp4"
-    assert result.extra_lines == ["play_token=animated-video-token"]
+    assert result.content.cover_urls == ["https://img.example/animated-cover.webp"]
+    assert result.content.image_urls == []
+    assert result.media.video_url == "https://video.example/animated.mp4"
+    assert result.content.extra_lines == ["play_token=animated-video-token"]
 
 
 @pytest.mark.asyncio
@@ -828,7 +830,7 @@ async def test_parse_materializes_images_without_leaking_douyin_cookies(
         ParseContext(text=share_url)
     )
 
-    assert_temporary_image(result, result.image_urls[0], b"image-content")
+    assert_temporary_image(result, result.content.image_urls[0], b"image-content")
     assert image_request is not None
     assert image_request.headers["Referer"] == share_url
     assert "Mobile/15E148" in image_request.headers["User-Agent"]
@@ -883,10 +885,10 @@ async def test_parse_keeps_failed_douyin_image_slot(
 
     result = await douyin.DouyinParser({}).parse(ParseContext(text=share_url))
 
-    assert result.title == "图文标题"
-    assert result.image_urls[0] == ""
-    assert_temporary_image(result, result.image_urls[1], b"working-image")
-    assert result.image_errors == {0: "第 1 张图片获取失败：HTTP 403"}
+    assert result.content.title == "图文标题"
+    assert result.content.image_urls[0] == ""
+    assert_temporary_image(result, result.content.image_urls[1], b"working-image")
+    assert result.diagnostics.image_errors == {0: "第 1 张图片获取失败：HTTP 403"}
     warning = next(
         record.message
         for record in caplog.records
@@ -939,7 +941,7 @@ async def test_parse_materializes_video_cover(monkeypatch, assert_temporary_imag
 
     result = await douyin.DouyinParser({}).parse(ParseContext(text=share_url))
 
-    assert_temporary_image(result, result.cover_urls[0], b"original-cover")
+    assert_temporary_image(result, result.content.cover_urls[0], b"original-cover")
 
 
 @pytest.mark.asyncio
@@ -1003,10 +1005,10 @@ async def test_parse_slides_materializes_original_candidates_in_place(
         {"douyin_cookies": "sessionid=slides-session"}
     ).parse(ParseContext(text=share_url))
 
-    assert_temporary_image(result, result.image_urls[0], original_url.encode())
-    assert_temporary_image(result, result.image_urls[1], fallback_url.encode())
-    assert result.image_urls[2] == ""
-    assert result.image_errors == {2: "第 3 张图片获取失败：HTTP 403"}
+    assert_temporary_image(result, result.content.image_urls[0], original_url.encode())
+    assert_temporary_image(result, result.content.image_urls[1], fallback_url.encode())
+    assert result.content.image_urls[2] == ""
+    assert result.diagnostics.image_errors == {2: "第 3 张图片获取失败：HTTP 403"}
     assert [str(request.url) for request in image_requests] == [
         original_url,
         fallback_url,
@@ -1058,9 +1060,9 @@ async def test_parse_keeps_unsafe_douyin_candidates_without_requesting_them(
     result = await douyin.DouyinParser({}).parse(ParseContext(text=share_url))
 
     assert unexpected_requests == []
-    assert result.image_urls == ["", "", ""]
+    assert result.content.image_urls == ["", "", ""]
     assert result.image_count == 3
-    assert list(result.image_errors) == [0, 1, 2]
+    assert list(result.diagnostics.image_errors) == [0, 1, 2]
 
 
 def test_douyin_image_payloads_ignore_string_containers_and_mixed_elements():
@@ -1101,10 +1103,10 @@ def test_douyin_image_payloads_ignore_string_containers_and_mixed_elements():
     router_result = douyin.DouyinParser({})._parse_router_data(router_payload)
     slides_result = douyin.DouyinParser({})._parse_slides_data(slides_payload)
 
-    assert router_result.image_urls == ["https://img.example/a.jpg"]
-    assert router_result.author == "未知作者"
-    assert slides_result.image_urls == ["https://img.example/b.jpg"]
-    assert slides_result.author == "未知作者"
+    assert router_result.content.image_urls == ["https://img.example/a.jpg"]
+    assert router_result.content.author == "未知作者"
+    assert slides_result.content.image_urls == ["https://img.example/b.jpg"]
+    assert slides_result.content.author == "未知作者"
 
 
 def test_douyin_image_candidates_prefer_unwatermarked_url_list():
@@ -1163,7 +1165,7 @@ def test_douyin_image_candidates_continue_after_unsafe_values():
 
     result = douyin.DouyinParser({})._parse_slides_data(payload)
 
-    assert result.image_urls == [
+    assert result.content.image_urls == [
         "https://img.example/original-after-unsafe.webp",
         "https://img.example/original-fallback.webp",
     ]
