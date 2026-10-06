@@ -51,10 +51,10 @@ def test_parse_page_keeps_first_post_text_image_order_and_video():
 
     result = tieba.TiebaParser({})._parse_page(html, "1234567890")
 
-    assert result.title == "示例帖子标题"
-    assert result.author == "楼主"
-    assert result.video_url == "https://video-tieba.cdn.bcebos.com/example.mp4"
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert result.content.title == "示例帖子标题"
+    assert result.content.author == "楼主"
+    assert result.media.video_url == "https://video-tieba.cdn.bcebos.com/example.mp4"
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("text", "第一段正文"),
         ("image", "https://tiebapic.baidu.com/forum/pic/item/first.jpg"),
         ("text", "第二段正文"),
@@ -76,9 +76,9 @@ def test_parse_page_uses_visible_author_and_protocol_relative_image_fallbacks():
 
     result = tieba.TiebaParser({})._parse_page(html, "123")
 
-    assert result.title == "无属性标题"
-    assert result.author == "可见作者"
-    assert result.ordered_contents[-1].value == (
+    assert result.content.title == "无属性标题"
+    assert result.content.author == "可见作者"
+    assert result.content.ordered_contents[-1].value == (
         "https://imgsa.baidu.com/forum/pic/item/fallback.png"
     )
 
@@ -117,7 +117,7 @@ def test_legacy_page_cookie_header_forces_old_pc_page(cookie_header, expected):
 def test_parse_page_returns_readable_platform_errors(html, expected_error):
     result = tieba.TiebaParser({})._parse_page(html, "123")
 
-    assert expected_error in result.error
+    assert expected_error in result.diagnostics.error
 
 
 @pytest.mark.asyncio
@@ -159,7 +159,9 @@ async def test_parse_materializes_images_without_leaking_tieba_cookies(
         }
     ).parse(ParseContext(text=page_url))
 
-    assert_temporary_image(result, result.ordered_contents[-1].value, b"image-bytes")
+    assert_temporary_image(
+        result, result.content.ordered_contents[-1].value, b"image-bytes"
+    )
     page_request, image_request = requests
     assert page_request.url.params["see_lz"] == "1"
     assert page_request.url.params["pn"] == "1"
@@ -175,4 +177,4 @@ async def test_parse_materializes_images_without_leaking_tieba_cookies(
 async def test_parse_returns_error_when_thread_link_is_missing():
     result = await tieba.TiebaParser({}).parse(ParseContext(text="没有链接"))
 
-    assert result.error == "未找到贴吧帖子链接。"
+    assert result.diagnostics.error == "未找到贴吧帖子链接。"

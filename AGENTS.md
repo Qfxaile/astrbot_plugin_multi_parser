@@ -49,7 +49,7 @@ uv run ruff check .
 | 需求 | 首选位置 |
 | --- | --- |
 | 插件注册、事件入口 | `main.py`；插件级服务装配由 `services/container.py` 的 `ServiceContainer` 负责 |
-| 解析结果和上下文契约 | `core/contracts.py`；`ContentDocument`、`MediaBundle`、`ParseDiagnostics` 分别提供内容、媒体和诊断领域视图；GitHub、Pixiv、番茄小说、腾讯频道、微信已迁移生产写入到领域视图；`ParseResult.content_lines`、`ParseResult.image_references`、`ParseResult.media_metadata` 保持后处理兼容视图 |
+| 解析结果和上下文契约 | `core/contracts.py`；`ContentDocument`、`MediaBundle`、`ParseDiagnostics` 分别提供内容、媒体和诊断领域视图；GitHub、Pixiv、番茄小说、腾讯频道、微信、贴吧已迁移生产写入到领域视图；`ParseResult.content_lines`、`ParseResult.image_references`、`ParseResult.media_metadata` 保持后处理兼容视图 |
 | 登录契约、登录 HTTP 基类和二维码渲染 | `core/platform_login.py` |
 | 安全 HTTP、可信 URL、Cookie、平台代理、商品网页元数据、媒体和渲染 | `core/http.py`、`core/webpage.py`、`core/product_metadata.py`、`core/media.py`、`core/rendering.py`；`ParseResultRenderer` 负责结果到消息组件的转换 |
 | 配置类型读取与平台开关 | `core/settings.py`；基础设施和服务不得重复实现配置类型转换 |
