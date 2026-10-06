@@ -65,9 +65,9 @@ def test_article_html_preserves_text_and_image_order():
         """
     )
 
-    assert result.title == "文章标题"
-    assert result.author == "测试公众号"
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert result.content.title == "文章标题"
+    assert result.content.author == "测试公众号"
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("text", "第一段"),
         ("image", "https://mmbiz.qpic.cn/article/640?wx_fmt=jpeg"),
         ("text", "第二段"),
@@ -116,9 +116,9 @@ async def test_parse_article_materializes_wechat_image(
 
     result = await parser.parse(ParseContext(text=article_url))
 
-    assert result.title == "公众号文章"
-    assert result.author == "公众号作者"
-    image_item = result.ordered_contents[1]
+    assert result.content.title == "公众号文章"
+    assert result.content.author == "公众号作者"
+    image_item = result.content.ordered_contents[1]
     assert_temporary_image(result, image_item.value, b"wechat-image")
 
 
@@ -210,10 +210,10 @@ async def test_short_channels_url_uses_yuanbao_headers_without_leaking_them(
         "yuanbao.tencent.com",
         "channels.weixin.qq.com",
     ]
-    assert result.title == "视频号标题"
-    assert result.author == "视频号作者"
-    assert result.video_url == "https://finder.video.qq.com/video.mp4"
-    assert result.extra_lines == []
+    assert result.content.title == "视频号标题"
+    assert result.content.author == "视频号作者"
+    assert result.media.video_url == "https://finder.video.qq.com/video.mp4"
+    assert result.content.extra_lines == []
 
 
 @pytest.mark.asyncio
@@ -246,7 +246,7 @@ async def test_channels_long_url_skips_yuanbao_cookie(monkeypatch):
     result = await WeChatParser({}).parse(ParseContext(text=url))
 
     assert requested_hosts == ["channels.weixin.qq.com"]
-    assert result.video_url == "https://finder.video.qq.com/long.mp4"
+    assert result.media.video_url == "https://finder.video.qq.com/long.mp4"
 
 
 def test_channels_payload_rejects_untrusted_video_url():

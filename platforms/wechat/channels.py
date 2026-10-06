@@ -174,13 +174,13 @@ def parse_channels_payload(payload: Mapping[str, Any]) -> ParseResult:
     video_url = _validate_video_url(video_url)
 
     cover_url = str(feed_info.get("coverUrl") or "").strip()
-    return ParseResult(
-        platform="wechat",
-        title=str(feed_info.get("description") or "微信视频号"),
-        author=str(author_info.get("nickname") or "视频号用户"),
-        cover_urls=[cover_url] if cover_url else [],
-        video_url=video_url,
-    )
+    result = ParseResult(platform="wechat")
+    result.content.title = str(feed_info.get("description") or "微信视频号")
+    result.content.author = str(author_info.get("nickname") or "视频号用户")
+    if cover_url:
+        result.content.cover_urls.append(cover_url)
+    result.media.video_url = video_url
+    return result
 
 
 def _pick_video_url(feed_info: Mapping[str, Any]) -> str:
