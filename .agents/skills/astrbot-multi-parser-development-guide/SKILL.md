@@ -20,6 +20,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 安全 HTTP、平台代理、媒体和结果渲染：`core/http.py`、`core/media.py`、`core/rendering.py`
 - 解析器公共流程：`core/parser.py`
 - 解析结果后处理视图：`core/contracts.py` 中 `ParseResult.content_lines`、`ParseResult.image_references`、`ParseResult.media_metadata`
+- 解析结果领域视图：`core/contracts.py` 中的 `ContentDocument`、`MediaBundle`、`ParseDiagnostics`
 - 解析结果消息组件渲染：`core/rendering.py` 的 `ParseResultRenderer`
 - 平台统一 HTTP 客户端：`core/parser.py` 的 `BaseParser.http_client()`
 - 平台扩展接口与能力元数据：`core/platform.py`
@@ -48,7 +49,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 平台请求优先使用 `BaseParser.http_client()`，统一超时、平台代理参数和重定向策略；仅在需要特殊客户端选项时直接创建 `httpx.AsyncClient`。
 
-媒体投递、视频处理和渲染适配优先使用 `ParseResult.media_metadata`，不要重复读取媒体请求字段；临时文件通过 `core/media.py` 的 `TemporaryFileRegistry` 登记和清理。合并转发决策与节点发送复用 `ForwardDeliveryService`，不要在 `DeliveryService` 重建 OneBot 序列化流程。
+后处理服务优先使用 `ParseResult.content`、`ParseResult.media`、`ParseResult.diagnostics` 获取领域数据；`content_lines`、`image_references` 和 `media_metadata` 继续作为兼容视图。媒体投递和视频处理使用统一媒体视图；临时文件通过 `core/media.py` 的 `TemporaryFileRegistry` 登记和清理。合并转发决策与节点发送复用 `ForwardDeliveryService`，不要在 `DeliveryService` 重建 OneBot 序列化流程。
 修改媒体元数据访问时运行 `tests/test_media_metadata_boundaries.py`，确保服务层没有绕过统一视图。
 
 新增平台或跨层依赖时运行 `tests/test_architecture_dependencies.py`，保持平台适配器不依赖服务层、核心不依赖平台实现。

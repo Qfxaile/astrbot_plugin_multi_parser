@@ -23,7 +23,7 @@ class TemporaryFileRegistry:
 
     @staticmethod
     def register(result: ParseResult, path: Path) -> None:
-        result.media_metadata.temporary_files.append(path)
+        result.media.temporary_files.append(path)
 
     @staticmethod
     def cleanup(result: ParseResult) -> None:
@@ -66,7 +66,7 @@ def mark_invalid_legacy_images(
             image_number += 1
             if image_url == invalid_marker:
                 image_values[field_index] = ""
-                result.image_errors[legacy_index] = (
+                result.diagnostics.image_errors[legacy_index] = (
                     f"第 {image_number} 张图片获取失败：{error_detail}"
                 )
             legacy_index += 1
@@ -95,9 +95,9 @@ class ImageMaterializer:
     ) -> ParseResult:
         image_number = 0
         try:
-            if result.ordered_contents:
+            if result.content.ordered_contents:
                 candidates = []
-                for item in result.ordered_contents:
+                for item in result.content.ordered_contents:
                     if item.kind not in {"image", "image_error"}:
                         continue
                     image_number += 1
@@ -168,7 +168,9 @@ class ImageMaterializer:
                 else:
                     image_values[field_index] = ""
                     detail = self._image_error_detail(outcome)
-                    result.image_errors[index] = f"第 {number} 张图片获取失败：{detail}"
+                    result.diagnostics.image_errors[index] = (
+                        f"第 {number} 张图片获取失败：{detail}"
+                    )
                     logger.warning(
                         f"图片下载失败 ({self._hostname_label(image_url)}): {detail}"
                     )
@@ -357,7 +359,7 @@ class VideoMaterializer:
             follow_redirects=False,
             **http_client_proxy_options(self.config, result.platform),
         ) as client:
-            video_path = await self._download(client, result.video_url)
+            video_path = await self._download(client, result.media.video_url)
         TemporaryFileRegistry.register(result, video_path)
         return video_path
 

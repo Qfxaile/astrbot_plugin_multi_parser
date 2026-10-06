@@ -40,25 +40,28 @@ def render_info_chain(
     """将平台无关的解析结果转换为 AstrBot 消息组件。"""
     summary_chain: list = []
     lines = []
+    content = result.content
+    diagnostics = result.diagnostics
+    media = result.media
     if include_summary:
-        if result.title:
-            lines.append(result.title)
-        if result.author:
-            lines.append(f"作者: {result.author}")
-        if result.description:
-            lines.append(f"简介:\n{result.description}")
-        lines.extend(result.extra_lines)
-        if result.error:
-            lines.append(result.error)
-        if result.video_url and include_video_url:
-            lines.append(f"视频链接: {result.video_url}")
+        if content.title:
+            lines.append(content.title)
+        if content.author:
+            lines.append(f"作者: {content.author}")
+        if content.description:
+            lines.append(f"简介:\n{content.description}")
+        lines.extend(content.extra_lines)
+        if diagnostics.error:
+            lines.append(diagnostics.error)
+        if media.video_url and include_video_url:
+            lines.append(f"视频链接: {media.video_url}")
         if lines:
             summary_chain.append(Plain("\n".join(lines)))
 
-    if result.ordered_contents:
+    if content.ordered_contents:
         content_chain: list = []
         if include_content:
-            for item in result.ordered_contents:
+            for item in content.ordered_contents:
                 if not item.value:
                     continue
                 if item.kind == "image":
@@ -69,17 +72,17 @@ def render_info_chain(
 
     content_chain: list = []
     if include_content:
-        image_urls = [*result.cover_urls, *result.image_urls]
+        image_urls = [*content.cover_urls, *content.image_urls]
         for index, image_url in enumerate(image_urls):
             if image_url:
                 content_chain.append(_image_component(result, image_url))
-            elif error := result.image_errors.get(index):
+            elif error := diagnostics.image_errors.get(index):
                 content_chain.append(Plain(error))
     return [*content_chain, *summary_chain]
 
 
 def render_video_chain(result: ParseResult) -> list:
-    return [Video.fromURL(result.video_url)] if result.video_url else []
+    return [Video.fromURL(result.media.video_url)] if result.media.video_url else []
 
 
 def render_audio_chain(result: ParseResult) -> list:
@@ -88,6 +91,6 @@ def render_audio_chain(result: ParseResult) -> list:
 
 
 def _image_component(result: ParseResult, value: str) -> Image:
-    if any(value == str(path) for path in result.media_metadata.temporary_files):
+    if any(value == str(path) for path in result.media.temporary_files):
         return Image.fromFileSystem(value)
     return Image(file=value)

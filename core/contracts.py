@@ -22,6 +22,123 @@ class OrderedContent:
     value: str
 
 
+class ContentDocument:
+    """解析内容领域视图，统一管理标题、正文和图片顺序。"""
+
+    def __init__(self, result: "ParseResult") -> None:
+        self._result = result
+
+    @property
+    def title(self) -> str:
+        return self._result.title
+
+    @title.setter
+    def title(self, value: str) -> None:
+        self._result.title = value
+
+    @property
+    def author(self) -> str:
+        return self._result.author
+
+    @author.setter
+    def author(self, value: str) -> None:
+        self._result.author = value
+
+    @property
+    def description(self) -> str:
+        return self._result.description
+
+    @description.setter
+    def description(self, value: str) -> None:
+        self._result.description = value
+
+    @property
+    def extra_lines(self) -> list[str]:
+        return self._result.extra_lines
+
+    @property
+    def ordered_contents(self) -> list[OrderedContent]:
+        return self._result.ordered_contents
+
+    @property
+    def cover_urls(self) -> list[str]:
+        return self._result.cover_urls
+
+    @property
+    def image_urls(self) -> list[str]:
+        return self._result.image_urls
+
+
+class MediaBundle:
+    """解析媒体领域视图，集中暴露媒体地址与请求元数据。"""
+
+    def __init__(self, result: "ParseResult") -> None:
+        self._result = result
+
+    @property
+    def video_url(self) -> str:
+        return self._result.video_url
+
+    @video_url.setter
+    def video_url(self, value: str) -> None:
+        self._result.video_url = value
+
+    @property
+    def audio_url(self) -> str:
+        return self._result.audio_url
+
+    @audio_url.setter
+    def audio_url(self, value: str) -> None:
+        self._result.audio_url = value
+
+    @property
+    def image_urls(self) -> list[str]:
+        return self._result.image_urls
+
+    @property
+    def cover_urls(self) -> list[str]:
+        return self._result.cover_urls
+
+    @property
+    def temporary_files(self) -> list[Path]:
+        return self._result.temporary_files
+
+    @property
+    def image_source_urls(self) -> dict[str, str]:
+        return self._result.image_source_urls
+
+    @property
+    def image_download_headers(self) -> dict[str, str]:
+        return self._result.image_download_headers
+
+    @property
+    def video_download_headers(self) -> dict[str, str]:
+        return self._result.video_download_headers
+
+    @property
+    def video_download_host_suffixes(self) -> tuple[str, ...]:
+        return self._result.video_download_host_suffixes
+
+
+class ParseDiagnostics:
+    """解析诊断领域视图，隔离错误和部分媒体失败信息。"""
+
+    def __init__(self, result: "ParseResult") -> None:
+        self._result = result
+
+    @property
+    def error(self) -> str:
+        return self._result.error
+
+    @error.setter
+    def error(self, value: str) -> None:
+        self._result.error = value
+
+    @property
+    def image_errors(self) -> dict[int, str]:
+        return self._result.image_errors
+
+
 @dataclass(frozen=True)
 class MediaMetadata:
     """解析结果携带的媒体请求与临时文件元数据视图。"""
@@ -61,6 +178,21 @@ class ParseResult:
     subtitle_language: str = ""
 
     @property
+    def content(self) -> ContentDocument:
+        """返回内容领域视图，兼容旧字段的原地修改。"""
+        return ContentDocument(self)
+
+    @property
+    def media(self) -> MediaBundle:
+        """返回媒体领域视图，媒体基础设施优先使用此入口。"""
+        return MediaBundle(self)
+
+    @property
+    def diagnostics(self) -> ParseDiagnostics:
+        """返回解析诊断视图。"""
+        return ParseDiagnostics(self)
+
+    @property
     def image_count(self) -> int:
         return (
             len(self.cover_urls)
@@ -96,12 +228,13 @@ class ParseResult:
     @property
     def media_metadata(self) -> MediaMetadata:
         """返回媒体基础设施使用的元数据视图，保持与内容字段分离。"""
+        bundle = self.media
         return MediaMetadata(
-            temporary_files=self.temporary_files,
-            image_source_urls=self.image_source_urls,
-            image_download_headers=self.image_download_headers,
-            video_download_headers=self.video_download_headers,
-            video_download_host_suffixes=self.video_download_host_suffixes,
+            temporary_files=bundle.temporary_files,
+            image_source_urls=bundle.image_source_urls,
+            image_download_headers=bundle.image_download_headers,
+            video_download_headers=bundle.video_download_headers,
+            video_download_host_suffixes=bundle.video_download_host_suffixes,
         )
 
     def info_chain(
