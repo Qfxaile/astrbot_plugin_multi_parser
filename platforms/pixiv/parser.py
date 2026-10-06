@@ -10,6 +10,7 @@ import httpx
 from ...core.contracts import ParseContext, ParseResult
 from ...core.http import is_trusted_https_url
 from ...core.parser import BaseParser
+from .client import request_body
 
 
 class PixivParser(BaseParser):
@@ -53,11 +54,15 @@ class PixivParser(BaseParser):
         artwork_url = f"https://www.pixiv.net/artworks/{artwork_id}"
         try:
             async with self.http_client(headers=self.HEADERS) as client:
-                metadata = await self._request_body(
-                    client, f"{self.AJAX_BASE_URL}/{artwork_id}"
+                metadata = await request_body(
+                    client,
+                    f"{self.AJAX_BASE_URL}/{artwork_id}",
+                    raise_for_response=self.raise_for_response_status,
                 )
-                pages = await self._request_body(
-                    client, f"{self.AJAX_BASE_URL}/{artwork_id}/pages"
+                pages = await request_body(
+                    client,
+                    f"{self.AJAX_BASE_URL}/{artwork_id}/pages",
+                    raise_for_response=self.raise_for_response_status,
                 )
                 result = self._parse_illust_payload(metadata, pages)
                 return await self.materialize_images(result, client, artwork_url)
@@ -68,20 +73,6 @@ class PixivParser(BaseParser):
                 platform=self.name,
                 error="Pixiv作品请求失败，请稍后重试。",
             )
-
-    async def _request_body(self, client: httpx.AsyncClient, url: str) -> object:
-        response = await client.get(url)
-        self.raise_for_response_status(response)
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            raise ValueError("Pixiv返回了无法读取的作品数据。") from exc
-        if not isinstance(payload, Mapping) or payload.get("error"):
-            raise ValueError("Pixiv作品不可访问，可能已删除或受到访问限制。")
-        body = payload.get("body")
-        if body is None:
-            raise ValueError("Pixiv作品不可访问，可能已删除或受到访问限制。")
-        return body
 
     def _parse_illust_payload(
         self,

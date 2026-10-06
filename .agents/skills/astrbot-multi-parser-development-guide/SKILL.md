@@ -38,7 +38,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 配置声明：`_conf_schema.json`
 - 行为验证：`tests/`
 
-跨平台能力进入 `core/` 或 `services/`，平台特有细节留在平台目录。每个平台由 `parser.py` 保留顶层解析入口；复杂平台将请求跳转、领域模型和内容转换分别放入 `client.py`、`models.py`、`content.py`，并从平台包的 `__init__.py` 导出公开解析器或登录提供者。
+跨平台能力进入 `core/` 或 `services/`，平台特有细节留在平台目录。每个平台由 `parser.py` 保留顶层解析入口；复杂平台将请求跳转、领域模型和内容转换分别放入 `client.py`、`models.py`、`content.py`，番茄小说、抖音、微博、小红书、Pixiv、腾讯频道已按实际职责拆分，避免为轻量入口创建空壳模块。
 
 ## 处理常见任务
 

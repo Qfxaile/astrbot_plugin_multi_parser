@@ -70,7 +70,7 @@ uv run ruff check .
 
 服务层和媒体渲染适配器读取解析结果媒体请求元数据时必须使用 `ParseResult.media_metadata`；临时文件登记和清理由 `core/media.py` 的 `TemporaryFileRegistry` 负责。合并转发决策、节点构建和 OneBot 图片序列化由 `ForwardDeliveryService` 负责，`DeliveryService` 只做服务编排。边界由 `tests/test_media_metadata_boundaries.py` 校验。
 
-每个平台只保留一个顶层解析入口，当前平台清单以 `platforms/registry.py` 中的 `PLATFORM_REGISTRY` 为准。平台实现使用 `platforms/<platform>/` 目录，`parser.py` 负责顶层入口和路由，内容逻辑按职责拆入同目录模块；复杂平台按职责拆分为 `client.py`、`models.py` 和 `content.py`，番茄小说已按该结构实现；支持登录的平台另有 `login.py`。各平台从自己的 `__init__.py` 导出解析器或登录提供者。新增平台或调整导出时，同步检查：
+每个平台只保留一个顶层解析入口，当前平台清单以 `platforms/registry.py` 中的 `PLATFORM_REGISTRY` 为准。平台实现使用 `platforms/<platform>/` 目录，`parser.py` 负责顶层入口和路由，内容逻辑按职责拆入同目录模块；复杂平台按职责拆分为 `client.py`、`models.py` 和 `content.py`，番茄小说、抖音、微博、小红书、Pixiv、腾讯频道已按实际职责拆出客户端或内容模块；支持登录的平台另有 `login.py`。各平台从自己的 `__init__.py` 导出解析器或登录提供者。新增平台或调整导出时，同步检查：
 
 - `platforms/registry.py`
 - `platforms/__init__.py`
