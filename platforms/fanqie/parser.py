@@ -1,12 +1,7 @@
 """解析番茄小说公开分享页。"""
 
-import json
 import re
-from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
-from html import unescape
-from html.parser import HTMLParser
-from urllib.parse import parse_qs, urljoin, urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 
@@ -14,62 +9,8 @@ from ...core.contracts import ParseContext, ParseResult
 from ...core.http import is_trusted_https_url
 from ...core.parser import BaseParser
 from ...core.webpage import TrustedWebPageError, fetch_trusted_html
-
-
-@dataclass(frozen=True)
-class _NovelMetadata:
-    title: str = ""
-    author: str = ""
-    description: str = ""
-    cover_url: str = ""
-
-    def with_fallback(self, fallback: "_NovelMetadata") -> "_NovelMetadata":
-        return _NovelMetadata(
-            title=self.title or fallback.title,
-            author=self.author or fallback.author,
-            description=self.description or fallback.description,
-            cover_url=self.cover_url or fallback.cover_url,
-        )
-
-
-class _SharePageParser(HTMLParser):
-    """收集分享页元数据和可能包含作品数据的 JSON 脚本。"""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.meta: dict[str, str] = {}
-        self.json_scripts: list[str] = []
-        self._script_type = ""
-        self._script_chunks: list[str] = []
-
-    def handle_starttag(
-        self,
-        tag: str,
-        attrs: list[tuple[str, str | None]],
-    ) -> None:
-        attributes = {key.lower(): value for key, value in attrs if value is not None}
-        if tag.lower() == "meta":
-            key = (attributes.get("property") or attributes.get("name") or "").lower()
-            content = attributes.get("content", "").strip()
-            if key and content and key not in self.meta:
-                self.meta[key] = unescape(content)
-        elif tag.lower() == "script":
-            self._script_type = attributes.get("type", "").lower()
-            self._script_chunks = []
-
-    def handle_data(self, data: str) -> None:
-        if self._script_type:
-            self._script_chunks.append(data)
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag.lower() != "script" or not self._script_type:
-            return
-        if "json" in self._script_type:
-            script = "".join(self._script_chunks).strip()
-            if script:
-                self.json_scripts.append(script)
-        self._script_type = ""
-        self._script_chunks = []
+from .client import resolve_book_id
+from .content import extract_metadata
 
 
 class FanqieParser(BaseParser):
@@ -234,25 +175,12 @@ class FanqieParser(BaseParser):
         client: httpx.AsyncClient,
         url: str,
     ) -> str:
-        """仅检查可信跳转响应头，避免请求并记录带敏感参数的动态分享页。"""
-        current_url = url
-        for _ in range(6):
-            if book_id := self._extract_book_id(current_url):
-                return book_id
-            if not is_trusted_https_url(current_url, self.page_host_suffixes):
-                raise TrustedWebPageError("番茄小说分享链接跳转到不可信域名。")
-
-            response = await client.get(current_url, follow_redirects=False)
-            if not response.is_redirect:
-                response.raise_for_status()
-                return self._extract_book_id(str(response.url))
-
-            location = response.headers.get("Location")
-            if not location:
-                raise TrustedWebPageError("番茄小说分享链接缺少跳转地址。")
-            current_url = urljoin(current_url, location)
-
-        raise TrustedWebPageError("番茄小说分享链接重定向次数超过安全限制。")
+        return await resolve_book_id(
+            client,
+            url,
+            page_host_suffixes=self.page_host_suffixes,
+            extract_book_id=self._extract_book_id,
+        )
 
     @classmethod
     def _extract_metadata(
@@ -261,133 +189,12 @@ class FanqieParser(BaseParser):
         base_url: str,
         *,
         expected_book_id: str = "",
-    ) -> _NovelMetadata:
-        parser = _SharePageParser()
-        parser.feed(html_text)
-        metadata = _NovelMetadata()
-        for payload in cls._iter_payloads(html_text, parser.json_scripts):
-            for mapping in cls._iter_mappings(payload):
-                if expected_book_id and not cls._mapping_matches_book(
-                    mapping,
-                    expected_book_id,
-                ):
-                    continue
-                candidate = cls._metadata_from_mapping(mapping, base_url)
-                if candidate.title:
-                    metadata = candidate.with_fallback(metadata)
-                    if all(
-                        (
-                            metadata.title,
-                            metadata.author,
-                            metadata.description,
-                            metadata.cover_url,
-                        )
-                    ):
-                        break
-        return metadata.with_fallback(cls._metadata_from_meta(parser.meta, base_url))
-
-    @classmethod
-    def _mapping_matches_book(
-        cls,
-        mapping: Mapping[str, object],
-        expected_book_id: str,
-    ) -> bool:
-        value = mapping.get("bookId") or mapping.get("book_id")
-        return isinstance(value, (str, int)) and str(value) == expected_book_id
-
-    @classmethod
-    def _iter_payloads(
-        cls,
-        html_text: str,
-        json_scripts: Iterable[str],
-    ) -> Iterable[object]:
-        for script in json_scripts:
-            try:
-                yield json.loads(script)
-            except (json.JSONDecodeError, RecursionError):
-                continue
-        for match in cls.ASSIGNED_JSON_PATTERN.finditer(html_text):
-            try:
-                payload, _ = json.JSONDecoder().raw_decode(html_text, match.end())
-            except (json.JSONDecodeError, RecursionError):
-                continue
-            yield payload
-
-    @classmethod
-    def _iter_mappings(
-        cls,
-        value: object,
-        depth: int = 0,
-    ) -> Iterable[Mapping[str, object]]:
-        if depth > 20:
-            return
-        if isinstance(value, Mapping):
-            yield value
-            for child in value.values():
-                yield from cls._iter_mappings(child, depth + 1)
-        elif isinstance(value, list):
-            for child in value:
-                yield from cls._iter_mappings(child, depth + 1)
-
-    @classmethod
-    def _metadata_from_mapping(
-        cls,
-        mapping: Mapping[str, object],
-        base_url: str,
-    ) -> _NovelMetadata:
-        title = cls._first_text(mapping, cls.TITLE_KEYS)
-        if not title:
-            return _NovelMetadata()
-        return _NovelMetadata(
-            title=title,
-            author=cls._first_text(mapping, cls.AUTHOR_KEYS),
-            description=cls._first_text(mapping, cls.DESCRIPTION_KEYS),
-            cover_url=cls._absolute_url(
-                cls._first_text(mapping, cls.COVER_KEYS),
-                base_url,
-            ),
+    ):
+        return extract_metadata(
+            html_text,
+            base_url,
+            expected_book_id=expected_book_id,
         )
-
-    @classmethod
-    def _metadata_from_meta(
-        cls,
-        meta: Mapping[str, str],
-        base_url: str,
-    ) -> _NovelMetadata:
-        title = meta.get("og:title", "") or meta.get("twitter:title", "")
-        description = meta.get("og:description", "") or meta.get("description", "")
-        return _NovelMetadata(
-            title=cls._clean_text(title),
-            description=cls._clean_text(description),
-            cover_url=cls._absolute_url(
-                meta.get("og:image", "") or meta.get("twitter:image", ""),
-                base_url,
-            ),
-        )
-
-    @classmethod
-    def _first_text(
-        cls,
-        mapping: Mapping[str, object],
-        keys: Iterable[str],
-    ) -> str:
-        for key in keys:
-            value = mapping.get(key)
-            if isinstance(value, (str, int, float)) and not isinstance(value, bool):
-                text = cls._clean_text(str(value))
-                if text:
-                    return text
-        return ""
-
-    @staticmethod
-    def _clean_text(value: str) -> str:
-        return " ".join(unescape(value).split())
-
-    @staticmethod
-    def _absolute_url(value: str, base_url: str) -> str:
-        if not value:
-            return ""
-        return urljoin(base_url, value.replace("\\u002F", "/"))
 
     def _network_error(self) -> ParseResult:
         return ParseResult(
