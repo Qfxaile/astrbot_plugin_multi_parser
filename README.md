@@ -83,6 +83,17 @@ git clone https://github.com/Qfxaile/astrbot_plugin_multi_parser.git astrbot_plu
 
 随后参考 [AstrBot 插件指南](https://docs.astrbot.app/dev/star/plugin-new.html) 完成依赖安装，并在 WebUI 中重载插件。
 
+### 平台扩展约束
+
+平台解析器的普通 HTTP 请求统一通过 `BaseParser.http_client()` 创建客户端，
+以复用统一的超时、平台代理和重定向安全策略。GitHub、Pixiv、番茄小说、QQ
+空间和腾讯频道属于简单平台，必须使用该入口，不要在解析器中直接创建
+`httpx.AsyncClient`。微博、抖音、小红书和 B 站因 Cookie、签名或多客户端生命周期
+可以保留专用客户端，但仍须复用 `core/http.py` 的 URL、Cookie、代理和响应边界。
+
+修改平台 HTTP 装配后，请运行 `tests/test_architecture_dependencies.py` 中的架构
+测试，确认简单平台没有回退到独立客户端，并保持平台适配器不依赖服务层。
+
 ## 配置
 
 所有配置均可在 AstrBot 插件配置页面修改。
