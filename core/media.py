@@ -18,6 +18,18 @@ from .settings import PluginSettings
 FORBIDDEN_MEDIA_HEADERS = {"authorization", "cookie", "proxy-authorization"}
 
 
+class TemporaryFileRegistry:
+    """登记解析期间创建的临时文件，并集中执行清理。"""
+
+    @staticmethod
+    def register(result: ParseResult, path: Path) -> None:
+        result.media_metadata.temporary_files.append(path)
+
+    @staticmethod
+    def cleanup(result: ParseResult) -> None:
+        cleanup_temporary_files(result)
+
+
 def sanitize_media_headers(
     headers: Mapping[str, str] | None,
 ) -> dict[str, str]:
@@ -105,7 +117,7 @@ class ImageMaterializer:
                 ):
                     if isinstance(outcome, Path):
                         image_path = outcome
-                        result.media_metadata.temporary_files.append(image_path)
+                        TemporaryFileRegistry.register(result, image_path)
                         result.media_metadata.image_source_urls[
                             str(image_path.resolve())
                         ] = image_url
@@ -148,7 +160,7 @@ class ImageMaterializer:
                 number, index, image_values, field_index, image_url = candidate
                 if isinstance(outcome, Path):
                     image_path = outcome
-                    result.media_metadata.temporary_files.append(image_path)
+                    TemporaryFileRegistry.register(result, image_path)
                     result.media_metadata.image_source_urls[
                         str(image_path.resolve())
                     ] = image_url
@@ -346,7 +358,7 @@ class VideoMaterializer:
             **http_client_proxy_options(self.config, result.platform),
         ) as client:
             video_path = await self._download(client, result.video_url)
-        result.media_metadata.temporary_files.append(video_path)
+        TemporaryFileRegistry.register(result, video_path)
         return video_path
 
     async def _download(self, client: httpx.AsyncClient, video_url: str) -> Path:

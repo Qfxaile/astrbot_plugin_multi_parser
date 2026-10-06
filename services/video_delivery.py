@@ -7,7 +7,7 @@ from astrbot.api.event import AstrMessageEvent, MessageChain
 from astrbot.api.message_components import Video
 
 from ..core.contracts import ParseResult
-from ..core.media import VideoMaterializer
+from ..core.media import TemporaryFileRegistry, VideoMaterializer
 
 
 class VideoDeliveryService:
@@ -28,7 +28,7 @@ class VideoDeliveryService:
                 ).materialize(result)
             else:
                 video_path = Path(await video_chain[0].convert_to_file_path()).resolve()
-                result.media_metadata.temporary_files.append(video_path)
+                TemporaryFileRegistry.register(result, video_path)
             video_chain = [Video.fromFileSystem(video_path)]
         await event.send(MessageChain(video_chain))
 

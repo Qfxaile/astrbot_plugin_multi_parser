@@ -27,6 +27,8 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 登录文案格式化：`services/login_messages.py` 的 `LoginMessageFormatter`
 - 活动登录会话管理：`services/login_sessions.py` 的 `LoginSessionRegistry`
 - 视频直链摘要与路由：`services/forward_link_delivery.py` 的 `ForwardLinkDeliveryService`
+- 合并转发构建与发送：`services/forward_delivery.py` 的 `ForwardDeliveryService`
+- OneBot 机器人身份缓存：`services/onebot_identity.py` 的 `OneBotIdentityResolver`
 - 配置、登录、会话历史、消息投递、视频策略、OneBot 适配和 AI 总结编排：`services/`
 - 自动解析事件编排：`services/parsing.py` 的 `ParseCoordinator`
 - 插件级服务装配：`services/container.py` 的 `ServiceContainer`
@@ -46,7 +48,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 平台请求优先使用 `BaseParser.http_client()`，统一超时、平台代理参数和重定向策略；仅在需要特殊客户端选项时直接创建 `httpx.AsyncClient`。
 
-媒体投递、视频处理和渲染适配优先使用 `ParseResult.media_metadata`，不要重复读取媒体请求字段；`core/media.py` 负责写入临时文件生命周期和来源映射。
+媒体投递、视频处理和渲染适配优先使用 `ParseResult.media_metadata`，不要重复读取媒体请求字段；临时文件通过 `core/media.py` 的 `TemporaryFileRegistry` 登记和清理。合并转发决策与节点发送复用 `ForwardDeliveryService`，不要在 `DeliveryService` 重建 OneBot 序列化流程。
 修改媒体元数据访问时运行 `tests/test_media_metadata_boundaries.py`，确保服务层没有绕过统一视图。
 
 新增平台或跨层依赖时运行 `tests/test_architecture_dependencies.py`，保持平台适配器不依赖服务层、核心不依赖平台实现。

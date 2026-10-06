@@ -1,20 +1,17 @@
 from collections.abc import Mapping
 
 from astrbot.api import logger
-from astrbot.api.event import AstrMessageEvent, MessageChain
-from astrbot.api.message_components import Image, Node, Nodes, Plain
+from astrbot.api.event import AstrMessageEvent
+from astrbot.api.message_components import Nodes
 
 from ..core.contracts import ParseResult
 from ..core.settings import PluginSettings
-from .content_assembly import ContentAssembler
 from .delivery_policy import DeliveryPolicy
 from .event_identity import EventIdentity
+from .forward_delivery import ForwardDeliveryService
 from .forward_link_delivery import ForwardLinkDeliveryService
 from .link_filter import LinkFilter
-from .onebot_forward import OneBotForwardSerializer
-from .onebot_forward_sender import OneBotForwardSender
 from .onebot_gateway import OneBotGateway
-from .onebot_image_downloader import OneBotImageDownloader
 from .video_delivery import VideoDeliveryService
 from .video_fallback import VideoFallbackService
 
@@ -33,7 +30,6 @@ class DeliveryService:
     VIDEO_OVER_LIMIT_ACTIONS = {"notice", "direct_link", "group_file"}
     DEFAULT_VIDEO_OVER_LIMIT_ACTION = "direct_link"
     DEFAULT_FILTERED_LINK_TEXT = "[详细内容请打开原链接查看]"
-    _image_downloader = OneBotImageDownloader()
 
     def __init__(self, config: Mapping[str, object]) -> None:
         self.config = config
@@ -42,13 +38,13 @@ class DeliveryService:
         self.video_delivery = VideoDeliveryService(config)
         self.video_fallback = VideoFallbackService(config, self.send_forward_links)
         self.link_filter = LinkFilter(config)
+        self.forward_delivery = ForwardDeliveryService(config)
         self.forward_link_delivery = ForwardLinkDeliveryService(
-            lambda event: self.resolve_forward_node_identity(
-                event, prefer_raw_nickname=True
+            lambda event: self.forward_delivery.identity.resolve(
+                event, self.sender_identity(event, prefer_raw_nickname=True)
             ),
             self._supports_forward_nodes,
         )
-        self._onebot_names: dict[str, str] = {}
 
     @staticmethod
     async def call_onebot(event: AstrMessageEvent, action: str, **params):
@@ -121,35 +117,9 @@ class DeliveryService:
             return [], False
         if self._should_split_onebot_content(event, result):
             return [event.chain_result([component]) for component in info_chain], False
-        if not self._should_forward_content(event, result, info_chain):
-            if self._platform_name(event) == self.ONEBOT_PLATFORM:
-                info_chain = self._merge_adjacent_plain_components(info_chain)
-            return [event.chain_result(info_chain)], False
-
-        forward_components = list(info_chain)
-        video_embedded = (
-            include_video
-            and bool(result.video_url)
-            and (self._forward_mode() == "always" or result.keep_video_in_forward)
+        return self.forward_delivery.build(
+            event, result, info_chain, include_video=include_video
         )
-        if video_embedded:
-            forward_components.extend(result.video_chain())
-        sender_name, sender_id = self.forward_node_identity(event)
-        merged_components = self._merge_adjacent_plain_components(forward_components)
-        nodes = [
-            Node(content=[component], name=sender_name, uin=sender_id)
-            for component in merged_components
-        ]
-        results = [
-            event.chain_result([Nodes(batch)])
-            for batch in self._balanced_forward_batches(nodes)
-        ]
-        return results, video_embedded
-
-    @classmethod
-    def _balanced_forward_batches(cls, nodes: list[Node]) -> list[list[Node]]:
-        """均衡拆分超长转发，避免首批贴近上限而尾批过小。"""
-        return ContentAssembler.balanced_forward_batches(nodes)
 
     async def send_forward_results(
         self,
@@ -158,82 +128,7 @@ class DeliveryService:
         parse_result: ParseResult,
     ) -> None:
         """发送合并转发，只有构建阶段超过节点上限时才会分批。"""
-        sender_name, sender_id = await self.resolve_forward_node_identity(event)
-        for result in results:
-            chain = getattr(result, "chain", result)
-            if len(chain) != 1 or not isinstance(chain[0], Nodes):
-                raise ValueError("合并转发结果结构无效")
-            nodes = chain[0].nodes
-            for node in nodes:
-                node.name = sender_name
-                node.uin = sender_id
-            if self._can_send_onebot_url_forward(
-                event, nodes, parse_result.media_metadata.image_source_urls
-            ):
-                image_files = parse_result.media_metadata.image_source_urls
-                if parse_result.media_metadata.image_download_headers:
-                    image_files = await self._download_onebot_forward_images(
-                        event,
-                        nodes,
-                        parse_result.media_metadata.image_source_urls,
-                        parse_result.media_metadata.image_download_headers,
-                    )
-                messages = await self._serialize_onebot_nodes(nodes, image_files)
-                await self._send_onebot_forward_nodes(event, messages)
-                continue
-            await event.send(MessageChain([Nodes(nodes)]))
-
-    @classmethod
-    def _can_send_onebot_url_forward(
-        cls,
-        event: AstrMessageEvent,
-        nodes: list[Node],
-        image_source_urls: Mapping[str, str],
-    ) -> bool:
-        """仅在 aiocqhttp 的全部图片都有远程地址时绕过 Base64 序列化。"""
-        if cls._platform_name(event) != cls.ONEBOT_PLATFORM:
-            return False
-        images = [
-            component
-            for node in nodes
-            for component in node.content
-            if isinstance(component, Image)
-        ]
-        return bool(images) and all(
-            cls._remote_image_url(image, image_source_urls) for image in images
-        )
-
-    @classmethod
-    async def _serialize_onebot_nodes(
-        cls,
-        nodes: list[Node],
-        image_source_urls: Mapping[str, str],
-    ) -> list[dict]:
-        """构造使用远程图片 URL 的 OneBot 节点，避免 WebSocket 携带 Base64。"""
-        return await OneBotForwardSerializer.serialize(nodes, image_source_urls)
-
-    @classmethod
-    async def _download_onebot_forward_images(
-        cls,
-        event: AstrMessageEvent,
-        nodes: list[Node],
-        image_source_urls: Mapping[str, str],
-        headers: Mapping[str, str],
-    ) -> dict[str, str]:
-        """兼容入口，委托给独立图片预下载服务。"""
-        return await cls._image_downloader.download(
-            event, nodes, image_source_urls, headers
-        )
-
-    @staticmethod
-    def _remote_image_url(image: Image, image_source_urls: Mapping[str, str]) -> str:
-        return OneBotForwardSerializer.remote_image_url(image, image_source_urls)
-
-    async def _send_onebot_forward_nodes(
-        self, event: AstrMessageEvent, messages: list[dict]
-    ) -> None:
-        """将已序列化的 URL 节点直接交给 OneBot，避免 AstrBot 转为 Base64。"""
-        await OneBotForwardSender.send(event, messages)
+        await self.forward_delivery.send(event, results, parse_result)
 
     @staticmethod
     def is_forward_delivery(results: list) -> bool:
@@ -241,34 +136,6 @@ class DeliveryService:
             return False
         chain = getattr(results[0], "chain", results[0])
         return len(chain) == 1 and isinstance(chain[0], Nodes)
-
-    @classmethod
-    def _merge_adjacent_plain_components(cls, components: list) -> list:
-        """合并相邻文本并保留媒体边界与原始顺序。"""
-        return ContentAssembler.merge_adjacent_plain(components)
-
-    @staticmethod
-    def _join_plain_text(previous: str, current: str) -> str:
-        return ContentAssembler.join_plain_text(previous, current)
-
-    def _should_forward_content(
-        self,
-        event: AstrMessageEvent,
-        result: ParseResult,
-        chain: list,
-    ) -> bool:
-        if not self._supports_forward_nodes(event):
-            return False
-        if (
-            self._platform_name(event) == self.ONEBOT_PLATFORM
-            and result.disable_onebot_forward
-        ):
-            return False
-
-        text_length = sum(
-            len(component.text) for component in chain if isinstance(component, Plain)
-        )
-        return self.policy.should_forward(result.image_count, text_length)
 
     @classmethod
     def _should_split_onebot_content(
@@ -314,18 +181,8 @@ class DeliveryService:
         prefer_raw_nickname: bool = False,
     ) -> tuple[str, str]:
         """QQ 合并转发先使用已缓存名称或账号，其他平台沿用发送者身份。"""
-        if self._platform_name(event) == self.ONEBOT_PLATFORM:
-            try:
-                bot_id = str(event.get_self_id() or "")
-            except Exception:
-                bot_id = ""
-
-            if bot_id:
-                return self._onebot_names.get(bot_id, bot_id), bot_id
-
-        return self.sender_identity(
-            event,
-            prefer_raw_nickname=prefer_raw_nickname,
+        return self.forward_delivery.identity.cached(event) or self.sender_identity(
+            event, prefer_raw_nickname=prefer_raw_nickname
         )
 
     async def resolve_forward_node_identity(
@@ -335,36 +192,10 @@ class DeliveryService:
         prefer_raw_nickname: bool = False,
     ) -> tuple[str, str]:
         """发送前通过 OneBot 登录信息解析 QQ 昵称，并缓存到当前服务实例。"""
-        sender_name, sender_id = self.forward_node_identity(
+        return await self.forward_delivery.identity.resolve(
             event,
-            prefer_raw_nickname=prefer_raw_nickname,
+            self.sender_identity(event, prefer_raw_nickname=prefer_raw_nickname),
         )
-        if self._platform_name(event) != self.ONEBOT_PLATFORM:
-            return sender_name, sender_id
-        try:
-            bot_id = str(event.get_self_id() or "")
-        except Exception:
-            bot_id = ""
-        if not bot_id:
-            return sender_name, sender_id
-        if bot_id in self._onebot_names:
-            return self._onebot_names[bot_id], bot_id
-
-        try:
-            login_info = await self.call_onebot(
-                event,
-                "get_login_info",
-                self_id=int(bot_id),
-            )
-            if isinstance(login_info, Mapping):
-                bot_name = str(login_info.get("nickname") or "").strip()
-                if bot_name:
-                    self._onebot_names[bot_id] = bot_name
-                    return bot_name, bot_id
-        except Exception as exc:
-            logger.info(f"获取 QQ 机器人名称失败: {type(exc).__name__}")
-
-        return sender_name, bot_id
 
     def sender_identity(
         self,

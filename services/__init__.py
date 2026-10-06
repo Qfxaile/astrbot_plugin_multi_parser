@@ -20,6 +20,8 @@ __all__ = [
     "LoginAttempt",
     "LoginSessionRegistry",
     "ServiceContainer",
+    "ForwardDeliveryService",
+    "OneBotIdentityResolver",
 ]
 
 _EXPORT_MODULES = {
@@ -40,6 +42,8 @@ _EXPORT_MODULES = {
     "LoginAttempt": ".login_sessions",
     "LoginSessionRegistry": ".login_sessions",
     "ServiceContainer": ".container",
+    "ForwardDeliveryService": ".forward_delivery",
+    "OneBotIdentityResolver": ".onebot_identity",
 }
 
 
