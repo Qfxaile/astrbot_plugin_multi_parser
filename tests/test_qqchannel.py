@@ -193,12 +193,12 @@ async def test_qqchannel_parse_fetches_detail_and_materializes_all_images(
     result = await parser.parse(_card_context(title="  测试\n频道帖子  "))
 
     assert result.platform == "qqchannel"
-    assert result.title == "详情标题"
-    assert result.author == "Nex"
-    assert result.ordered_contents[0].kind == "text"
-    assert result.ordered_contents[0].value == "正文内容"
+    assert result.content.title == "详情标题"
+    assert result.content.author == "Nex"
+    assert result.content.ordered_contents[0].kind == "text"
+    assert result.content.ordered_contents[0].value == "正文内容"
     assert [
-        item.value for item in result.ordered_contents if item.kind == "image"
+        item.value for item in result.content.ordered_contents if item.kind == "image"
     ] == DETAIL_IMAGE_URLS
     assert captured["referer"] == CARD_URL
     assert captured["headers"] == parser.HEADERS
@@ -285,10 +285,10 @@ def test_qqchannel_rich_article_preserves_text_media_and_list_order():
 
     result = content_module.build_result(feed, fallback_title="卡片标题")
 
-    assert result.title == "富文本文章"
-    assert result.author == "作者"
-    assert result.video_url == FIRST_VIDEO_URL
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert result.content.title == "富文本文章"
+    assert result.content.author == "作者"
+    assert result.media.video_url == FIRST_VIDEO_URL
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("text", "第一段 资料 (https://example.com/article)#话题"),
         ("text", "- 项目一"),
         ("image", SECOND_IMAGE_URL),
@@ -317,9 +317,9 @@ async def test_qqchannel_detail_business_failure_falls_back_to_card(monkeypatch)
 
     result = await parser.parse(_card_context())
 
-    assert result.title == "测试频道帖子"
-    assert result.cover_urls == [COVER_URL]
-    assert result.extra_lines == ["帖子详情获取失败，已返回分享卡片摘要。"]
+    assert result.content.title == "测试频道帖子"
+    assert result.content.cover_urls == [COVER_URL]
+    assert result.content.extra_lines == ["帖子详情获取失败，已返回分享卡片摘要。"]
 
 
 async def test_qqchannel_oversized_detail_falls_back_without_reading_body(monkeypatch):
@@ -340,8 +340,8 @@ async def test_qqchannel_oversized_detail_falls_back_without_reading_body(monkey
 
     result = await parser.parse(_card_context())
 
-    assert result.cover_urls == [COVER_URL]
-    assert result.extra_lines == ["帖子详情获取失败，已返回分享卡片摘要。"]
+    assert result.content.cover_urls == [COVER_URL]
+    assert result.content.extra_lines == ["帖子详情获取失败，已返回分享卡片摘要。"]
 
 
 async def test_qqchannel_parse_filters_untrusted_cover_without_request(monkeypatch):
@@ -363,8 +363,8 @@ async def test_qqchannel_parse_filters_untrusted_cover_without_request(monkeypat
         )
     )
 
-    assert result.title == "腾讯频道帖子"
-    assert result.cover_urls == []
+    assert result.content.title == "腾讯频道帖子"
+    assert result.content.cover_urls == []
 
 
 async def test_qqchannel_parse_reports_missing_supported_card():
@@ -374,4 +374,4 @@ async def test_qqchannel_parse_reports_missing_supported_card():
 
     result = await parser_type({}).parse(ParseContext(text=CARD_URL))
 
-    assert result.error == "未找到可解析的腾讯频道分享卡片。"
+    assert result.diagnostics.error == "未找到可解析的腾讯频道分享卡片。"

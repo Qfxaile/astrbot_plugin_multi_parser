@@ -115,9 +115,17 @@ class MediaBundle:
     def video_download_headers(self) -> dict[str, str]:
         return self._result.video_download_headers
 
+    @video_download_headers.setter
+    def video_download_headers(self, value: dict[str, str]) -> None:
+        self._result.video_download_headers = value
+
     @property
     def video_download_host_suffixes(self) -> tuple[str, ...]:
         return self._result.video_download_host_suffixes
+
+    @video_download_host_suffixes.setter
+    def video_download_host_suffixes(self, value: tuple[str, ...]) -> None:
+        self._result.video_download_host_suffixes = value
 
 
 class ParseDiagnostics:

@@ -52,10 +52,9 @@ class QQChannelParser(BaseParser):
     async def parse(self, context: ParseContext) -> ParseResult:
         card = self._find_card(context)
         if card is None:
-            return ParseResult(
-                platform=self.name,
-                error="未找到可解析的腾讯频道分享卡片。",
-            )
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "未找到可解析的腾讯频道分享卡片。"
+            return result
 
         index, share_url = card
         title = self._clean_title(self._value_at(context.json_titles, index))
@@ -67,11 +66,10 @@ class QQChannelParser(BaseParser):
         ):
             cover_url = ""
 
-        fallback = ParseResult(
-            platform=self.name,
-            title=title or "腾讯频道帖子",
-            cover_urls=[cover_url] if cover_url else [],
-        )
+        fallback = ParseResult(platform=self.name)
+        fallback.content.title = title or "腾讯频道帖子"
+        if cover_url:
+            fallback.content.cover_urls.append(cover_url)
         feed_id = self._feed_id_at(context, index)
         if not self.FEED_ID_PATTERN.fullmatch(feed_id):
             if not cover_url:
@@ -96,7 +94,7 @@ class QQChannelParser(BaseParser):
                     mapping=self._mapping,
                 )
                 result = build_result(feed, fallback_title=title)
-                result.video_download_headers = {
+                result.media.video_download_headers = {
                     "Referer": share_url,
                     "User-Agent": self.HEADERS["User-Agent"],
                 }
@@ -107,7 +105,9 @@ class QQChannelParser(BaseParser):
                 QQChannelDetailError,
                 ValueError,
             ):
-                fallback.extra_lines.append("帖子详情获取失败，已返回分享卡片摘要。")
+                fallback.content.extra_lines.append(
+                    "帖子详情获取失败，已返回分享卡片摘要。"
+                )
                 result = fallback
         return await self.materialize_public_images(
             result,
