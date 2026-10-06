@@ -64,27 +64,28 @@ class GitHubParser(BaseParser):
     async def parse(self, context: ParseContext) -> ParseResult:
         repository = self._find_repository(context.combined_text)
         if repository is None:
-            return ParseResult(platform=self.name, error="未找到 GitHub 仓库链接。")
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "未找到 GitHub 仓库链接。"
+            return result
 
         owner, repo = repository
         repository_url = f"https://github.com/{owner}/{repo}"
         try:
             async with self.http_client(headers=self.HEADERS) as client:
                 card_url = await self._fetch_opengraph_url(client, repository_url)
-                result = ParseResult(
-                    platform=self.name,
-                    image_urls=[card_url],
-                    image_download_headers={
+                result = ParseResult(platform=self.name)
+                result.content.image_urls.append(card_url)
+                result.media.image_download_headers.update(
+                    {
                         "Referer": repository_url,
                         "User-Agent": self.HEADERS["User-Agent"],
-                    },
+                    }
                 )
                 return await self.materialize_images(result, client, repository_url)
         except httpx.HTTPError:
-            return ParseResult(
-                platform=self.name,
-                error="GitHub仓库卡片请求失败，请稍后重试。",
-            )
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "GitHub仓库卡片请求失败，请稍后重试。"
+            return result
 
     async def _fetch_opengraph_url(
         self,

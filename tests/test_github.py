@@ -64,7 +64,7 @@ async def test_github_parse_uses_official_opengraph_card_from_repository_page(
     )
 
     assert result.platform == "github"
-    assert result.image_urls == [
+    assert result.content.image_urls == [
         "https://opengraph.githubassets.com/official-hash/AstrBotDevs/AstrBot"
     ]
     assert fetched_pages == ["https://github.com/AstrBotDevs/AstrBot"]
@@ -233,5 +233,5 @@ async def test_github_parse_returns_readable_error_when_card_download_fails(
         ParseContext(text="https://github.com/AstrBotDevs/AstrBot")
     )
 
-    assert result.error == "GitHub仓库卡片请求失败，请稍后重试。"
-    assert "private network detail" not in result.error
+    assert result.diagnostics.error == "GitHub仓库卡片请求失败，请稍后重试。"
+    assert "private network detail" not in result.diagnostics.error
