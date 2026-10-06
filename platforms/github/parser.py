@@ -9,6 +9,7 @@ import httpx
 from ...core.contracts import ParseContext, ParseResult
 from ...core.http import is_trusted_https_url
 from ...core.parser import BaseParser
+from ...core.settings import PluginSettings
 
 
 class _OpenGraphImageParser(HTMLParser):
@@ -131,7 +132,7 @@ class GitHubParser(BaseParser):
         headers = {
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
         }
-        token = str(self.config.get("github_token") or "").strip()
+        token = PluginSettings(self.config).text("github_token")
         if token:
             headers["Authorization"] = f"Bearer {token}"
         return headers
