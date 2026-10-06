@@ -36,15 +36,15 @@ def test_pixiv_parse_illust_payload_extracts_metadata_and_pages():
         ],
     )
 
-    assert result.title == "测试作品"
-    assert result.author == "测试作者"
-    assert result.description == "简介 第二行"
-    assert result.image_urls == [
+    assert result.content.title == "测试作品"
+    assert result.content.author == "测试作者"
+    assert result.content.description == "简介 第二行"
+    assert result.content.image_urls == [
         "https://i.pximg.net/img-original/first.jpg",
         "https://i.pximg.net/img-original/second.jpg",
     ]
-    assert result.extra_lines == ["标签：原创、风景"]
-    assert result.image_download_headers == {
+    assert result.content.extra_lines == ["标签：原创、风景"]
+    assert result.media.image_download_headers == {
         "Referer": "https://www.pixiv.net/",
         "User-Agent": parser.HEADERS["User-Agent"],
     }
@@ -125,8 +125,8 @@ async def test_pixiv_parse_handles_public_ajax_responses(monkeypatch):
         ParseContext(text="https://www.pixiv.net/artworks/123456")
     )
 
-    assert result.title == "测试作品"
-    assert result.image_urls == ["https://i.pximg.net/img-original/first.jpg"]
+    assert result.content.title == "测试作品"
+    assert result.content.image_urls == ["https://i.pximg.net/img-original/first.jpg"]
 
 
 async def test_pixiv_parse_returns_error_for_unavailable_ajax_payload(monkeypatch):
@@ -155,5 +155,5 @@ async def test_pixiv_parse_returns_error_for_unavailable_ajax_payload(monkeypatc
         ParseContext(text="https://www.pixiv.net/artworks/123456")
     )
 
-    assert result.error == "Pixiv作品不可访问，可能已删除或受到访问限制。"
-    assert "private detail" not in result.error
+    assert result.diagnostics.error == "Pixiv作品不可访问，可能已删除或受到访问限制。"
+    assert "private detail" not in result.diagnostics.error
