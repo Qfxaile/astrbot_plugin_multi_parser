@@ -90,7 +90,7 @@ async def test_parse_short_link_keeps_scheme_and_stops_after_first_redirect(
 
     result = await redbook.RedBookParser({}).parse(ParseContext(text=short_url))
 
-    assert result.title == "第一跳中的笔记"
+    assert result.content.title == "第一跳中的笔记"
     assert requested_urls == [short_url, explore_url]
 
 
@@ -139,7 +139,7 @@ async def test_parse_explore_uses_minimal_desktop_headers(monkeypatch):
 
     result = await redbook.RedBookParser({}).parse(ParseContext(text=page_url))
 
-    assert result.title == "桌面页面中的笔记"
+    assert result.content.title == "桌面页面中的笔记"
     assert explore_request is not None
     assert "Accept" not in explore_request.headers
     assert "Origin" not in explore_request.headers
@@ -178,9 +178,9 @@ def test_explore_prefers_h265_video():
 
     result = redbook.RedBookParser({})._parse_explore_state(state, "note123")
 
-    assert result.video_url == "https://video.example/h265.mp4"
-    assert result.cover_urls == ["https://img.example/cover.jpg"]
-    assert result.description == "视频简介"
+    assert result.media.video_url == "https://video.example/h265.mp4"
+    assert result.content.cover_urls == ["https://img.example/cover.jpg"]
+    assert result.content.description == "视频简介"
 
 
 def test_explore_keeps_image_order():
@@ -212,7 +212,7 @@ def test_explore_keeps_image_order():
 
     result = redbook.RedBookParser({})._parse_explore_state(state, "note123")
 
-    assert result.image_urls == [
+    assert result.content.image_urls == [
         "https://sns-img-qc.xhscdn.com/notes_pre_post/original-1",
         "https://sns-img-qc.xhscdn.com/notes_pre_post/original-2",
     ]
@@ -243,7 +243,7 @@ def test_explore_removes_only_explicit_transform_suffix():
 
     result = redbook.RedBookParser({})._parse_explore_state(state, "note123")
 
-    assert result.image_urls == [
+    assert result.content.image_urls == [
         "https://img.example/path/photo.jpg?token=1#preview",
         "https://backup.example/image.jpg",
     ]
@@ -277,7 +277,7 @@ def test_discovery_continues_from_unsafe_default_to_safe_url():
 
     result = redbook.RedBookParser({})._parse_discovery_state(state)
 
-    assert result.image_urls == [
+    assert result.content.image_urls == [
         "https://img.example/original.jpg?token=1#preview",
         "https://img.example/preferred-original.jpg",
     ]
@@ -300,7 +300,7 @@ def test_explore_leaves_malformed_url_unchanged():
 
     result = redbook.RedBookParser({})._parse_explore_state(state, "note123")
 
-    assert result.image_urls == [malformed_url]
+    assert result.content.image_urls == [malformed_url]
 
 
 def test_explore_image_id_cannot_replace_original_cdn_authority():
@@ -321,7 +321,7 @@ def test_explore_image_id_cannot_replace_original_cdn_authority():
 
     result = redbook.RedBookParser({})._parse_explore_state(state, "note123")
 
-    assert result.image_urls == [
+    assert result.content.image_urls == [
         "https://sns-img-qc.xhscdn.com/evil.example/image.jpg%3Ftoken%3D1%23preview"
     ]
 
@@ -360,10 +360,10 @@ def test_discovery_uses_large_video_cover_and_converts_metadata():
 
     result = redbook.RedBookParser({})._parse_discovery_state(state)
 
-    assert result.title == "兜底标题"
-    assert result.author == "兜底作者"
-    assert result.video_url == "https://video.example/video.mp4"
-    assert result.cover_urls == ["https://img.example/large.jpg"]
+    assert result.content.title == "兜底标题"
+    assert result.content.author == "兜底作者"
+    assert result.media.video_url == "https://video.example/video.mp4"
+    assert result.content.cover_urls == ["https://img.example/large.jpg"]
 
 
 def test_discovery_uses_file_ids_for_unwatermarked_images():
@@ -392,7 +392,7 @@ def test_discovery_uses_file_ids_for_unwatermarked_images():
 
     result = redbook.RedBookParser({})._parse_discovery_state(state)
 
-    assert result.image_urls == [
+    assert result.content.image_urls == [
         "https://sns-img-qc.xhscdn.com/notes_pre_post/image-1",
         "https://sns-img-qc.xhscdn.com/notes_pre_post/image-2",
     ]
@@ -426,7 +426,7 @@ def test_discovery_without_file_id_normalizes_url_safely(image_url, expected_url
 
     result = redbook.RedBookParser({})._parse_discovery_state(state)
 
-    assert result.image_urls == [expected_url]
+    assert result.content.image_urls == [expected_url]
 
 
 def test_discovery_video_cover_prefers_original_trace_id():
@@ -462,7 +462,7 @@ def test_discovery_video_cover_prefers_original_trace_id():
 
     result = redbook.RedBookParser({})._parse_discovery_state(state)
 
-    assert result.cover_urls == [
+    assert result.content.cover_urls == [
         "https://sns-img-qc.xhscdn.com/notes_pre_post/video-cover"
     ]
 
@@ -517,7 +517,7 @@ async def test_parse_explore_materializes_original_without_leaking_cookies(
         {"redbook_cookies": "web_session=cookie-value"}
     ).parse(ParseContext(text=page_url))
 
-    assert_temporary_image(result, result.image_urls[0], b"original-image")
+    assert_temporary_image(result, result.content.image_urls[0], b"original-image")
     assert image_request is not None
     assert image_request.headers["Referer"] == page_url.split("?", 1)[0]
     assert "Mobile/15E148" in image_request.headers["User-Agent"]
@@ -573,9 +573,9 @@ async def test_parse_discovery_materializes_and_keeps_failed_slot(
 
     result = await redbook.RedBookParser({}).parse(ParseContext(text=source_url))
 
-    assert_temporary_image(result, result.image_urls[0], b"discovery-image")
-    assert result.image_urls[1] == ""
-    assert result.image_errors == {1: "第 2 张图片获取失败：HTTP 403"}
+    assert_temporary_image(result, result.content.image_urls[0], b"discovery-image")
+    assert result.content.image_urls[1] == ""
+    assert result.diagnostics.image_errors == {1: "第 2 张图片获取失败：HTTP 403"}
     assert [request.headers["Referer"] for request in image_requests] == [
         discovery_url,
         discovery_url,
@@ -631,8 +631,8 @@ async def test_parse_explore_materializes_video_cover_with_session(
         {"redbook_cookies": "web_session=explore-session"}
     ).parse(ParseContext(text=page_url))
 
-    assert_temporary_image(result, result.cover_urls[0], b"explore-cover")
-    assert result.video_url == video_url
+    assert_temporary_image(result, result.content.cover_urls[0], b"explore-cover")
+    assert result.media.video_url == video_url
     assert cover_request is not None
     assert cover_request.headers["Referer"] == page_url.split("?", 1)[0]
     assert "Cookie" not in cover_request.headers
@@ -699,8 +699,8 @@ async def test_parse_discovery_materializes_video_cover_with_session(
         {"redbook_cookies": "web_session=discovery-session"}
     ).parse(ParseContext(text=source_url))
 
-    assert_temporary_image(result, result.cover_urls[0], b"discovery-cover")
-    assert result.video_url == video_url
+    assert_temporary_image(result, result.content.cover_urls[0], b"discovery-cover")
+    assert result.media.video_url == video_url
     assert cover_request is not None
     assert cover_request.headers["Referer"] == source_url
     assert "Cookie" not in cover_request.headers
@@ -760,9 +760,9 @@ async def test_parse_keeps_unsafe_redbook_candidates_without_requesting_them(
     result = await redbook.RedBookParser({}).parse(ParseContext(text=page_url))
 
     assert unexpected_requests == []
-    assert result.image_urls == ["", "", ""]
+    assert result.content.image_urls == ["", "", ""]
     assert result.image_count == 3
-    assert list(result.image_errors) == [0, 1, 2]
+    assert list(result.diagnostics.image_errors) == [0, 1, 2]
 
 
 def test_redbook_payloads_handle_null_strings_and_mixed_lists_safely():
@@ -805,9 +805,9 @@ def test_redbook_payloads_handle_null_strings_and_mixed_lists_safely():
 
     result = parser._parse_explore_state(explore_state, "note123")
 
-    assert result.author == "未知作者"
-    assert result.cover_urls == ["https://img.example/cover.jpg"]
-    assert result.video_url == "https://video.example/video.mp4"
+    assert result.content.author == "未知作者"
+    assert result.content.cover_urls == ["https://img.example/cover.jpg"]
+    assert result.media.video_url == "https://video.example/video.mp4"
 
 
 def test_extract_initial_state_replaces_javascript_undefined():

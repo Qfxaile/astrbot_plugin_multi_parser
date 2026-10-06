@@ -66,7 +66,9 @@ class RedBookParser(
     async def parse(self, context: ParseContext) -> ParseResult:
         match = re.search(self.PATTERN, context.combined_text)
         if not match:
-            return ParseResult(platform=self.name, error="未找到小红书链接。")
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "未找到小红书链接。"
+            return result
 
         cookies = build_cookies(
             cookie_config_value(self.config, "redbook_cookies"),
