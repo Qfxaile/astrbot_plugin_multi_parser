@@ -28,6 +28,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 登录文案格式化：`services/login_messages.py` 的 `LoginMessageFormatter`
 - 活动登录会话管理：`services/login_sessions.py` 的 `LoginSessionRegistry`
 - 二维码登录轮询：`services/login_polling.py` 的 `QRLoginPoller`
+- 登录状态查询：`services/login_status.py` 的 `LoginStatusService`
 - 视频直链摘要与路由：`services/forward_link_delivery.py` 的 `ForwardLinkDeliveryService`
 - 合并转发构建与发送：`services/forward_delivery.py` 的 `ForwardDeliveryService`
 - OneBot 机器人身份缓存：`services/onebot_identity.py` 的 `OneBotIdentityResolver`
@@ -64,6 +65,8 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 登录流程编排与用户可见文案分离；状态、错误、过期和用户信息文案统一复用 `LoginMessageFormatter`。
 
 二维码等待、扫描提示、超时和取消由 `QRLoginPoller` 负责；`AuthenticationService` 继续负责登录会话生命周期、成功后的用户确认和 Cookie 持久化。
+
+多平台登录状态查询由 `LoginStatusService` 负责，统一处理 Cookie 状态、当前用户查询、Provider 释放和状态文案。
 
 同一平台登录互斥、按私聊取消、活动会话快照和插件卸载清理统一复用 `LoginSessionRegistry`。
 

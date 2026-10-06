@@ -19,6 +19,7 @@ from .cookie_store import CookieStore
 from .login_messages import LoginMessageFormatter
 from .login_polling import QRLoginPoller
 from .login_sessions import LoginAttempt, LoginSessionRegistry
+from .login_status import LoginStatusService
 
 ProviderFactory = Callable[[], PlatformLoginProvider]
 
@@ -54,6 +55,12 @@ class AuthenticationService:
         }
         self._sessions = LoginSessionRegistry()
         self._poller = QRLoginPoller(self.POLL_INTERVAL_SECONDS)
+        self._status_service = LoginStatusService(
+            self.cookie_store,
+            self._provider_factories,
+            self._cookie_keys,
+            self._get_current_user,
+        )
 
     @property
     def supported_platforms(self) -> tuple[str, ...]:
@@ -161,51 +168,10 @@ class AuthenticationService:
 
     async def status(self) -> str:
         """并发查询所有平台的本地配置状态与当前账号。"""
-        active_platforms = await self._sessions.active_platforms()
-        states = await asyncio.gather(
-            *(
-                self._platform_status(platform_name, active_platforms)
-                for platform_name in self.supported_platforms
-            )
+        return await self._status_service.render(
+            self.supported_platforms,
+            await self._sessions.active_platforms(),
         )
-        lines = ["平台登录状态："]
-        lines.extend(
-            f"- {platform_name}：{state}"
-            for platform_name, state in zip(
-                self.supported_platforms,
-                states,
-                strict=True,
-            )
-        )
-        return "\n".join(lines)
-
-    async def _platform_status(
-        self,
-        platform_name: str,
-        active_platforms: frozenset[str],
-    ) -> str:
-        if platform_name in active_platforms:
-            return "登录中"
-        cookie_key = self._cookie_keys[platform_name]
-        cookie_header = str(self.cookie_store.get(cookie_key) or "")
-        if not parse_cookie_header(cookie_header):
-            return "未配置"
-
-        provider = None
-        try:
-            provider = self._provider_factories[platform_name]()
-            user = await self._get_current_user(provider, cookie_header)
-        except Exception:
-            user = None
-        finally:
-            if provider is not None:
-                try:
-                    await provider.close()
-                except Exception:
-                    pass
-        if user is None:
-            return "已配置｜用户信息获取失败"
-        return f"已配置｜当前用户：{self._format_user(user)}"
 
     async def close(self) -> None:
         """取消并释放插件卸载时仍在进行的登录流程。"""
