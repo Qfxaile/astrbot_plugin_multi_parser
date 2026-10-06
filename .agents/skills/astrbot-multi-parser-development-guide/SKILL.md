@@ -34,11 +34,11 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 自动解析事件编排：`services/parsing.py` 的 `ParseCoordinator`
 - 插件级服务装配：`services/container.py` 的 `ServiceContainer`
 - 平台清单以及解析器、登录适配器对应关系：`platforms/registry.py`
-- 平台入口和协议实现：`platforms/<platform>/parser.py`、支持登录平台的 `platforms/<platform>/login.py` 及同目录内容模块
+- 平台入口和协议实现：`platforms/<platform>/parser.py`、支持登录平台的 `platforms/<platform>/login.py` 及同目录 `client.py`、`models.py`、`content.py` 模块
 - 配置声明：`_conf_schema.json`
 - 行为验证：`tests/`
 
-跨平台能力进入 `core/` 或 `services/`，平台特有细节留在平台目录。每个平台由 `parser.py` 保留顶层解析入口，文章、视频、图集、签名等内容逻辑按职责拆入同目录模块，并从平台包的 `__init__.py` 导出公开解析器或登录提供者。
+跨平台能力进入 `core/` 或 `services/`，平台特有细节留在平台目录。每个平台由 `parser.py` 保留顶层解析入口；复杂平台将请求跳转、领域模型和内容转换分别放入 `client.py`、`models.py`、`content.py`，并从平台包的 `__init__.py` 导出公开解析器或登录提供者。
 
 ## 处理常见任务
 

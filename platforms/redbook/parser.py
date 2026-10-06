@@ -10,6 +10,7 @@ from ...core.contracts import ParseContext, ParseResult
 from ...core.http import build_cookies, cookie_config_value
 from ...core.media import mark_invalid_legacy_images
 from ...core.parser import BaseParser
+from .client import resolve_short_link
 from .gallery import RedBookGalleryContent
 from .note import RedBookNoteContent
 from .video import RedBookVideoContent
@@ -80,15 +81,13 @@ class RedBookParser(
         ) as client:
             url = match.group(0)
             if (urlparse(url).hostname or "").lower() in self.SHORT_LINK_HOSTS:
-                response = await client.get(url, follow_redirects=False)
-                if not response.has_redirect_location:
-                    self.raise_for_response_status(response)
-                    raise ValueError("小红书短链未返回重定向地址")
-                url = str(response.url.join(response.headers["Location"]))
-                if self._is_auth_url(url):
-                    raise self.cookie_access_error()
-                if (urlparse(url).hostname or "").lower() not in self.OFFICIAL_HOSTS:
-                    raise ValueError("小红书短链重定向到不受支持的地址")
+                url = await resolve_short_link(
+                    client,
+                    url,
+                    supported_hosts=self.OFFICIAL_HOSTS,
+                    raise_for_response=self.raise_for_response_status,
+                    auth_url=self._is_auth_url,
+                )
 
             parsed_url = urlparse(url)
             site_host = (parsed_url.hostname or "").lower()
