@@ -64,16 +64,13 @@ class FanqieParser(BaseParser):
     async def parse(self, context: ParseContext) -> ParseResult:
         url = self._find_share_url(context.combined_text)
         if url is None:
-            return ParseResult(platform=self.name, error="未找到番茄小说分享链接。")
+            return self._error_result("未找到番茄小说分享链接。")
 
         try:
             async with self.http_client(headers=self.HEADERS) as client:
                 book_id = await self._resolve_book_id(client, url)
                 if not book_id:
-                    return ParseResult(
-                        platform=self.name,
-                        error="番茄小说分享链接未指向受支持的作品。",
-                    )
+                    return self._error_result("番茄小说分享链接未指向受支持的作品。")
 
                 detail_url = f"https://fanqienovel.com/page/{book_id}"
                 detail_page = await fetch_trusted_html(
@@ -82,10 +79,7 @@ class FanqieParser(BaseParser):
                     self.page_host_suffixes,
                 )
                 if not self._is_detail_page(detail_page.final_url, book_id):
-                    return ParseResult(
-                        platform=self.name,
-                        error="番茄小说详情页跳转到了不受支持的地址。",
-                    )
+                    return self._error_result("番茄小说详情页跳转到了不受支持的地址。")
 
                 metadata = self._extract_metadata(
                     detail_page.html,
@@ -93,9 +87,8 @@ class FanqieParser(BaseParser):
                     expected_book_id=book_id,
                 )
                 if not metadata.title:
-                    return ParseResult(
-                        platform=self.name,
-                        error="番茄小说分享页中未找到可解析的作品信息。",
+                    return self._error_result(
+                        "番茄小说分享页中未找到可解析的作品信息。"
                     )
 
                 cover_url = metadata.cover_url
@@ -104,14 +97,13 @@ class FanqieParser(BaseParser):
                     self.image_host_suffixes,
                 ):
                     cover_url = ""
-                result = ParseResult(
-                    platform=self.name,
-                    title=metadata.title,
-                    author=metadata.author,
-                    description=metadata.description,
-                    cover_urls=[cover_url] if cover_url else [],
-                )
-                if not result.cover_urls:
+                result = ParseResult(platform=self.name)
+                result.content.title = metadata.title
+                result.content.author = metadata.author
+                result.content.description = metadata.description
+                if cover_url:
+                    result.content.cover_urls.append(cover_url)
+                if not result.content.cover_urls:
                     return result
                 return await self.materialize_public_images(
                     result,
@@ -119,13 +111,10 @@ class FanqieParser(BaseParser):
                     headers=self.HEADERS,
                 )
         except TrustedWebPageError as exc:
-            return ParseResult(platform=self.name, error=str(exc))
+            return self._error_result(str(exc))
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code in {404, 410}:
-                return ParseResult(
-                    platform=self.name,
-                    error="该番茄小说作品已下架或分享链接已失效。",
-                )
+                return self._error_result("该番茄小说作品已下架或分享链接已失效。")
             return self._network_error()
         except httpx.HTTPError:
             return self._network_error()
@@ -197,7 +186,9 @@ class FanqieParser(BaseParser):
         )
 
     def _network_error(self) -> ParseResult:
-        return ParseResult(
-            platform=self.name,
-            error="番茄小说分享页请求失败，请稍后重试。",
-        )
+        return self._error_result("番茄小说分享页请求失败，请稍后重试。")
+
+    def _error_result(self, message: str) -> ParseResult:
+        result = ParseResult(platform=self.name)
+        result.diagnostics.error = message
+        return result
