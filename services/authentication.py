@@ -1,7 +1,6 @@
 """协调管理员私聊中的平台登录、取消和凭据持久化。"""
 
 import asyncio
-import time
 from collections.abc import Callable, Mapping
 from functools import partial
 
@@ -18,6 +17,7 @@ from ..core.platform_login import (
 from ..platforms.registry import login_platforms
 from .cookie_store import CookieStore
 from .login_messages import LoginMessageFormatter
+from .login_polling import QRLoginPoller
 from .login_sessions import LoginAttempt, LoginSessionRegistry
 
 ProviderFactory = Callable[[], PlatformLoginProvider]
@@ -53,6 +53,7 @@ class AuthenticationService:
             for registration in login_platforms()
         }
         self._sessions = LoginSessionRegistry()
+        self._poller = QRLoginPoller(self.POLL_INTERVAL_SECONDS)
 
     @property
     def supported_platforms(self) -> tuple[str, ...]:
@@ -99,53 +100,30 @@ class AuthenticationService:
                 )
             )
 
-            deadline = time.monotonic() + challenge.expires_in_seconds
-            scanned_notified = False
-            while time.monotonic() < deadline:
-                if attempt.cancel_event.is_set():
+            poll_result = await self._poller.poll(
+                event, provider, challenge, attempt.cancel_event
+            )
+            if poll_result is None:
+                return None
+            if poll_result.state == LoginPollState.SUCCESS:
+                user = await self._get_current_user(
+                    provider,
+                    poll_result.cookie_header,
+                )
+                if attempt.cancel_event.is_set() or not await self._sessions.is_current(
+                    platform_name, attempt
+                ):
                     return None
-
-                poll_result = await provider.poll_qr_status(challenge.session_key)
-                if poll_result.state == LoginPollState.SUCCESS:
-                    user = await self._get_current_user(
-                        provider,
-                        poll_result.cookie_header,
-                    )
-                    if (
-                        attempt.cancel_event.is_set()
-                        or not await self._sessions.is_current(platform_name, attempt)
-                    ):
-                        return None
-                    self._save_cookie(
-                        provider.cookie_config_key, poll_result.cookie_header
-                    )
-                    if user is None:
-                        return (
-                            f"{platform_name}登录成功，Cookies 已保存。"
-                            "当前用户信息获取失败。"
-                        )
+                self._save_cookie(provider.cookie_config_key, poll_result.cookie_header)
+                if user is None:
                     return (
                         f"{platform_name}登录成功，Cookies 已保存。"
-                        f"当前用户：{self._format_user(user)}。"
+                        "当前用户信息获取失败。"
                     )
-                if poll_result.state == LoginPollState.EXPIRED:
-                    return self._expired_message(provider)
-                if poll_result.state == LoginPollState.SCANNED and not scanned_notified:
-                    await event.send(
-                        MessageChain([Plain("二维码已扫描，请在手机上确认登录。")])
-                    )
-                    scanned_notified = True
-
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    break
-                try:
-                    await asyncio.wait_for(
-                        attempt.cancel_event.wait(),
-                        timeout=min(self.POLL_INTERVAL_SECONDS, remaining),
-                    )
-                except TimeoutError:
-                    pass
+                return (
+                    f"{platform_name}登录成功，Cookies 已保存。"
+                    f"当前用户：{self._format_user(user)}。"
+                )
             return self._expired_message(provider)
         except PlatformLoginError as exc:
             return self._format_login_error(platform_name, exc)
