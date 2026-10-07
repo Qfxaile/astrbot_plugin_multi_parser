@@ -122,17 +122,17 @@ def test_parses_new_ticket_payload_with_summary_and_detail_images():
 
     result = mall.mall_detail_result(mall.parse_ticket_detail(payload))
 
-    assert result.title == "沈阳·第二十一届 SSCA 动漫游戏博览会"
-    assert result.description == "大型动漫游戏博览会"
-    assert result.extra_lines == [
+    assert result.content.title == "沈阳·第二十一届 SSCA 动漫游戏博览会"
+    assert result.content.description == "大型动漫游戏博览会"
+    assert result.content.extra_lines == [
         "类型: 会员购票务",
         "票价: ¥70.00 - ¥118.00",
         "活动日期: 2026.10.01-10.04（以现场为准）",
         "场馆: 工业展览馆",
         "地址: 辽宁 沈阳 和平区青年大街 1 号",
     ]
-    assert result.cover_urls == ["https://i1.hdslb.com/banner.jpg"]
-    assert result.image_urls == [
+    assert result.content.cover_urls == ["https://i1.hdslb.com/banner.jpg"]
+    assert result.content.image_urls == [
         "https://i1.hdslb.com/detail-1.jpg",
         "https://i2.hdslb.com/detail-2.jpg",
     ]
@@ -155,8 +155,8 @@ def test_parses_legacy_ticket_payload():
 
     result = mall.mall_detail_result(mall.parse_ticket_detail(payload))
 
-    assert result.title == "旧版票务活动"
-    assert result.extra_lines == [
+    assert result.content.title == "旧版票务活动"
+    assert result.content.extra_lines == [
         "类型: 会员购票务",
         "票价: ¥50.00",
         "活动日期: 2026.08.01",
@@ -188,9 +188,9 @@ def test_parses_universal_product_payload():
 
     result = mall.mall_detail_result(mall.parse_product_detail(payload))
 
-    assert result.title == "会员购普通商品"
-    assert result.description == "商品简短说明"
-    assert result.extra_lines == [
+    assert result.content.title == "会员购普通商品"
+    assert result.content.description == "商品简短说明"
+    assert result.content.extra_lines == [
         "类型: 会员购商品",
         "价格: ¥1.3",
         "店铺: 测试小店",
@@ -198,8 +198,8 @@ def test_parses_universal_product_payload():
         "尺寸: 高 32 格",
         "使用范围: 个人使用",
     ]
-    assert result.cover_urls == ["https://i0.hdslb.com/main.png"]
-    assert result.image_urls == ["https://i0.hdslb.com/detail.png"]
+    assert result.content.cover_urls == ["https://i0.hdslb.com/main.png"]
+    assert result.content.image_urls == ["https://i0.hdslb.com/detail.png"]
 
 
 def test_parses_workshop_product_payload():
@@ -220,15 +220,15 @@ def test_parses_workshop_product_payload():
 
     result = mall.mall_detail_result(mall.parse_workshop_detail(payload))
 
-    assert result.title == "工房商品"
-    assert result.extra_lines == [
+    assert result.content.title == "工房商品"
+    assert result.content.extra_lines == [
         "类型: 会员购工房",
         "价格: ¥1.00",
         "粉丝价: ¥0.10",
         "店铺: UP 主小店",
         "交付: 线上交付 / 支付后自动发货",
     ]
-    assert result.image_urls == ["https://i0.hdslb.com/workshop-detail.jpg"]
+    assert result.content.image_urls == ["https://i0.hdslb.com/workshop-detail.jpg"]
 
 
 def test_parses_market_product_payload_with_fukubukuro_warning():
@@ -246,8 +246,8 @@ def test_parses_market_product_payload_with_fukubukuro_warning():
 
     result = mall.mall_detail_result(mall.parse_market_detail(payload))
 
-    assert result.title == "福袋商品"
-    assert result.extra_lines == [
+    assert result.content.title == "福袋商品"
+    assert result.content.extra_lines == [
         "类型: 会员购市集",
         "价格: ¥20",
         "状态: 已成交",
@@ -267,7 +267,7 @@ def test_mall_result_keeps_six_unique_trusted_images():
 
     result = mall.mall_detail_result(detail)
 
-    assert [*result.cover_urls, *result.image_urls] == [
+    assert [*result.content.cover_urls, *result.content.image_urls] == [
         f"https://i0.hdslb.com/{index}.jpg" for index in range(6)
     ]
 
@@ -327,7 +327,7 @@ async def test_new_ticket_request_uses_json_headers_cookie_and_public_images(
     assert "SESSDATA=mall-session" in api_request.headers["Cookie"]
     assert "Cookie" not in image_request.headers
     assert image_request.headers["Referer"].endswith("id=1004079")
-    assert_temporary_image(result, result.cover_urls[0], b"ticket-image")
+    assert_temporary_image(result, result.content.cover_urls[0], b"ticket-image")
 
 
 @pytest.mark.asyncio
@@ -382,7 +382,7 @@ async def test_dispatches_product_detail_to_its_single_api(
 
     result = await bilibili.BilibiliParser({}).parse(ParseContext(text=url))
 
-    assert result.title == title
+    assert result.content.title == title
     assert len(requests) == 1
     assert requests[0].url.path == api_path
     assert requests[0].url.params[param_name] in url
@@ -422,7 +422,7 @@ async def test_new_ticket_falls_back_to_legacy_api(monkeypatch):
         )
     )
 
-    assert result.title == "旧接口回退活动"
+    assert result.content.title == "旧接口回退活动"
     assert [request.url.path for request in requests] == [
         "/mall-search-items/items_detail/info",
         "/api/ticket/project/getV2",
@@ -488,7 +488,7 @@ async def test_mall_http_errors_return_readable_result(
         )
     )
 
-    assert result.error == expected_error
+    assert result.diagnostics.error == expected_error
 
 
 @pytest.mark.asyncio
@@ -512,7 +512,7 @@ async def test_mall_invalid_json_returns_readable_result(monkeypatch):
         )
     )
 
-    assert result.error == "B站会员购响应异常，无法解析。"
+    assert result.diagnostics.error == "B站会员购响应异常，无法解析。"
 
 
 @pytest.mark.asyncio
@@ -543,7 +543,7 @@ async def test_mall_rejects_oversized_api_response_without_content_length(
         )
     )
 
-    assert result.error == "B站会员购响应过大，无法解析。"
+    assert result.diagnostics.error == "B站会员购响应过大，无法解析。"
 
 
 @pytest.mark.asyncio
@@ -573,4 +573,4 @@ async def test_mall_rejects_oversized_declared_content_length(monkeypatch):
         )
     )
 
-    assert result.error == "B站会员购响应过大，无法解析。"
+    assert result.diagnostics.error == "B站会员购响应过大，无法解析。"

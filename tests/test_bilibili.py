@@ -70,7 +70,7 @@ async def test_short_video_url_extracts_id_when_redirect_target_returns_412(
 
     result = await parser.parse(ParseContext(text=short_url))
 
-    assert result.title == "视频标题"
+    assert result.content.title == "视频标题"
     assert parsed_video_ids == ["BV1VpK56jERg"]
     assert requested_urls == [short_url, shared_url]
     assert requested_cookies == [None, None]
@@ -194,10 +194,10 @@ def test_bangumi_payload_extracts_introduction_without_video():
         payload, episode_id="199612"
     )
 
-    assert result.title == "测试番剧"
-    assert result.description == "这是一段作品简介。"
-    assert result.cover_urls == ["https://i0.hdslb.com/bfs/bangumi/cover.jpg"]
-    assert result.extra_lines == [
+    assert result.content.title == "测试番剧"
+    assert result.content.description == "这是一段作品简介。"
+    assert result.content.cover_urls == ["https://i0.hdslb.com/bfs/bangumi/cover.jpg"]
+    assert result.content.extra_lines == [
         "类型: 国创",
         "地区: 中国大陆",
         "风格: 剧情 / 奇幻",
@@ -205,7 +205,7 @@ def test_bangumi_payload_extracts_introduction_without_video():
         "状态: 更新至第12话",
         "当前分集: 12 - 终章",
     ]
-    assert result.video_url == ""
+    assert result.media.video_url == ""
 
 
 def test_bangumi_payload_uses_numeric_type_name_fallback():
@@ -219,7 +219,7 @@ def test_bangumi_payload_uses_numeric_type_name_fallback():
 
     result = bilibili.BilibiliParser({})._parse_bangumi_payload(payload)
 
-    assert result.extra_lines == ["类型: 电影"]
+    assert result.content.extra_lines == ["类型: 电影"]
 
 
 @pytest.mark.asyncio
@@ -270,9 +270,9 @@ async def test_parse_bangumi_requests_season_api_without_video(
         {"bilibili_cookies": "SESSDATA=bangumi-session"}
     ).parse(ParseContext(text=url))
 
-    assert result.title == "影视标题"
-    assert result.description == "影视简介"
-    assert result.video_url == ""
+    assert result.content.title == "影视标题"
+    assert result.content.description == "影视简介"
+    assert result.media.video_url == ""
     assert api_request is not None
     assert api_request.url.path == "/pgc/view/web/season"
     assert dict(api_request.url.params) == {parameter_name: content_id}
@@ -300,9 +300,9 @@ async def test_parse_bangumi_reports_api_business_error(monkeypatch):
         ParseContext(text="https://www.bilibili.com/bangumi/play/ep404")
     )
 
-    assert result.error == "获取影视信息失败: 啥都木有"
-    assert result.title == ""
-    assert result.video_url == ""
+    assert result.diagnostics.error == "获取影视信息失败: 啥都木有"
+    assert result.content.title == ""
+    assert result.media.video_url == ""
 
 
 @pytest.mark.asyncio
@@ -340,7 +340,7 @@ async def test_parse_bangumi_materializes_cover_without_cdn_cookie(
         {"bilibili_cookies": "SESSDATA=bangumi-session"}
     ).parse(ParseContext(text=page_url))
 
-    assert_temporary_image(result, result.cover_urls[0], b"bangumi-cover")
+    assert_temporary_image(result, result.content.cover_urls[0], b"bangumi-cover")
     assert image_request is not None
     assert image_request.headers["Referer"] == page_url
     assert "Cookie" not in image_request.headers
@@ -374,10 +374,10 @@ def test_live_payload_extracts_room_information():
 
     result = bilibili.BilibiliParser({})._parse_live_payload(payload)
 
-    assert result.title == "直播标题"
-    assert result.author == "主播昵称"
-    assert result.cover_urls == ["https://i0.hdslb.com/live.jpg"]
-    assert result.extra_lines == [
+    assert result.content.title == "直播标题"
+    assert result.content.author == "主播昵称"
+    assert result.content.cover_urls == ["https://i0.hdslb.com/live.jpg"]
+    assert result.content.extra_lines == [
         "直播状态: 直播中",
         "分区: 游戏 / 单机游戏",
         "人气: 12,345",
@@ -429,8 +429,8 @@ async def test_parse_live_requests_api_and_materializes_cover(
         {"bilibili_cookies": "SESSDATA=live-session"}
     ).parse(ParseContext(text=live_url))
 
-    assert result.title == "直播标题"
-    assert_temporary_image(result, result.cover_urls[0], b"live-cover")
+    assert result.content.title == "直播标题"
+    assert_temporary_image(result, result.content.cover_urls[0], b"live-cover")
     assert api_request is not None
     assert api_request.url.params["room_id"] == "123456"
     assert "SESSDATA=live-session" in api_request.headers["Cookie"]
@@ -467,9 +467,9 @@ def test_dynamic_payload_extracts_text_and_images_in_order():
 
     result = bilibili.BilibiliParser({})._parse_dynamic_payload(payload)
 
-    assert result.title == "动态标题"
-    assert result.author == "动态作者"
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert result.content.title == "动态标题"
+    assert result.content.author == "动态作者"
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("text", "动态正文"),
         ("image", "https://i0.hdslb.com/dynamic.jpg"),
     ]
@@ -498,7 +498,7 @@ def test_dynamic_archive_uses_original_cover_url():
 
     result = bilibili.BilibiliParser({})._parse_dynamic_payload(payload)
 
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("image", "https://i0.hdslb.com/archive.jpg")
     ]
 
@@ -530,9 +530,9 @@ def test_dynamic_article_uses_article_description_and_covers():
 
     result = bilibili.BilibiliParser({})._parse_dynamic_payload(payload)
 
-    assert result.title == "传统专栏标题"
-    assert result.author == "专栏作者"
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert result.content.title == "传统专栏标题"
+    assert result.content.author == "专栏作者"
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("text", "传统专栏摘要"),
         ("image", "https://i0.hdslb.com/article-cover.jpg"),
     ]
@@ -595,9 +595,9 @@ def test_opus_payload_keeps_paragraph_order():
 
     result = bilibili.BilibiliParser({})._parse_opus_payload(payload)
 
-    assert result.title == "图文标题"
-    assert result.author == "图文作者"
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert result.content.title == "图文标题"
+    assert result.content.author == "图文作者"
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("text", "第一段"),
         ("image", "https://i0.hdslb.com/opus.jpg"),
         ("text", "第二段"),
@@ -654,7 +654,7 @@ def test_opus_payload_extracts_top_album_images():
 
     result = bilibili.BilibiliParser({})._parse_opus_payload(payload)
 
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("image", "http://i0.hdslb.com/top-1.jpg"),
         ("image", "https://i0.hdslb.com/top-2.jpg"),
         ("text", "正文"),
@@ -680,9 +680,9 @@ def test_article_html_keeps_visible_text_and_image_order():
 
     result = bilibili.BilibiliParser({})._parse_article_html(html)
 
-    assert result.title == "专栏标题"
-    assert result.author == "专栏作者"
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert result.content.title == "专栏标题"
+    assert result.content.author == "专栏作者"
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("text", "第一段"),
         ("image", "https://i0.hdslb.com/article.jpg"),
         ("text", "第二段"),
@@ -707,9 +707,9 @@ def test_article_payload_keeps_full_content_and_image_order():
 
     result = bilibili.BilibiliParser({})._parse_article_payload(payload)
 
-    assert result.title == "传统专栏标题"
-    assert result.author == "专栏作者"
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert result.content.title == "传统专栏标题"
+    assert result.content.author == "专栏作者"
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("image", "https://i0.hdslb.com/article-cover.jpg"),
         ("image", "https://i0.hdslb.com/article-cover.jpg"),
         ("text", "完整正文第一段"),
@@ -817,8 +817,10 @@ async def test_dynamic_and_opus_materialize_original_images(
         {"bilibili_cookies": "SESSDATA=graphic-session"}
     ).parse(ParseContext(text=page_url))
 
-    assert [item.kind for item in result.ordered_contents] == ["image"]
-    assert_temporary_image(result, result.ordered_contents[0].value, b"graphic-image")
+    assert [item.kind for item in result.content.ordered_contents] == ["image"]
+    assert_temporary_image(
+        result, result.content.ordered_contents[0].value, b"graphic-image"
+    )
     assert image_request is not None
     assert str(image_request.url) in {
         "https://i0.hdslb.com/dynamic.jpg",
@@ -901,9 +903,9 @@ async def test_opus_falls_back_to_dynamic_article(monkeypatch):
         ParseContext(text="https://www.bilibili.com/opus/73309181869226939")
     )
 
-    assert result.title == "传统专栏标题"
-    assert result.author == "专栏作者"
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert result.content.title == "传统专栏标题"
+    assert result.content.author == "专栏作者"
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("text", "完整专栏正文")
     ]
     assert [request.url.path for request in api_requests] == [
@@ -964,15 +966,21 @@ async def test_article_materializes_original_image_and_preserves_failed_slot(
         {"bilibili_cookies": "SESSDATA=article-session"}
     ).parse(ParseContext(text=article_url))
 
-    assert result.ordered_contents[0].kind == "image"
-    assert_temporary_image(result, result.ordered_contents[0].value, b"article-image")
-    assert [(item.kind, item.value) for item in result.ordered_contents[1:4]] == [
+    assert result.content.ordered_contents[0].kind == "image"
+    assert_temporary_image(
+        result, result.content.ordered_contents[0].value, b"article-image"
+    )
+    assert [
+        (item.kind, item.value) for item in result.content.ordered_contents[1:4]
+    ] == [
         ("text", "第一段"),
         ("image_error", "第 2 张图片获取失败：HTTP 403"),
         ("text", "第二段"),
     ]
-    assert result.ordered_contents[4].kind == "image"
-    assert_temporary_image(result, result.ordered_contents[4].value, b"article-image")
+    assert result.content.ordered_contents[4].kind == "image"
+    assert_temporary_image(
+        result, result.content.ordered_contents[4].value, b"article-image"
+    )
     assert [str(request.url) for request in image_requests] == [
         "https://i0.hdslb.com/article-cover.jpg",
         "https://i0.hdslb.com/failed.jpg",
@@ -1028,8 +1036,8 @@ async def test_video_materializes_original_cover(monkeypatch, assert_temporary_i
 
     result = await parser.parse(ParseContext(text="BV1xx411c7mD"))
 
-    assert_temporary_image(result, result.cover_urls[0], b"video-cover")
-    assert result.video_url == "https://video.example/play.mp4"
+    assert_temporary_image(result, result.content.cover_urls[0], b"video-cover")
+    assert result.media.video_url == "https://video.example/play.mp4"
     assert result.video_download_headers == {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) "
@@ -1127,5 +1135,5 @@ async def test_bilibili_rejects_external_image_without_request():
         await parser.materialize_images(result, client, "https://www.bilibili.com")
 
     assert requested_urls == []
-    assert result.image_urls == [""]
-    assert result.image_errors == {0: "第 1 张图片获取失败：InvalidURL"}
+    assert result.content.image_urls == [""]
+    assert result.diagnostics.image_errors == {0: "第 1 张图片获取失败：InvalidURL"}

@@ -57,11 +57,11 @@ class BilibiliLiveContent:
         if isinstance(online, int) and online >= 0:
             extra_lines.append(f"人气: {online:,}")
         cover_url = original_image_url(str(room_info.get("keyframe") or ""))
-        return ParseResult(
-            platform=self.name,
-            title=str(room_info.get("title") or "B站直播间"),
-            author=str(base_info.get("uname") or "未知主播"),
-            description=str(room_info.get("description") or ""),
-            cover_urls=[cover_url] if cover_url else [],
-            extra_lines=extra_lines,
-        )
+        result = ParseResult(platform=self.name)
+        result.content.title = str(room_info.get("title") or "B站直播间")
+        result.content.author = str(base_info.get("uname") or "未知主播")
+        result.content.description = str(room_info.get("description") or "")
+        if cover_url:
+            result.content.cover_urls.append(cover_url)
+        result.content.extra_lines.extend(extra_lines)
+        return result
