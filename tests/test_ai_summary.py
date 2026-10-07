@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
-from astrbot_multi_parser.core.contracts import OrderedContent, ParseResult
+from astrbot_multi_parser.core.contracts import MediaBundle, OrderedContent, ParseResult
 from astrbot_multi_parser.services.ai_summary import DEFAULT_PROMPT, AISummaryService
 
 
@@ -78,7 +78,10 @@ async def test_all_mode_skips_empty_subtitles_and_uses_configured_provider():
         },
     )
 
-    result = ParseResult(platform="测试", subtitle_text="  字幕文本  ")
+    result = ParseResult(
+        platform="测试",
+        media=MediaBundle(subtitle_text="  字幕文本  "),
+    )
     assert await service.summarize(FakeEvent(), result) == ["正文总结", "字幕总结"]
     assert len(current.calls) == 1
     assert len(subtitle.calls) == 1

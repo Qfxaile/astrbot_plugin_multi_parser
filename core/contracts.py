@@ -90,8 +90,6 @@ class ParseResult:
     )
     delivery: DeliveryHints = field(default_factory=DeliveryHints)
     audio_url: str = ""
-    subtitle_text: str = ""
-    subtitle_language: str = ""
 
     def __post_init__(self) -> None:
         """将旧构造参数一次性装载到内容对象，后续读取统一走领域对象。"""
@@ -114,8 +112,6 @@ class ParseResult:
                 image_download_headers=self.image_download_headers,
                 video_download_headers=self.video_download_headers,
                 video_download_host_suffixes=self.video_download_host_suffixes,
-                subtitle_text=self.subtitle_text,
-                subtitle_language=self.subtitle_language,
             )
 
     @property
