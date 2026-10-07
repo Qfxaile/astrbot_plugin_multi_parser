@@ -96,8 +96,8 @@ async def test_materialize_images_streams_original_bytes_to_temporary_file(tmp_p
     assert image_path.suffix == ".webp"
     assert image_path.read_bytes() == b"original-image-bytes"
     assert not result.image_urls[0].startswith("base64://")
-    assert result.temporary_files == [image_path]
-    assert result.image_source_urls == {
+    assert result.media.temporary_files == [image_path]
+    assert result.media.image_source_urls == {
         str(image_path.resolve()): "https://img.example/original.webp"
     }
 
@@ -107,8 +107,8 @@ async def test_materialize_images_streams_original_bytes_to_temporary_file(tmp_p
 
     result.cleanup_temporary_files()
     assert not image_path.exists()
-    assert result.temporary_files == []
-    assert result.image_source_urls == {}
+    assert result.media.temporary_files == []
+    assert result.media.image_source_urls == {}
 
 
 @pytest.mark.asyncio
@@ -658,7 +658,7 @@ def test_parse_result_preserves_legacy_positional_arguments():
         ordered_contents=ordered_contents,
     )
 
-    assert result.video_url == "https://video.example/1.mp4"
+    assert result.media.video_url == "https://video.example/1.mp4"
     assert result.diagnostics.error == "解析失败"
     assert result.extra_lines == ["额外信息"]
     assert result.ordered_contents is ordered_contents
@@ -675,7 +675,7 @@ def test_audio_chain_builds_remote_record_component():
 
     assert len(chain) == 1
     assert isinstance(chain[0], Record)
-    assert chain[0].file == result.audio_url
+    assert chain[0].file == result.media.audio_url
 
 
 def test_info_chain_returns_empty_when_summary_and_content_are_disabled():

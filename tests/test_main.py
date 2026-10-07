@@ -720,7 +720,7 @@ async def test_handle_parse_cleans_temporary_images_after_send(monkeypatch, tmp_
     assert messages[0][0].file == image_path.resolve().as_uri()
     assert messages[0][0].path == str(image_path.resolve())
     assert not image_path.exists()
-    assert result.temporary_files == []
+    assert result.media.temporary_files == []
 
 
 @pytest.mark.asyncio
@@ -1508,7 +1508,7 @@ async def test_group_file_upload_failure_falls_back_to_direct_link():
     )
 
     assert bot.actions[0][0] == "upload_group_file"
-    assert bot.actions[0][1]["file"] == result.video_url
+    assert bot.actions[0][1]["file"] == result.media.video_url
     assert bot.actions[1][0] == "send_group_forward_msg"
     assert "https://example.com/video.mp4" in str(bot.actions[1][1]["messages"])
 
@@ -1538,7 +1538,7 @@ async def test_group_file_upload_uses_remote_url_without_local_download():
             "upload_group_file",
             {
                 "group_id": 456,
-                "file": result.video_url,
+                "file": result.media.video_url,
                 "name": "测试_标题.mp4",
             },
         )
@@ -1628,7 +1628,7 @@ async def test_main_uses_group_file_action_when_video_send_fails(
             "upload_group_file",
             {
                 "group_id": 456,
-                "file": result.video_url,
+                "file": result.media.video_url,
                 "name": "摘要.mp4",
             },
         )
@@ -1834,7 +1834,7 @@ async def test_threshold_forward_keeps_regular_video_as_separate_message(monkeyp
     assert isinstance(messages[0][0], Nodes)
     assert not any(isinstance(node.content[0], Video) for node in messages[0][0].nodes)
     assert isinstance(messages[1][0], Video)
-    assert messages[1][0].file == result.video_url
+    assert messages[1][0].file == result.media.video_url
 
 
 @pytest.mark.asyncio
@@ -1862,7 +1862,7 @@ async def test_threshold_forward_keeps_xiaoheihe_game_video_inside(monkeypatch):
     assert len(messages) == 1
     assert isinstance(messages[0][0], Nodes)
     assert isinstance(messages[0][0].nodes[-1].content[0], Video)
-    assert messages[0][0].nodes[-1].content[0].file == result.video_url
+    assert messages[0][0].nodes[-1].content[0].file == result.media.video_url
 
 
 @pytest.mark.asyncio
@@ -1971,13 +1971,13 @@ async def test_kook_materializes_remote_video_before_send(monkeypatch, tmp_path)
         FakeEvent(platform_name="kook"),
     )
 
-    assert converted_urls == [result.video_url]
+    assert converted_urls == [result.media.video_url]
     assert len(messages) == 2
     assert isinstance(messages[1][0], Video)
     assert messages[1][0].file == video_path.resolve().as_uri()
     assert messages[1][0].path == str(video_path.resolve())
     assert not video_path.exists()
-    assert result.temporary_files == []
+    assert result.media.temporary_files == []
 
 
 @pytest.mark.asyncio
@@ -2039,7 +2039,7 @@ async def test_kook_materializes_video_with_platform_headers(monkeypatch):
     )
 
     assert len(requested_headers) == 1
-    assert probed_headers == [result.video_download_headers]
+    assert probed_headers == [result.media.video_download_headers]
     assert probed_platforms == ["fake"]
     assert materialized_platforms == ["bilibili"]
     assert requested_headers[0]["User-Agent"] == "BilibiliTestAgent/1.0"
@@ -2048,7 +2048,7 @@ async def test_kook_materializes_video_with_platform_headers(monkeypatch):
     assert "Authorization" not in requested_headers[0]
     assert isinstance(messages[1][0], Video)
     assert messages[1][0].file.startswith("file:///")
-    assert result.temporary_files == []
+    assert result.media.temporary_files == []
 
 
 @pytest.mark.asyncio
@@ -2091,12 +2091,12 @@ async def test_kook_video_rejects_untrusted_download_redirect(monkeypatch):
         FakeEvent(platform_name="kook"),
     )
 
-    assert requested_urls == [result.video_url]
+    assert requested_urls == [result.media.video_url]
     assert not any(
         isinstance(component, Video) for message in messages for component in message
     )
     assert any(
-        result.video_url in component.text
+        result.media.video_url in component.text
         for message in messages
         for component in message
         if isinstance(component, Plain)
@@ -2137,7 +2137,7 @@ async def test_kook_video_materialization_failure_falls_back_to_direct_link(
     texts = [component.text for message in messages for component in message]
     assert "summary" in texts
     assert any("视频发送失败: ConnectError" in text for text in texts)
-    assert any(result.video_url in text for text in texts)
+    assert any(result.media.video_url in text for text in texts)
 
 
 @pytest.mark.asyncio
@@ -2154,7 +2154,7 @@ async def test_audio_is_sent_after_track_summary(monkeypatch):
     assert isinstance(messages[0][0], Plain)
     assert messages[0][0].text == "歌曲标题"
     assert isinstance(messages[1][0], Record)
-    assert messages[1][0].file == result.audio_url
+    assert messages[1][0].file == result.media.audio_url
 
 
 @pytest.mark.asyncio

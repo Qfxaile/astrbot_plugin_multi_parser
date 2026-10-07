@@ -20,7 +20,7 @@ def assert_temporary_image():
 
     def assert_image(result, value: str, expected_bytes: bytes) -> Path:
         image_path = Path(value)
-        assert image_path in result.temporary_files
+        assert image_path in result.media.temporary_files
         assert image_path.is_file()
         assert image_path.read_bytes() == expected_bytes
         assert not value.startswith("base64://")

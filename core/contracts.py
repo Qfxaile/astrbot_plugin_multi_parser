@@ -35,71 +35,19 @@ class ContentDocument:
     ordered_contents: list[OrderedContent] = field(default_factory=list)
 
 
+@dataclass
 class MediaBundle:
-    """解析媒体领域视图，集中暴露媒体地址与请求元数据。"""
+    """解析得到的视频、音频及媒体请求生命周期数据。"""
 
-    def __init__(self, result: "ParseResult") -> None:
-        self._result = result
-
-    @property
-    def video_url(self) -> str:
-        return self._result.video_url
-
-    @video_url.setter
-    def video_url(self, value: str) -> None:
-        self._result.video_url = value
-
-    @property
-    def audio_url(self) -> str:
-        return self._result.audio_url
-
-    @audio_url.setter
-    def audio_url(self, value: str) -> None:
-        self._result.audio_url = value
-
-    @property
-    def image_urls(self) -> list[str]:
-        return self._result.image_urls
-
-    @property
-    def cover_urls(self) -> list[str]:
-        return self._result.cover_urls
-
-    @property
-    def temporary_files(self) -> list[Path]:
-        return self._result.temporary_files
-
-    @property
-    def image_source_urls(self) -> dict[str, str]:
-        return self._result.image_source_urls
-
-    @property
-    def image_download_headers(self) -> dict[str, str]:
-        return self._result.image_download_headers
-
-    @property
-    def video_download_headers(self) -> dict[str, str]:
-        return self._result.video_download_headers
-
-    @video_download_headers.setter
-    def video_download_headers(self, value: dict[str, str]) -> None:
-        self._result.video_download_headers = value
-
-    @property
-    def video_download_host_suffixes(self) -> tuple[str, ...]:
-        return self._result.video_download_host_suffixes
-
-    @video_download_host_suffixes.setter
-    def video_download_host_suffixes(self, value: tuple[str, ...]) -> None:
-        self._result.video_download_host_suffixes = value
-
-    @property
-    def subtitle_text(self) -> str:
-        return self._result.subtitle_text
-
-    @property
-    def subtitle_language(self) -> str:
-        return self._result.subtitle_language
+    video_url: str = ""
+    audio_url: str = ""
+    temporary_files: list[Path] = field(default_factory=list, repr=False)
+    image_source_urls: dict[str, str] = field(default_factory=dict, repr=False)
+    image_download_headers: dict[str, str] = field(default_factory=dict, repr=False)
+    video_download_headers: dict[str, str] = field(default_factory=dict, repr=False)
+    video_download_host_suffixes: tuple[str, ...] = field(default_factory=tuple)
+    subtitle_text: str = ""
+    subtitle_language: str = ""
 
 
 @dataclass
@@ -123,6 +71,7 @@ class DeliveryHints:
 class ParseResult:
     platform: str
     content: ContentDocument = field(default_factory=ContentDocument)
+    media: MediaBundle = field(default_factory=MediaBundle)
     title: str = ""
     author: str = ""
     description: str = ""
@@ -146,22 +95,28 @@ class ParseResult:
 
     def __post_init__(self) -> None:
         """将旧构造参数一次性装载到内容对象，后续读取统一走领域对象。"""
-        if self.content != ContentDocument():
-            return
-        self.content = ContentDocument(
-            title=self.title,
-            author=self.author,
-            description=self.description,
-            cover_urls=self.cover_urls,
-            image_urls=self.image_urls,
-            extra_lines=self.extra_lines,
-            ordered_contents=self.ordered_contents,
-        )
-
-    @property
-    def media(self) -> MediaBundle:
-        """返回媒体领域视图，媒体基础设施优先使用此入口。"""
-        return MediaBundle(self)
+        if self.content == ContentDocument():
+            self.content = ContentDocument(
+                title=self.title,
+                author=self.author,
+                description=self.description,
+                cover_urls=self.cover_urls,
+                image_urls=self.image_urls,
+                extra_lines=self.extra_lines,
+                ordered_contents=self.ordered_contents,
+            )
+        if self.media == MediaBundle():
+            self.media = MediaBundle(
+                video_url=self.video_url,
+                audio_url=self.audio_url,
+                temporary_files=self.temporary_files,
+                image_source_urls=self.image_source_urls,
+                image_download_headers=self.image_download_headers,
+                video_download_headers=self.video_download_headers,
+                video_download_host_suffixes=self.video_download_host_suffixes,
+                subtitle_text=self.subtitle_text,
+                subtitle_language=self.subtitle_language,
+            )
 
     @property
     def image_count(self) -> int:
