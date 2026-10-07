@@ -74,9 +74,6 @@ class ParseResult:
     media: MediaBundle = field(default_factory=MediaBundle)
     video_url: str = ""
     diagnostics: ParseDiagnostics = field(default_factory=ParseDiagnostics)
-    temporary_files: list[Path] = field(default_factory=list, repr=False)
-    image_source_urls: dict[str, str] = field(default_factory=dict, repr=False)
-    image_download_headers: dict[str, str] = field(default_factory=dict, repr=False)
     video_download_headers: dict[str, str] = field(default_factory=dict, repr=False)
     video_download_host_suffixes: tuple[str, ...] = field(
         default_factory=tuple, repr=False
