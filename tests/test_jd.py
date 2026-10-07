@@ -12,7 +12,7 @@ def test_jd_result_only_displays_product_content():
         "https://item.jd.com/100012043978.html",
     )
 
-    assert result.extra_lines == []
+    assert result.content.extra_lines == []
 
 
 @pytest.mark.parametrize(
@@ -82,9 +82,9 @@ async def test_jd_parse_uses_json_ld_then_platform_data(monkeypatch):
 
     result = await parser.parse(ParseContext(text="https://3.cn/abc-def"))
 
-    assert result.title == "JSON-LD京东商品"
-    assert result.cover_urls == ["https://img10.360buyimg.com/n1/main.jpg"]
-    assert result.extra_lines == []
+    assert result.content.title == "JSON-LD京东商品"
+    assert result.content.cover_urls == ["https://img10.360buyimg.com/n1/main.jpg"]
+    assert result.content.extra_lines == []
     assert materialized == ["https://item.jd.com/100012043978.html?utm_source=secret"]
 
 
@@ -120,9 +120,11 @@ async def test_jd_parse_reads_item_info_embedded_objects(monkeypatch):
 
     result = await parser.parse(ParseContext(text="https://3.cn/2Xhi-9CP"))
 
-    assert result.title == "西部数据固态硬盘"
-    assert result.cover_urls == ["https://img10.360buyimg.com/n1/jfs/t1/main.png"]
-    assert result.extra_lines == []
+    assert result.content.title == "西部数据固态硬盘"
+    assert result.content.cover_urls == [
+        "https://img10.360buyimg.com/n1/jfs/t1/main.png"
+    ]
+    assert result.content.extra_lines == []
 
 
 async def test_jd_scopes_page_cookies_and_keeps_images_cookie_free(monkeypatch):
@@ -155,7 +157,7 @@ async def test_jd_scopes_page_cookies_and_keeps_images_cookie_free(monkeypatch):
 
     result = await parser.parse(ParseContext(text="https://3.cn/abc-def"))
 
-    assert result.title == "京东商品"
+    assert result.content.title == "京东商品"
     assert page_cookie_domains == [[".3.cn", ".jd.com"]]
     assert image_cookies == []
 
@@ -180,9 +182,9 @@ async def test_jd_parse_falls_back_to_open_graph_without_optional_fields(
         ParseContext(text="https://item.jd.com/100012043978.html")
     )
 
-    assert result.title == "京东公开商品"
-    assert result.cover_urls == []
-    assert result.extra_lines == []
+    assert result.content.title == "京东公开商品"
+    assert result.content.cover_urls == []
+    assert result.content.extra_lines == []
 
 
 async def test_jd_parse_rejects_short_link_to_non_product_page(monkeypatch):
@@ -198,7 +200,7 @@ async def test_jd_parse_rejects_short_link_to_non_product_page(monkeypatch):
 
     result = await parser.parse(ParseContext(text="https://u.jd.com/abc123"))
 
-    assert result.error == "京东分享链接未指向受支持的商品。"
+    assert result.diagnostics.error == "京东分享链接未指向受支持的商品。"
 
 
 @pytest.mark.parametrize("marker", ["验证码", "安全验证", "登录后查看"])
@@ -232,8 +234,8 @@ async def test_jd_parse_reports_verification_page(
         ParseContext(text="https://item.jd.com/100012043978.html")
     )
 
-    assert result.error == expected
-    assert "test-secret" not in result.error
+    assert result.diagnostics.error == expected
+    assert "test-secret" not in result.diagnostics.error
 
 
 @pytest.mark.parametrize("status_code", [401, 403])
@@ -264,8 +266,8 @@ async def test_jd_maps_auth_status_to_cookie_error(
 
     result = await parser.parse(ParseContext(text="https://3.cn/abc-def"))
 
-    assert result.error == expected
-    assert "test-secret" not in result.error
+    assert result.diagnostics.error == expected
+    assert "test-secret" not in result.diagnostics.error
 
 
 @pytest.mark.parametrize("status_code", [404, 410])
@@ -286,7 +288,7 @@ async def test_jd_parse_reports_unavailable_product(monkeypatch, status_code):
         ParseContext(text="https://item.jd.com/100012043978.html")
     )
 
-    assert result.error == "该京东商品已下架或不存在。"
+    assert result.diagnostics.error == "该京东商品已下架或不存在。"
 
 
 async def test_jd_parse_filters_untrusted_image(monkeypatch):
@@ -313,8 +315,8 @@ async def test_jd_parse_filters_untrusted_image(monkeypatch):
         ParseContext(text="https://item.jd.com/100012043978.html")
     )
 
-    assert result.title == "京东商品"
-    assert result.cover_urls == []
+    assert result.content.title == "京东商品"
+    assert result.content.cover_urls == []
 
 
 async def test_jd_parse_maps_safe_and_network_errors(monkeypatch):
@@ -328,7 +330,7 @@ async def test_jd_parse_maps_safe_and_network_errors(monkeypatch):
         unsafe_page,
     )
     safe_error = await parser.parse(ParseContext(text="https://3.cn/abc-def"))
-    assert safe_error.error == "商品分享链接跳转到不可信域名。"
+    assert safe_error.diagnostics.error == "商品分享链接跳转到不可信域名。"
 
     async def failed_page(client, url, host_suffixes):
         raise httpx.ConnectError("private-network-detail")
@@ -338,5 +340,5 @@ async def test_jd_parse_maps_safe_and_network_errors(monkeypatch):
         failed_page,
     )
     network_error = await parser.parse(ParseContext(text="https://3.cn/abc-def"))
-    assert network_error.error == "京东商品请求失败，请稍后重试。"
-    assert "private-network-detail" not in network_error.error
+    assert network_error.diagnostics.error == "京东商品请求失败，请稍后重试。"
+    assert "private-network-detail" not in network_error.diagnostics.error
