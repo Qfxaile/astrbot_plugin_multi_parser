@@ -136,10 +136,10 @@ class DouyinLiveContent:
             display_value = str(view_stats.get("display_value") or "").strip()
             if display_value:
                 extra_lines.append(f"观看人数: {display_value}")
-        return ParseResult(
-            platform=self.name,
-            title=str(room.get("title") or "抖音直播间"),
-            author=str(user.get("nickname") or "未知主播"),
-            cover_urls=[cover_url] if cover_url else [],
-            extra_lines=extra_lines,
-        )
+        result = ParseResult(platform=self.name)
+        result.content.title = str(room.get("title") or "抖音直播间")
+        result.content.author = str(user.get("nickname") or "未知主播")
+        if cover_url:
+            result.content.cover_urls.append(cover_url)
+        result.content.extra_lines.extend(extra_lines)
+        return result

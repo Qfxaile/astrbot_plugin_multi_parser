@@ -171,9 +171,7 @@ class BilibiliDynamicContent:
                                 value=original_image_url(str(image_url)),
                             )
                         )
-        return ParseResult(
-            platform=self.name,
-            title=title,
-            author=author,
-            ordered_contents=ordered_contents,
-        )
+        result = ParseResult(platform=self.name)
+        result.content.title, result.content.author = title, author
+        result.content.ordered_contents.extend(ordered_contents)
+        return result
