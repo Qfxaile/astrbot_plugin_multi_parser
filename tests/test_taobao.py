@@ -16,7 +16,7 @@ def test_taobao_result_only_displays_product_content():
         "https://item.taobao.com/item.htm?id=123456",
     )
 
-    assert result.extra_lines == []
+    assert result.content.extra_lines == []
 
 
 @pytest.mark.parametrize(
@@ -97,9 +97,9 @@ async def test_taobao_parse_uses_json_ld_then_platform_data(monkeypatch):
 
     result = await parser.parse(ParseContext(text="分享 https://m.tb.cn/h.Abc123"))
 
-    assert result.title == "JSON-LD标题"
-    assert result.cover_urls == ["https://img.alicdn.com/main.jpg"]
-    assert result.extra_lines == []
+    assert result.content.title == "JSON-LD标题"
+    assert result.content.cover_urls == ["https://img.alicdn.com/main.jpg"]
+    assert result.content.extra_lines == []
     assert requested[0][0] == "https://m.tb.cn/h.Abc123"
     assert materialized == ["https://item.taobao.com/item.htm?id=123456&spm=secret"]
 
@@ -134,8 +134,8 @@ async def test_taobao_parse_follows_client_side_share_target(monkeypatch):
         ParseContext(text="https://e.tb.cn/h.8VdXPOwpkmPwjZu?tk=share")
     )
 
-    assert result.title == "淘宝公开商品"
-    assert result.extra_lines == []
+    assert result.content.title == "淘宝公开商品"
+    assert result.content.extra_lines == []
     assert requested == [
         "https://e.tb.cn/h.8VdXPOwpkmPwjZu?tk=share",
         "https://item.taobao.com/item.htm?id=1067554939784&spm=secret",
@@ -185,9 +185,9 @@ async def test_taobao_parse_uses_mtop_when_page_has_no_metadata(monkeypatch):
         ParseContext(text="https://item.taobao.com/item.htm?id=1067554939784")
     )
 
-    assert result.title == "MTop 淘宝商品"
-    assert result.cover_urls == ["https://img.alicdn.com/product.jpg"]
-    assert result.extra_lines == []
+    assert result.content.title == "MTop 淘宝商品"
+    assert result.content.cover_urls == ["https://img.alicdn.com/product.jpg"]
+    assert result.content.extra_lines == []
     assert requested_item_ids == ["1067554939784"]
 
 
@@ -312,7 +312,7 @@ async def test_taobao_scopes_page_cookies_and_keeps_images_cookie_free(monkeypat
 
     result = await parser.parse(ParseContext(text="https://m.tb.cn/h.Abc123"))
 
-    assert result.title == "淘宝商品"
+    assert result.content.title == "淘宝商品"
     assert page_cookie_domains == [[".taobao.com", ".tb.cn", ".tmall.com"]]
     assert image_cookies == []
 
@@ -334,7 +334,7 @@ async def test_taobao_parse_rejects_untrusted_client_side_target(monkeypatch):
 
     result = await parser.parse(ParseContext(text="https://e.tb.cn/h.Abc123"))
 
-    assert result.error == "淘宝/天猫分享链接未指向受支持的商品。"
+    assert result.diagnostics.error == "淘宝/天猫分享链接未指向受支持的商品。"
     assert requested == ["https://e.tb.cn/h.Abc123"]
 
 
@@ -363,8 +363,8 @@ async def test_taobao_parse_falls_back_to_open_graph_without_price(monkeypatch):
         ParseContext(text="https://detail.tmall.com/item.htm?id=234567")
     )
 
-    assert result.title == "公开商品"
-    assert result.extra_lines == []
+    assert result.content.title == "公开商品"
+    assert result.content.extra_lines == []
 
 
 async def test_taobao_parse_rejects_short_link_to_non_product_page(monkeypatch):
@@ -379,7 +379,7 @@ async def test_taobao_parse_rejects_short_link_to_non_product_page(monkeypatch):
 
     result = await parser.parse(ParseContext(text="https://m.tb.cn/h.Abc123"))
 
-    assert result.error == "淘宝/天猫分享链接未指向受支持的商品。"
+    assert result.diagnostics.error == "淘宝/天猫分享链接未指向受支持的商品。"
 
 
 @pytest.mark.parametrize("marker", ["验证码", "安全验证", "登录后查看"])
@@ -412,8 +412,8 @@ async def test_taobao_parse_reports_verification_page(
         ParseContext(text="https://item.taobao.com/item.htm?id=123456")
     )
 
-    assert result.error == expected
-    assert "test-secret" not in result.error
+    assert result.diagnostics.error == expected
+    assert "test-secret" not in result.diagnostics.error
 
 
 @pytest.mark.parametrize(
@@ -445,8 +445,8 @@ async def test_taobao_parse_maps_missing_metadata_to_cookie_error(
         ParseContext(text="https://item.taobao.com/item.htm?id=123456")
     )
 
-    assert result.error == expected
-    assert "test-secret" not in result.error
+    assert result.diagnostics.error == expected
+    assert "test-secret" not in result.diagnostics.error
 
 
 @pytest.mark.parametrize("status_code", [401, 403])
@@ -476,8 +476,8 @@ async def test_taobao_maps_auth_status_to_cookie_error(
 
     result = await parser.parse(ParseContext(text="https://m.tb.cn/h.Abc123"))
 
-    assert result.error == expected
-    assert "test-secret" not in result.error
+    assert result.diagnostics.error == expected
+    assert "test-secret" not in result.diagnostics.error
 
 
 async def test_taobao_parse_does_not_leak_network_error(monkeypatch):
@@ -492,8 +492,8 @@ async def test_taobao_parse_does_not_leak_network_error(monkeypatch):
 
     result = await parser.parse(ParseContext(text="https://m.tb.cn/h.Abc123"))
 
-    assert result.error == "淘宝/天猫商品请求失败，请稍后重试。"
-    assert "private-token" not in result.error
+    assert result.diagnostics.error == "淘宝/天猫商品请求失败，请稍后重试。"
+    assert "private-token" not in result.diagnostics.error
 
 
 async def test_taobao_parse_keeps_trusted_page_error_without_target(monkeypatch):
@@ -508,4 +508,4 @@ async def test_taobao_parse_keeps_trusted_page_error_without_target(monkeypatch)
 
     result = await parser.parse(ParseContext(text="https://m.tb.cn/h.Abc123"))
 
-    assert result.error == "商品分享链接跳转到不可信域名。"
+    assert result.diagnostics.error == "商品分享链接跳转到不可信域名。"
