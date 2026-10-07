@@ -22,8 +22,8 @@ def test_parse_result_domain_views_share_legacy_storage():
     result.media.video_url = "https://example.test/video.mp4"
     result.diagnostics.error = "新错误"
 
-    assert result.title == "新标题"
-    assert result.video_url.endswith("video.mp4")
+    assert result.content.title == "新标题"
+    assert result.media.video_url.endswith("video.mp4")
     assert result.diagnostics.error == "新错误"
 
 

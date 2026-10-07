@@ -22,55 +22,17 @@ class OrderedContent:
     value: str
 
 
+@dataclass
 class ContentDocument:
-    """解析内容领域视图，统一管理标题、正文和图片顺序。"""
+    """解析得到的可见文本与有序图片内容。"""
 
-    def __init__(self, result: "ParseResult") -> None:
-        self._result = result
-
-    @property
-    def title(self) -> str:
-        return self._result.title
-
-    @title.setter
-    def title(self, value: str) -> None:
-        self._result.title = value
-
-    @property
-    def author(self) -> str:
-        return self._result.author
-
-    @author.setter
-    def author(self, value: str) -> None:
-        self._result.author = value
-
-    @property
-    def description(self) -> str:
-        return self._result.description
-
-    @description.setter
-    def description(self, value: str) -> None:
-        self._result.description = value
-
-    @property
-    def extra_lines(self) -> list[str]:
-        return self._result.extra_lines
-
-    @extra_lines.setter
-    def extra_lines(self, value: list[str]) -> None:
-        self._result.extra_lines = value
-
-    @property
-    def ordered_contents(self) -> list[OrderedContent]:
-        return self._result.ordered_contents
-
-    @property
-    def cover_urls(self) -> list[str]:
-        return self._result.cover_urls
-
-    @property
-    def image_urls(self) -> list[str]:
-        return self._result.image_urls
+    title: str = ""
+    author: str = ""
+    description: str = ""
+    cover_urls: list[str] = field(default_factory=list)
+    image_urls: list[str] = field(default_factory=list)
+    extra_lines: list[str] = field(default_factory=list)
+    ordered_contents: list[OrderedContent] = field(default_factory=list)
 
 
 class MediaBundle:
@@ -160,6 +122,7 @@ class DeliveryHints:
 @dataclass
 class ParseResult:
     platform: str
+    content: ContentDocument = field(default_factory=ContentDocument)
     title: str = ""
     author: str = ""
     description: str = ""
@@ -181,10 +144,19 @@ class ParseResult:
     subtitle_text: str = ""
     subtitle_language: str = ""
 
-    @property
-    def content(self) -> ContentDocument:
-        """返回内容领域视图，兼容旧字段的原地修改。"""
-        return ContentDocument(self)
+    def __post_init__(self) -> None:
+        """将旧构造参数一次性装载到内容对象，后续读取统一走领域对象。"""
+        if self.content != ContentDocument():
+            return
+        self.content = ContentDocument(
+            title=self.title,
+            author=self.author,
+            description=self.description,
+            cover_urls=self.cover_urls,
+            image_urls=self.image_urls,
+            extra_lines=self.extra_lines,
+            ordered_contents=self.ordered_contents,
+        )
 
     @property
     def media(self) -> MediaBundle:
@@ -194,21 +166,22 @@ class ParseResult:
     @property
     def image_count(self) -> int:
         return (
-            len(self.cover_urls)
-            + len(self.image_urls)
+            len(self.content.cover_urls)
+            + len(self.content.image_urls)
             + sum(
-                item.kind in {"image", "image_error"} for item in self.ordered_contents
+                item.kind in {"image", "image_error"}
+                for item in self.content.ordered_contents
             )
         )
 
     @property
     def content_lines(self) -> list[str]:
         """返回供总结和会话历史使用的可见文本，保留正文顺序。"""
-        lines = [self.description, *self.extra_lines]
-        if self.ordered_contents:
+        lines = [self.content.description, *self.content.extra_lines]
+        if self.content.ordered_contents:
             lines.extend(
                 item.value
-                for item in self.ordered_contents
+                for item in self.content.ordered_contents
                 if item.value and item.kind in {"text", "image_error"}
             )
         return [line for line in lines if line]
@@ -216,13 +189,17 @@ class ParseResult:
     @property
     def image_references(self) -> list[str]:
         """返回按展示顺序排列的图片引用。"""
-        if self.ordered_contents:
+        if self.content.ordered_contents:
             return [
                 item.value
-                for item in self.ordered_contents
+                for item in self.content.ordered_contents
                 if item.kind == "image" and item.value
             ]
-        return [value for value in [*self.cover_urls, *self.image_urls] if value]
+        return [
+            value
+            for value in [*self.content.cover_urls, *self.content.image_urls]
+            if value
+        ]
 
     def info_chain(
         self,
