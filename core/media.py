@@ -21,13 +21,23 @@ FORBIDDEN_MEDIA_HEADERS = {"authorization", "cookie", "proxy-authorization"}
 class TemporaryFileRegistry:
     """登记解析期间创建的临时文件，并集中执行清理。"""
 
+    _files: dict[int, list[Path]] = {}
+
     @staticmethod
     def register(result: ParseResult, path: Path) -> None:
-        result.media.temporary_files.append(path)
+        TemporaryFileRegistry._files.setdefault(id(result), []).append(path)
+
+    @staticmethod
+    def paths(result: ParseResult) -> tuple[Path, ...]:
+        return tuple(TemporaryFileRegistry._files.get(id(result), ()))
 
     @staticmethod
     def cleanup(result: ParseResult) -> None:
-        cleanup_temporary_files(result)
+        for path in TemporaryFileRegistry._files.pop(id(result), []):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError as exc:
+                logger.warning(f"清理临时媒体失败 ({path.name}): {exc}")
 
 
 def sanitize_media_headers(
@@ -430,10 +440,5 @@ class VideoMaterializer:
 
 def cleanup_temporary_files(result: ParseResult) -> None:
     """删除解析结果登记的临时文件，并始终清空登记列表。"""
-    for path in result.media.temporary_files:
-        try:
-            path.unlink(missing_ok=True)
-        except OSError as exc:
-            logger.warning(f"清理临时图片失败 ({path.name}): {exc}")
-    result.media.temporary_files.clear()
+    TemporaryFileRegistry.cleanup(result)
     result.media.image_source_urls.clear()

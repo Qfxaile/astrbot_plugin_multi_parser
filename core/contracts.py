@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Literal
 
 
@@ -41,7 +40,6 @@ class MediaBundle:
 
     video_url: str = ""
     audio_url: str = ""
-    temporary_files: list[Path] = field(default_factory=list, repr=False)
     image_source_urls: dict[str, str] = field(default_factory=dict, repr=False)
     image_download_headers: dict[str, str] = field(default_factory=dict, repr=False)
     video_download_headers: dict[str, str] = field(default_factory=dict, repr=False)
@@ -126,13 +124,18 @@ class ParseResult:
         }
         if media is None:
             media = MediaBundle(
-                temporary_files=media_values["temporary_files"] or [],
                 image_source_urls=media_values["image_source_urls"] or {},
                 image_download_headers=media_values["image_download_headers"] or {},
             )
-        else:
-            if media_values["temporary_files"]:
-                media.temporary_files.extend(media_values["temporary_files"])
+        if media_values["temporary_files"]:
+            from .media import TemporaryFileRegistry
+
+            for path in media_values["temporary_files"]:
+                TemporaryFileRegistry.register(self, path)
+        if media is not None and media_values["image_source_urls"]:
+            media.image_source_urls.update(media_values["image_source_urls"])
+        if media is not None and media_values["image_download_headers"]:
+            media.image_download_headers.update(media_values["image_download_headers"])
             if media_values["image_source_urls"]:
                 media.image_source_urls.update(media_values["image_source_urls"])
             if media_values["image_download_headers"]:

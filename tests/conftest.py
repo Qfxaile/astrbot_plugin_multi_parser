@@ -16,11 +16,13 @@ if PLUGIN_NAME not in sys.modules:
 
 @pytest.fixture
 def assert_temporary_image():
+    from astrbot_multi_parser.core.media import TemporaryFileRegistry
+
     created_paths: set[Path] = set()
 
     def assert_image(result, value: str, expected_bytes: bytes) -> Path:
         image_path = Path(value)
-        assert image_path in result.media.temporary_files
+        assert image_path in TemporaryFileRegistry.paths(result)
         assert image_path.is_file()
         assert image_path.read_bytes() == expected_bytes
         assert not value.startswith("base64://")

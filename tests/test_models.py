@@ -6,6 +6,7 @@ import pytest
 from astrbot.api.message_components import Image, Plain, Record
 from astrbot_multi_parser import core as models
 from astrbot_multi_parser.core.contracts import MediaBundle
+from astrbot_multi_parser.core.media import TemporaryFileRegistry
 
 
 def test_core_exports_contracts():
@@ -97,7 +98,7 @@ async def test_materialize_images_streams_original_bytes_to_temporary_file(tmp_p
     assert image_path.suffix == ".webp"
     assert image_path.read_bytes() == b"original-image-bytes"
     assert not result.content.image_urls[0].startswith("base64://")
-    assert result.media.temporary_files == [image_path]
+    assert TemporaryFileRegistry.paths(result) == (image_path,)
     assert result.media.image_source_urls == {
         str(image_path.resolve()): "https://img.example/original.webp"
     }
@@ -108,7 +109,7 @@ async def test_materialize_images_streams_original_bytes_to_temporary_file(tmp_p
 
     result.cleanup_temporary_files()
     assert not image_path.exists()
-    assert result.media.temporary_files == []
+    assert TemporaryFileRegistry.paths(result) == ()
     assert result.media.image_source_urls == {}
 
 

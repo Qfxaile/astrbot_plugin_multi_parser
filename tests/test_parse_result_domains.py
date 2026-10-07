@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from astrbot_multi_parser.core.contracts import ParseDiagnostics, ParseResult
+from astrbot_multi_parser.core.media import TemporaryFileRegistry
 
 
 def test_parse_result_domain_views_share_legacy_storage():
@@ -14,7 +15,7 @@ def test_parse_result_domain_views_share_legacy_storage():
 
     assert result.content.title == "标题"
     assert result.content.image_urls == ["https://example.test/image.jpg"]
-    assert result.media.temporary_files == result.media.temporary_files
+    assert TemporaryFileRegistry.paths(result) == (Path("/tmp/image.jpg"),)
     assert result.diagnostics.error == "请求失败"
 
     result.content.title = "新标题"

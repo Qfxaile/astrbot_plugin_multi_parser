@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from astrbot_multi_parser.core.contracts import MediaBundle, ParseResult
+from astrbot_multi_parser.core.media import TemporaryFileRegistry
 
 
 def test_parse_result_exposes_media_bundle():
@@ -16,6 +17,6 @@ def test_parse_result_exposes_media_bundle():
 
     media = result.media
     assert isinstance(media, MediaBundle)
-    assert media.temporary_files == [path]
+    assert TemporaryFileRegistry.paths(result) == (path,)
     assert media.image_source_urls[str(path)].startswith("https://")
     assert media.video_download_host_suffixes == ("example.com",)

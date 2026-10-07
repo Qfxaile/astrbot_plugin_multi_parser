@@ -723,7 +723,7 @@ async def test_handle_parse_cleans_temporary_images_after_send(monkeypatch, tmp_
     assert messages[0][0].file == image_path.resolve().as_uri()
     assert messages[0][0].path == str(image_path.resolve())
     assert not image_path.exists()
-    assert result.media.temporary_files == []
+    assert media.TemporaryFileRegistry.paths(result) == ()
 
 
 @pytest.mark.asyncio
@@ -1980,7 +1980,7 @@ async def test_kook_materializes_remote_video_before_send(monkeypatch, tmp_path)
     assert messages[1][0].file == video_path.resolve().as_uri()
     assert messages[1][0].path == str(video_path.resolve())
     assert not video_path.exists()
-    assert result.media.temporary_files == []
+    assert media.TemporaryFileRegistry.paths(result) == ()
 
 
 @pytest.mark.asyncio
@@ -2053,7 +2053,7 @@ async def test_kook_materializes_video_with_platform_headers(monkeypatch):
     assert "Authorization" not in requested_headers[0]
     assert isinstance(messages[1][0], Video)
     assert messages[1][0].file.startswith("file:///")
-    assert result.media.temporary_files == []
+    assert media.TemporaryFileRegistry.paths(result) == ()
 
 
 @pytest.mark.asyncio

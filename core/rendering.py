@@ -1,6 +1,7 @@
 from astrbot.api.message_components import Image, Plain, Record, Video
 
 from .contracts import ParseResult
+from .media import TemporaryFileRegistry
 
 
 class ParseResultRenderer:
@@ -91,6 +92,6 @@ def render_audio_chain(result: ParseResult) -> list:
 
 
 def _image_component(result: ParseResult, value: str) -> Image:
-    if any(value == str(path) for path in result.media.temporary_files):
+    if any(value == str(path) for path in TemporaryFileRegistry.paths(result)):
         return Image.fromFileSystem(value)
     return Image(file=value)
