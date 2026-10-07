@@ -772,7 +772,7 @@ async def test_pinduoduo_maps_safe_and_network_errors(monkeypatch):
         unsafe_page,
     )
     safe_error = await parser.parse(ParseContext(text="https://p.pinduoduo.com/Abc123"))
-    assert safe_error.error == "商品分享链接跳转到不可信域名。"
+    assert safe_error.diagnostics.error == "商品分享链接跳转到不可信域名。"
 
     async def failed_page(client, url, host_suffixes):
         raise httpx.ConnectError("private-network-detail")
@@ -784,5 +784,5 @@ async def test_pinduoduo_maps_safe_and_network_errors(monkeypatch):
     network_error = await parser.parse(
         ParseContext(text="https://p.pinduoduo.com/Abc123")
     )
-    assert network_error.error == "拼多多商品请求失败，请稍后重试。"
-    assert "private-network-detail" not in network_error.error
+    assert network_error.diagnostics.error == "拼多多商品请求失败，请稍后重试。"
+    assert "private-network-detail" not in network_error.diagnostics.error

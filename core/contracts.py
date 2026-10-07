@@ -140,23 +140,12 @@ class MediaBundle:
         return self._result.subtitle_language
 
 
+@dataclass
 class ParseDiagnostics:
-    """解析诊断领域视图，隔离错误和部分媒体失败信息。"""
+    """解析错误及部分媒体失败信息。"""
 
-    def __init__(self, result: "ParseResult") -> None:
-        self._result = result
-
-    @property
-    def error(self) -> str:
-        return self._result.error
-
-    @error.setter
-    def error(self, value: str) -> None:
-        self._result.error = value
-
-    @property
-    def image_errors(self) -> dict[int, str]:
-        return self._result.image_errors
+    error: str = ""
+    image_errors: dict[int, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -177,10 +166,9 @@ class ParseResult:
     cover_urls: list[str] = field(default_factory=list)
     image_urls: list[str] = field(default_factory=list)
     video_url: str = ""
-    error: str = ""
     extra_lines: list[str] = field(default_factory=list)
     ordered_contents: list[OrderedContent] = field(default_factory=list)
-    image_errors: dict[int, str] = field(default_factory=dict)
+    diagnostics: ParseDiagnostics = field(default_factory=ParseDiagnostics)
     temporary_files: list[Path] = field(default_factory=list, repr=False)
     image_source_urls: dict[str, str] = field(default_factory=dict, repr=False)
     image_download_headers: dict[str, str] = field(default_factory=dict, repr=False)
@@ -202,11 +190,6 @@ class ParseResult:
     def media(self) -> MediaBundle:
         """返回媒体领域视图，媒体基础设施优先使用此入口。"""
         return MediaBundle(self)
-
-    @property
-    def diagnostics(self) -> ParseDiagnostics:
-        """返回解析诊断视图。"""
-        return ParseDiagnostics(self)
 
     @property
     def image_count(self) -> int:

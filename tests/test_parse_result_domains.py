@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from astrbot_multi_parser.core.contracts import ParseResult
+from astrbot_multi_parser.core.contracts import ParseDiagnostics, ParseResult
 
 
 def test_parse_result_domain_views_share_legacy_storage():
@@ -8,7 +8,7 @@ def test_parse_result_domain_views_share_legacy_storage():
         platform="测试",
         title="标题",
         image_urls=["https://example.test/image.jpg"],
-        error="请求失败",
+        diagnostics=ParseDiagnostics(error="请求失败"),
         temporary_files=[Path("/tmp/image.jpg")],
     )
 
@@ -24,7 +24,7 @@ def test_parse_result_domain_views_share_legacy_storage():
 
     assert result.title == "新标题"
     assert result.video_url.endswith("video.mp4")
-    assert result.error == "新错误"
+    assert result.diagnostics.error == "新错误"
 
 
 def test_media_bundle_exposes_request_headers():

@@ -26,7 +26,7 @@ def test_invalid_legacy_image_slots_are_marked_in_original_order():
 
     assert result.cover_urls == [""]
     assert result.image_urls == ["https://safe.test/1.jpg", ""]
-    assert result.image_errors == {
+    assert result.diagnostics.image_errors == {
         0: "第 1 张图片获取失败：InvalidURL",
         2: "第 3 张图片获取失败：InvalidURL",
     }
@@ -169,7 +169,7 @@ async def test_materialize_images_keeps_failed_legacy_slot_and_index(
     assert_temporary_image(result, result.cover_urls[0], b"/cover.jpg")
     assert result.image_urls[0] == ""
     assert_temporary_image(result, result.image_urls[1], b"/final.jpg")
-    assert result.image_errors == {1: "第 2 张图片获取失败：HTTP 403"}
+    assert result.diagnostics.image_errors == {1: "第 2 张图片获取失败：HTTP 403"}
 
 
 @pytest.mark.asyncio
@@ -294,7 +294,7 @@ async def test_materialize_images_converts_malformed_legacy_url_to_error(caplog)
         )
 
     assert result.image_urls == [""]
-    assert result.image_errors == {0: "第 1 张图片获取失败：InvalidURL"}
+    assert result.diagnostics.image_errors == {0: "第 1 张图片获取失败：InvalidURL"}
     assert any(
         record.message == "图片下载失败 (unknown): InvalidURL"
         for record in caplog.records
@@ -359,7 +359,9 @@ async def test_materialize_images_rejects_unsafe_legacy_urls_without_requests(
     assert requested_urls == ["https://img.example/ok.jpg"]
     assert result.image_urls[: len(unsafe_urls)] == ["" for _ in unsafe_urls]
     assert all(
-        result.image_errors[index].startswith(f"第 {index + 1} 张图片获取失败：")
+        result.diagnostics.image_errors[index].startswith(
+            f"第 {index + 1} 张图片获取失败："
+        )
         for index in range(len(unsafe_urls))
     )
     assert_temporary_image(result, result.image_urls[-1], b"unexpected")
@@ -414,7 +416,7 @@ async def test_materialize_images_rejects_nonstandard_port_before_request():
 
     assert requested_urls == []
     assert result.image_urls == [""]
-    assert result.image_errors == {0: "第 1 张图片获取失败：InvalidURL"}
+    assert result.diagnostics.image_errors == {0: "第 1 张图片获取失败：InvalidURL"}
 
 
 @pytest.mark.asyncio
@@ -437,7 +439,7 @@ async def test_materialize_images_rejects_redirect_to_private_host():
 
     assert requested_urls == ["https://cdn.trusted.example/start.jpg"]
     assert result.image_urls == [""]
-    assert result.image_errors == {0: "第 1 张图片获取失败：InvalidURL"}
+    assert result.diagnostics.image_errors == {0: "第 1 张图片获取失败：InvalidURL"}
 
 
 @pytest.mark.asyncio
@@ -494,7 +496,7 @@ async def test_materialize_images_stops_after_five_redirects():
         f"https://cdn.trusted.example/hop-{index}.jpg" for index in range(6)
     ]
     assert result.image_urls == [""]
-    assert result.image_errors == {0: "第 1 张图片获取失败：InvalidURL"}
+    assert result.diagnostics.image_errors == {0: "第 1 张图片获取失败：InvalidURL"}
 
 
 def test_info_chain_preserves_ordered_text_and_images():
@@ -551,7 +553,7 @@ def test_image_count_includes_successful_and_failed_image_slots():
         platform="bilibili",
         cover_urls=["https://img.example/cover.jpg", ""],
         image_urls=["https://img.example/1.jpg"],
-        image_errors={1: "封面下载失败"},
+        diagnostics=models.ParseDiagnostics(image_errors={1: "封面下载失败"}),
         ordered_contents=[
             models.OrderedContent(kind="text", value="正文"),
             models.OrderedContent(kind="image", value="https://img.example/2.jpg"),
@@ -570,7 +572,7 @@ def test_info_chain_can_render_summary_only():
         description="简介内容",
         cover_urls=["https://img.example/cover.jpg"],
         video_url="https://video.example/1.mp4",
-        error="解析失败",
+        diagnostics=models.ParseDiagnostics(error="解析失败"),
         extra_lines=["额外信息"],
         ordered_contents=[models.OrderedContent(kind="text", value="正文")],
     )
@@ -613,7 +615,9 @@ def test_info_chain_keeps_legacy_slots_and_errors_before_summary():
         title="标题",
         cover_urls=["https://img.example/cover.jpg", ""],
         image_urls=["", "https://img.example/1.jpg"],
-        image_errors={1: "封面下载失败", 2: "正文图片下载失败"},
+        diagnostics=models.ParseDiagnostics(
+            image_errors={1: "封面下载失败", 2: "正文图片下载失败"}
+        ),
     )
 
     chain = result.info_chain()
@@ -642,23 +646,23 @@ def test_parse_result_preserves_legacy_positional_arguments():
     ordered_contents = [models.OrderedContent(kind="text", value="正文")]
 
     result = models.ParseResult(
-        "bilibili",
-        "标题",
-        "作者",
-        "简介",
-        ["https://img.example/cover.jpg"],
-        ["https://img.example/1.jpg"],
-        "https://video.example/1.mp4",
-        "解析失败",
-        ["额外信息"],
-        ordered_contents,
+        platform="bilibili",
+        title="标题",
+        author="作者",
+        description="简介",
+        cover_urls=["https://img.example/cover.jpg"],
+        image_urls=["https://img.example/1.jpg"],
+        video_url="https://video.example/1.mp4",
+        diagnostics=models.ParseDiagnostics(error="解析失败"),
+        extra_lines=["额外信息"],
+        ordered_contents=ordered_contents,
     )
 
     assert result.video_url == "https://video.example/1.mp4"
-    assert result.error == "解析失败"
+    assert result.diagnostics.error == "解析失败"
     assert result.extra_lines == ["额外信息"]
     assert result.ordered_contents is ordered_contents
-    assert result.image_errors == {}
+    assert result.diagnostics.image_errors == {}
 
 
 def test_audio_chain_builds_remote_record_component():
