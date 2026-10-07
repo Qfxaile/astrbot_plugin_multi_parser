@@ -12,9 +12,9 @@ from uuid import uuid4
 import httpx
 from astrbot.api import logger
 
-from .contracts import ParseResult
-from .http import http_client_proxy_options, is_trusted_https_url, request_timeout
-from .settings import PluginSettings
+from ..contracts import ParseResult
+from ..http import http_client_proxy_options, is_trusted_https_url, request_timeout
+from ..settings import PluginSettings
 
 FORBIDDEN_MEDIA_HEADERS = {"authorization", "cookie", "proxy-authorization"}
 

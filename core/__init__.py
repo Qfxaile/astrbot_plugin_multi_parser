@@ -25,7 +25,7 @@ _EXPORT_MODULES = {
     "MediaBundle": ".contracts",
     "ParseDiagnostics": ".contracts",
     "DeliveryHints": ".contracts",
-    "PlatformSpec": ".platform",
+    "PlatformSpec": ".ports",
     "PluginSettings": ".settings",
     "ParseResultRenderer": ".rendering",
 }

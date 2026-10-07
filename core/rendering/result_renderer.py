@@ -1,7 +1,7 @@
 from astrbot.api.message_components import Image, Plain, Record, Video
 
-from .contracts import ParseResult
-from .media import TemporaryFileRegistry
+from ..contracts import ParseResult
+from ..media import TemporaryFileRegistry
 
 
 class ParseResultRenderer:

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 from astrbot_multi_parser.core.parser import BaseParser
-from astrbot_multi_parser.core.platform import PlatformFeature, PlatformSpec
+from astrbot_multi_parser.core.ports import PlatformFeature, PlatformSpec
 from astrbot_multi_parser.platforms.registry import (
     PLATFORM_REGISTRY,
     login_platforms,
@@ -114,10 +114,10 @@ def test_registered_parsers_implement_parser_contract():
 
 
 def test_parser_registry_rejects_non_async_contract(monkeypatch):
-    from astrbot_multi_parser.core.platform import PlatformSpec
+    from astrbot_multi_parser.core.ports import PlatformSpec
     from astrbot_multi_parser.platforms import registry
 
-    class InvalidParser:
+    class InvalidParser(BaseParser):
         name = "invalid"
 
         def match(self, context):

@@ -3,7 +3,8 @@
 import inspect
 from collections.abc import Mapping
 
-from ..core.platform import PlatformFeature, PlatformSpec
+from ..core.parser import BaseParser
+from ..core.ports import PlatformFeature, PlatformSpec
 from .bilibili import BilibiliLoginProvider, BilibiliParser
 from .douyin import DouyinLoginProvider, DouyinParser
 from .fanqie import FanqieParser
@@ -65,6 +66,8 @@ def validate_platform_registry() -> None:
 
     for item in PLATFORM_REGISTRY:
         parser_type = item.parser_type
+        if not inspect.isclass(parser_type) or not issubclass(parser_type, BaseParser):
+            raise ValueError(f"{item.key} 必须继承 BaseParser")
         if not callable(getattr(parser_type, "match", None)) or not callable(
             getattr(parser_type, "parse", None)
         ):
@@ -77,6 +80,10 @@ def validate_platform_registry() -> None:
             raise ValueError(f"{item.key} 必须声明 parse 能力")
         if item.supports_login != item.supports(PlatformFeature.LOGIN):
             raise ValueError(f"{item.key} 的 login 能力声明与 Provider 不一致")
+        if item.login_provider_type is not None and not inspect.isclass(
+            item.login_provider_type
+        ):
+            raise ValueError(f"{item.key} 的登录 Provider 必须是类")
 
     display_names = [item.display_name for item in login_platforms()]
     if len(display_names) != len(set(display_names)):

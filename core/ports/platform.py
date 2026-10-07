@@ -4,8 +4,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 
-from .parser import Parser
-from .platform_login import PlatformLoginProvider
+from ..parser import Parser
+from ..platform_login import PlatformLoginProvider
 
 
 class PlatformFeature(str, Enum):
