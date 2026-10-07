@@ -42,11 +42,11 @@ def parse_question_payload(payload: object, first_answer: object = None) -> Pars
             ("浏览", ("visitCount", "visit_count")),
         ),
     )
-    return ParseResult(
-        platform="zhihu",
-        title=title,
-        author=author,
-        ordered_contents=contents,
-        video_url=append_extra_videos(contents, videos),
-        extra_lines=[summary] if summary else [],
-    )
+    result = ParseResult(platform="zhihu")
+    result.content.title = title
+    result.content.author = author
+    result.media.video_url = append_extra_videos(contents, videos)
+    result.content.ordered_contents.extend(contents)
+    if summary:
+        result.content.extra_lines.append(summary)
+    return result

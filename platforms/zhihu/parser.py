@@ -47,7 +47,9 @@ class ZhihuParser(ZhihuContentResolver, BaseParser):
     async def parse(self, context: ParseContext) -> ParseResult:
         url = self._extract_url(context.combined_text)
         if not url:
-            return ParseResult(platform=self.name, error="未找到知乎链接。")
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "未找到知乎链接。"
+            return result
         requester = ZhihuRequest(self.config)
         async with requester.create_client() as client:
             if re.search(self.SHARE_PATTERN, url):

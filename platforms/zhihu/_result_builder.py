@@ -56,11 +56,11 @@ def content_result(
     )
     contents, video_urls = parse_html_content(html_body)
     summary = stats_line(payload, stats)
-    return ParseResult(
-        platform="zhihu",
-        title=normalize_text(title),
-        author=author_name(payload.get("author")),
-        ordered_contents=contents,
-        video_url=append_extra_videos(contents, video_urls),
-        extra_lines=[summary] if summary else [],
-    )
+    result = ParseResult(platform="zhihu")
+    result.content.title = normalize_text(title)
+    result.content.author = author_name(payload.get("author"))
+    result.media.video_url = append_extra_videos(contents, video_urls)
+    result.content.ordered_contents.extend(contents)
+    if summary:
+        result.content.extra_lines.append(summary)
+    return result

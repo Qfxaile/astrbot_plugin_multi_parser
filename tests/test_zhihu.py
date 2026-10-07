@@ -59,8 +59,8 @@ def test_answer_content_is_parsed_only_once(monkeypatch):
     )
 
     assert feed_calls == 1
-    assert result.video_url == "https://video.zhihu.com/a.mp4"
-    assert [item.kind for item in result.ordered_contents] == ["text", "image"]
+    assert result.media.video_url == "https://video.zhihu.com/a.mp4"
+    assert [item.kind for item in result.content.ordered_contents] == ["text", "image"]
 
 
 def test_normalize_text_decodes_entities_and_compacts_whitespace():
@@ -171,14 +171,14 @@ def test_answer_payload_builds_author_stats_and_ordered_body():
         }
     )
 
-    assert result.title == "问题标题"
-    assert result.author == "答主"
-    assert result.extra_lines == ["赞同 12 | 评论 3 | 收藏 2"]
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert result.content.title == "问题标题"
+    assert result.content.author == "答主"
+    assert result.content.extra_lines == ["赞同 12 | 评论 3 | 收藏 2"]
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("text", "回答正文"),
         ("image", "https://picx.zhimg.com/answer.jpg"),
     ]
-    assert result.video_url == "https://video.zhihu.com/answer.mp4"
+    assert result.media.video_url == "https://video.zhihu.com/answer.mp4"
 
 
 def test_question_payload_appends_default_first_answer():
@@ -197,10 +197,10 @@ def test_question_payload_appends_default_first_answer():
         },
     )
 
-    assert result.title == "问题标题"
-    assert result.author == "首答作者"
-    assert result.extra_lines == ["回答 5 | 关注 1.2万 | 浏览 1亿"]
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert result.content.title == "问题标题"
+    assert result.content.author == "首答作者"
+    assert result.content.extra_lines == ["回答 5 | 关注 1.2万 | 浏览 1亿"]
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("text", "问题描述"),
         ("text", "默认排序首条回答 @首答作者"),
         ("text", "首条回答"),
@@ -222,14 +222,14 @@ def test_article_payload_uses_article_title_and_multiple_video_policy():
         }
     )
 
-    assert result.title == "专栏标题"
-    assert result.author == "文章作者"
-    assert result.video_url == "https://video.zhihu.com/first.mp4"
-    assert result.ordered_contents[-1] == OrderedContent(
+    assert result.content.title == "专栏标题"
+    assert result.content.author == "文章作者"
+    assert result.media.video_url == "https://video.zhihu.com/first.mp4"
+    assert result.content.ordered_contents[-1] == OrderedContent(
         kind="text",
         value="视频链接: https://video.zhihu.com/second.mp4",
     )
-    assert result.extra_lines == ["赞同 2万 | 评论 4"]
+    assert result.content.extra_lines == ["赞同 2万 | 评论 4"]
 
 
 def test_pin_payload_handles_structured_text_image_and_video():
@@ -261,15 +261,15 @@ def test_pin_payload_handles_structured_text_image_and_video():
         }
     )
 
-    assert result.title == "知乎想法"
-    assert result.author == "想法作者"
-    assert result.ordered_contents == [
+    assert result.content.title == "知乎想法"
+    assert result.content.author == "想法作者"
+    assert result.content.ordered_contents == [
         OrderedContent(kind="text", value="想法正文"),
         OrderedContent(kind="image", value="https://pic1.zhimg.com/pin-original.jpg"),
         OrderedContent(kind="image", value="https://pic1.zhimg.com/pin-original.jpg"),
     ]
-    assert result.video_url == "https://video.zhihu.com/pin.mp4"
-    assert result.extra_lines == ["赞同 8 | 评论 1"]
+    assert result.media.video_url == "https://video.zhihu.com/pin.mp4"
+    assert result.content.extra_lines == ["赞同 8 | 评论 1"]
 
 
 @pytest.mark.parametrize(
@@ -357,9 +357,11 @@ async def test_parse_answer_uses_cookie_only_for_zhihu_and_materializes_image(
         ParseContext(text="https://www.zhihu.com/question/1/answer/2")
     )
 
-    assert result.title == "接口问题"
-    assert result.author == "接口答主"
-    assert_temporary_image(result, result.ordered_contents[0].value, image_bytes)
+    assert result.content.title == "接口问题"
+    assert result.content.author == "接口答主"
+    assert_temporary_image(
+        result, result.content.ordered_contents[0].value, image_bytes
+    )
 
 
 @pytest.mark.asyncio
@@ -399,8 +401,8 @@ async def test_parse_question_fetches_default_first_answer(monkeypatch):
         "/api/v4/questions/1",
         "/api/v4/questions/1/answers",
     ]
-    assert result.author == "首答作者"
-    assert result.ordered_contents[-1].value == "首条回答"
+    assert result.content.author == "首答作者"
+    assert result.content.ordered_contents[-1].value == "首条回答"
 
 
 @pytest.mark.asyncio
@@ -437,7 +439,7 @@ async def test_parse_routes_article_and_pin(
 
     result = await ZhihuParser({}).parse(ParseContext(text=url))
 
-    assert result.title == expected_title
+    assert result.content.title == expected_title
 
 
 @pytest.mark.asyncio
@@ -465,7 +467,7 @@ async def test_parse_share_follows_trusted_redirect(monkeypatch):
     install_zhihu_mock_client(monkeypatch, handler)
     result = await ZhihuParser({}).parse(ParseContext(text=share_url))
 
-    assert result.title == "跳转问题"
+    assert result.content.title == "跳转问题"
 
 
 @pytest.mark.asyncio
@@ -518,8 +520,8 @@ async def test_answer_api_risk_control_falls_back_to_initial_state(monkeypatch):
         ParseContext(text="https://www.zhihu.com/question/1/answer/2")
     )
 
-    assert result.title == "页面问题"
-    assert result.author == "页面答主"
+    assert result.content.title == "页面问题"
+    assert result.content.author == "页面答主"
 
 
 @pytest.mark.asyncio
@@ -560,8 +562,8 @@ async def test_answer_api_without_content_falls_back_to_initial_state(monkeypatc
         ParseContext(text="https://www.zhihu.com/question/1/answer/2")
     )
 
-    assert result.title == "页面问题"
-    assert result.author == "页面答主"
-    assert result.ordered_contents == [
+    assert result.content.title == "页面问题"
+    assert result.content.author == "页面答主"
+    assert result.content.ordered_contents == [
         OrderedContent(kind="text", value="完整回答正文")
     ]
