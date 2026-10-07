@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from astrbot_multi_parser.core.contracts import MediaMetadata, ParseResult
+from astrbot_multi_parser.core.contracts import MediaBundle, ParseResult
 
 
-def test_parse_result_exposes_media_metadata_view():
+def test_parse_result_exposes_media_bundle():
     path = Path("/tmp/image.jpg")
     result = ParseResult(
         platform="test",
@@ -12,8 +12,8 @@ def test_parse_result_exposes_media_metadata_view():
         video_download_host_suffixes=("example.com",),
     )
 
-    metadata = result.media_metadata
-    assert isinstance(metadata, MediaMetadata)
-    assert metadata.temporary_files == [path]
-    assert metadata.image_source_urls[str(path)].startswith("https://")
-    assert metadata.video_download_host_suffixes == ("example.com",)
+    media = result.media
+    assert isinstance(media, MediaBundle)
+    assert media.temporary_files == [path]
+    assert media.image_source_urls[str(path)].startswith("https://")
+    assert media.video_download_host_suffixes == ("example.com",)

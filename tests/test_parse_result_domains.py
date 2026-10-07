@@ -27,10 +27,8 @@ def test_parse_result_domain_views_share_legacy_storage():
     assert result.error == "新错误"
 
 
-def test_media_metadata_is_backed_by_media_bundle():
+def test_media_bundle_exposes_request_headers():
     result = ParseResult(platform="测试")
     result.media.image_download_headers["Referer"] = "https://example.test/"
 
-    assert result.media_metadata.image_download_headers == {
-        "Referer": "https://example.test/"
-    }
+    assert result.media.image_download_headers == {"Referer": "https://example.test/"}

@@ -19,7 +19,6 @@ def test_services_use_media_metadata_view_for_media_request_fields():
                 continue
             owner = node.value
             if isinstance(owner, ast.Attribute) and owner.attr in {
-                "media_metadata",
                 "media",
             }:
                 continue
