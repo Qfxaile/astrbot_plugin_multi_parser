@@ -14,7 +14,7 @@ def test_pinduoduo_result_only_displays_product_content():
         "https://mobile.yangkeduo.com/goods.html?goods_id=123456",
     )
 
-    assert result.extra_lines == []
+    assert result.content.extra_lines == []
 
 
 @pytest.mark.parametrize(
@@ -100,9 +100,9 @@ async def test_pinduoduo_parse_hides_price(monkeypatch):
 
     result = await parser.parse(ParseContext(text="https://p.pinduoduo.com/Abc123"))
 
-    assert result.title == "拼多多测试商品"
-    assert result.cover_urls == ["https://img.pddpic.com/main.jpg"]
-    assert result.extra_lines == []
+    assert result.content.title == "拼多多测试商品"
+    assert result.content.cover_urls == ["https://img.pddpic.com/main.jpg"]
+    assert result.content.extra_lines == []
 
 
 async def test_pinduoduo_parse_reads_goods_from_window_raw_data(monkeypatch):
@@ -139,9 +139,9 @@ async def test_pinduoduo_parse_reads_goods_from_window_raw_data(monkeypatch):
         ParseContext(text="https://mobile.yangkeduo.com/goods2.html?ps=CQGwm6NMIa")
     )
 
-    assert result.title == "真实拼多多商品"
-    assert result.cover_urls == ["https://img.pddpic.com/product.jpg"]
-    assert result.extra_lines == []
+    assert result.content.title == "真实拼多多商品"
+    assert result.content.cover_urls == ["https://img.pddpic.com/product.jpg"]
+    assert result.content.extra_lines == []
 
 
 async def test_pinduoduo_rejects_generic_store_metadata(monkeypatch):
@@ -170,10 +170,11 @@ async def test_pinduoduo_rejects_generic_store_metadata(monkeypatch):
         ParseContext(text="https://mobile.yangkeduo.com/goods2.html?ps=CQGwm6NMIa")
     )
 
-    assert result.title == ""
-    assert result.cover_urls == []
+    assert result.content.title == ""
+    assert result.content.cover_urls == []
     assert (
-        result.error == "拼多多内容获取失败，配置的 Cookies 可能已失效，请更新后重试。"
+        result.diagnostics.error
+        == "拼多多内容获取失败，配置的 Cookies 可能已失效，请更新后重试。"
     )
 
 
@@ -374,8 +375,8 @@ async def test_pinduoduo_uses_oak_gallery_when_page_image_is_app_icon(
     )
 
     assert oak_requests == ["795783843683"]
-    assert result.title == "正确商品标题"
-    assert result.cover_urls == ["https://img.pddpic.com/real-product.jpeg"]
+    assert result.content.title == "正确商品标题"
+    assert result.content.cover_urls == ["https://img.pddpic.com/real-product.jpeg"]
 
 
 def test_pinduoduo_page_metadata_uses_camel_case_thumb_url():
@@ -438,9 +439,9 @@ async def test_pinduoduo_uses_oak_fallback_when_page_has_no_product(monkeypatch)
         )
     )
 
-    assert result.title == "接口商品"
-    assert result.cover_urls == ["https://img.pddpic.com/api.jpg"]
-    assert result.extra_lines == []
+    assert result.content.title == "接口商品"
+    assert result.content.cover_urls == ["https://img.pddpic.com/api.jpg"]
+    assert result.content.extra_lines == []
 
 
 @pytest.mark.parametrize(
@@ -505,7 +506,7 @@ async def test_pinduoduo_scopes_page_cookies_and_keeps_images_cookie_free(
         ParseContext(text="https://mobile.yangkeduo.com/goods2.html?ps=Abc123")
     )
 
-    assert result.title == "拼多多商品"
+    assert result.content.title == "拼多多商品"
     assert page_cookie_domains == [[".pinduoduo.com", ".yangkeduo.com"]]
     assert image_cookies == []
 
@@ -533,7 +534,7 @@ async def test_pinduoduo_hides_string_price(monkeypatch):
         ParseContext(text="https://mobile.yangkeduo.com/goods.html?goods_id=123456")
     )
 
-    assert result.extra_lines == []
+    assert result.content.extra_lines == []
 
 
 async def test_pinduoduo_uses_json_ld_before_platform_and_og(monkeypatch):
@@ -563,8 +564,8 @@ async def test_pinduoduo_uses_json_ld_before_platform_and_og(monkeypatch):
 
     result = await parser.parse(ParseContext(text="https://p.pinduoduo.com/Abc123"))
 
-    assert result.title == "JSON-LD商品"
-    assert result.extra_lines == []
+    assert result.content.title == "JSON-LD商品"
+    assert result.content.extra_lines == []
 
 
 async def test_pinduoduo_keeps_clean_ps_link_when_goods_id_is_missing(
@@ -585,7 +586,7 @@ async def test_pinduoduo_keeps_clean_ps_link_when_goods_id_is_missing(
 
     result = await parser.parse(ParseContext(text="https://p.pinduoduo.com/Abc123"))
 
-    assert result.extra_lines == []
+    assert result.content.extra_lines == []
 
 
 async def test_pinduoduo_short_link_must_resolve_to_goods_page(monkeypatch):
@@ -604,7 +605,7 @@ async def test_pinduoduo_short_link_must_resolve_to_goods_page(monkeypatch):
 
     result = await parser.parse(ParseContext(text="https://p.pinduoduo.com/Abc123"))
 
-    assert result.error == "拼多多分享链接未指向受支持的商品。"
+    assert result.diagnostics.error == "拼多多分享链接未指向受支持的商品。"
 
 
 @pytest.mark.parametrize("marker", ["验证码", "安全验证", "登录后查看"])
@@ -638,8 +639,8 @@ async def test_pinduoduo_reports_verification_page(
         ParseContext(text="https://mobile.yangkeduo.com/goods.html?goods_id=123456")
     )
 
-    assert result.error == expected
-    assert "test-secret" not in result.error
+    assert result.diagnostics.error == expected
+    assert "test-secret" not in result.diagnostics.error
 
 
 @pytest.mark.parametrize(
@@ -673,8 +674,8 @@ async def test_pinduoduo_reports_need_login_page(monkeypatch, config, expected):
         ParseContext(text="https://mobile.yangkeduo.com/goods2.html?ps=CQGwm6NMIa")
     )
 
-    assert result.error == expected
-    assert "test-secret" not in result.error
+    assert result.diagnostics.error == expected
+    assert "test-secret" not in result.diagnostics.error
 
 
 @pytest.mark.parametrize("status_code", [401, 403])
@@ -707,8 +708,8 @@ async def test_pinduoduo_maps_auth_status_to_cookie_error(
         ParseContext(text="https://mobile.yangkeduo.com/goods2.html?ps=Abc123")
     )
 
-    assert result.error == expected
-    assert "test-secret" not in result.error
+    assert result.diagnostics.error == expected
+    assert "test-secret" not in result.diagnostics.error
 
 
 @pytest.mark.parametrize("status_code", [404, 410])
@@ -729,7 +730,7 @@ async def test_pinduoduo_reports_unavailable_product(monkeypatch, status_code):
         ParseContext(text="https://mobile.yangkeduo.com/goods.html?goods_id=123456")
     )
 
-    assert result.error == "该拼多多商品已下架或不存在。"
+    assert result.diagnostics.error == "该拼多多商品已下架或不存在。"
 
 
 async def test_pinduoduo_filters_untrusted_image(monkeypatch):
@@ -756,8 +757,8 @@ async def test_pinduoduo_filters_untrusted_image(monkeypatch):
         ParseContext(text="https://mobile.yangkeduo.com/goods.html?goods_id=123456")
     )
 
-    assert result.title == "拼多多商品"
-    assert result.cover_urls == []
+    assert result.content.title == "拼多多商品"
+    assert result.content.cover_urls == []
 
 
 async def test_pinduoduo_maps_safe_and_network_errors(monkeypatch):

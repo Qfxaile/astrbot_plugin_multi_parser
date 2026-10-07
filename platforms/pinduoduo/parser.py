@@ -83,7 +83,7 @@ class PinduoduoParser(BaseParser):
     async def parse(self, context: ParseContext) -> ParseResult:
         url = self._find_product_url(context.combined_text)
         if url is None:
-            return ParseResult(platform=self.name, error="未找到拼多多商品链接。")
+            return self._error_result("未找到拼多多商品链接。")
 
         try:
             async with httpx.AsyncClient(
@@ -101,17 +101,11 @@ class PinduoduoParser(BaseParser):
                     self.page_host_suffixes,
                 )
                 if not self._is_goods_page(page.final_url):
-                    return ParseResult(
-                        platform=self.name,
-                        error="拼多多分享链接未指向受支持的商品。",
-                    )
+                    return self._error_result("拼多多分享链接未指向受支持的商品。")
                 if any(
                     marker in page.html for marker in self.VERIFY_MARKERS
                 ) or self.NEED_LOGIN_PATTERN.search(page.html):
-                    return ParseResult(
-                        platform=self.name,
-                        error=str(self.cookie_access_error()),
-                    )
+                    return self._error_result(str(self.cookie_access_error()))
 
                 platform_metadata, goods_id = self._extract_platform_metadata(
                     page.html,
@@ -122,10 +116,7 @@ class PinduoduoParser(BaseParser):
                     goods_id=goods_id,
                 )
                 if not canonical_url:
-                    return ParseResult(
-                        platform=self.name,
-                        error="拼多多分享链接未指向受支持的商品。",
-                    )
+                    return self._error_result("拼多多分享链接未指向受支持的商品。")
 
                 metadata = extract_json_ld_product(
                     page.html,
@@ -165,10 +156,7 @@ class PinduoduoParser(BaseParser):
                             goods_id=oak_goods_id,
                         )
                 if not metadata.title:
-                    return ParseResult(
-                        platform=self.name,
-                        error=str(self.cookie_access_error()),
-                    )
+                    return self._error_result(str(self.cookie_access_error()))
 
                 result = self._build_result(metadata, canonical_url)
                 if not result.cover_urls:
@@ -179,20 +167,14 @@ class PinduoduoParser(BaseParser):
                     headers=self.HEADERS,
                 )
         except TrustedWebPageError as exc:
-            return ParseResult(platform=self.name, error=str(exc))
+            return self._error_result(str(exc))
         except CookieAccessError as exc:
-            return ParseResult(platform=self.name, error=str(exc))
+            return self._error_result(str(exc))
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code in self.cookie_failure_status_codes:
-                return ParseResult(
-                    platform=self.name,
-                    error=str(self.cookie_access_error()),
-                )
+                return self._error_result(str(self.cookie_access_error()))
             if exc.response.status_code in {404, 410}:
-                return ParseResult(
-                    platform=self.name,
-                    error="该拼多多商品已下架或不存在。",
-                )
+                return self._error_result("该拼多多商品已下架或不存在。")
             return self._network_error()
         except httpx.HTTPError:
             return self._network_error()
@@ -522,15 +504,16 @@ class PinduoduoParser(BaseParser):
             self.image_host_suffixes,
         ):
             image_url = ""
-        return ParseResult(
-            platform=self.name,
-            title=metadata.title,
-            cover_urls=[image_url] if image_url else [],
-            extra_lines=[],
-        )
+        result = ParseResult(platform=self.name)
+        result.content.title = metadata.title
+        if image_url:
+            result.content.cover_urls.append(image_url)
+        return result
 
     def _network_error(self) -> ParseResult:
-        return ParseResult(
-            platform=self.name,
-            error="拼多多商品请求失败，请稍后重试。",
-        )
+        return self._error_result("拼多多商品请求失败，请稍后重试。")
+
+    def _error_result(self, message: str) -> ParseResult:
+        result = ParseResult(platform=self.name)
+        result.diagnostics.error = message
+        return result
