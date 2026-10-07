@@ -53,7 +53,7 @@ uv run ruff check .
 | 登录契约、登录 HTTP 基类和二维码渲染 | `core/platform_login.py` |
 | 安全 HTTP、可信 URL、Cookie、平台代理、商品网页元数据、媒体和渲染 | `core/http.py`、`core/webpage.py`、`core/product_metadata.py`、`core/media.py`、`core/rendering.py`；`ParseResultRenderer` 负责结果到消息组件的转换 |
 | 配置类型读取与平台开关 | `core/settings.py`；基础设施和服务不得重复实现配置类型转换 |
-| 解析器公共流程和统一 HTTP 客户端 | `core/parser.py`；平台适配器优先复用 `BaseParser.http_client()` |
+| 解析器窄扩展契约、公共 HTTP 客户端和基础能力 | `core/parser.py` 的 `Parser` Protocol 与可实例化 `BaseParser`；平台适配器优先复用 `BaseParser.http_client()` |
 | 平台扩展接口与能力描述 | `core/platform.py` |
 | 平台清单及解析器、登录适配器对应关系 | `platforms/registry.py` |
 | 配置读取和解析器创建 | `services/configuration.py` |
@@ -66,7 +66,7 @@ uv run ruff check .
 | 视频大小探测、发送和回退策略 | `services/video.py`、`services/video_delivery.py`、`services/video_fallback.py` |
 | 平台请求、签名、登录和载荷转换 | `platforms/<platform>/` |
 
-跨平台规则放入 `core/` 或 `services/`；平台协议细节留在对应平台目录。Controller/命令入口只做权限与参数检查、调用服务并返回结果。自动解析由 `services/parsing.py` 的 `ParseCoordinator` 编排；平台注册的解析器必须覆写 `BaseParser` 的 `match` 和 `parse` 方法，并通过 `PlatformSpec` 注册。平台适配器不得反向依赖服务层，核心模块不得依赖平台实现；依赖方向由 `tests/test_architecture_dependencies.py` 校验。`BaseParser` 本身保留可实例化的公共 HTTP、Cookie 和媒体能力，供基础能力复用。京东、淘宝、拼多多源码和测试保留，但不注册、不出现在配置开关和自动解析主流程中。
+跨平台规则放入 `core/` 或 `services/`；平台协议细节留在对应平台目录。Controller/命令入口只做权限与参数检查、调用服务并返回结果。自动解析由 `services/parsing.py` 的 `ParseCoordinator` 编排；解析器通过 `core/parser.py` 的 `Parser` Protocol 提供异步 `match` 和 `parse`，并通过 `PlatformSpec` 注册，校验要求声明 `PARSE` 能力。平台适配器不得反向依赖服务层，核心模块不得依赖平台实现；依赖方向由 `tests/test_architecture_dependencies.py` 校验。`BaseParser` 本身保留可实例化的公共 HTTP、Cookie 和媒体能力，供基础能力复用。京东、淘宝、拼多多源码和测试保留，但不注册、不出现在配置开关和自动解析主流程中。
 
 服务层和媒体渲染适配器读取解析结果媒体请求元数据时必须使用 `ParseResult.media`；临时文件登记和清理由 `core/media.py` 的 `TemporaryFileRegistry` 负责。合并转发决策、节点构建和 OneBot 图片序列化由 `ForwardDeliveryService` 负责，`DeliveryService` 只做服务编排。边界由 `tests/test_media_metadata_boundaries.py` 校验。
 

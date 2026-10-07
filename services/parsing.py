@@ -8,6 +8,7 @@ from astrbot.api.event import AstrMessageEvent
 
 from ..core.contracts import ParseContext, ParseResult
 from ..core.http import CookieAccessError
+from ..core.parser import Parser
 from ..core.settings import PluginSettings
 
 
@@ -16,7 +17,7 @@ class ParseRuntime(Protocol):
 
     config: Any
 
-    def enabled_parsers(self) -> list[Any]: ...
+    def enabled_parsers(self) -> list[Parser]: ...
 
     async def react_success(self, event: AstrMessageEvent) -> None: ...
 
@@ -78,11 +79,16 @@ class ParseCoordinator:
             result: ParseResult | None = None
             restore_send_state = False
             try:
-                if not await parser.match(context):
+                matched = await parser.match(context)
+                if not isinstance(matched, bool):
+                    raise TypeError(f"{parser.name} match 必须返回 bool")
+                if not matched:
                     continue
                 restore_send_state = True
                 await self.runtime.react_success(event)
                 result = await parser.parse(context)
+                if not isinstance(result, ParseResult):
+                    raise TypeError(f"{parser.name} parse 必须返回 ParseResult")
                 send_video_by_url = PluginSettings(self.runtime.config).boolean(
                     "send_video_by_url", True
                 )

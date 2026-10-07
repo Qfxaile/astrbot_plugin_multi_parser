@@ -1,8 +1,9 @@
 """集中声明平台解析器与登录适配器的对应关系。"""
 
+import inspect
 from collections.abc import Mapping
 
-from ..core.platform import PlatformSpec
+from ..core.platform import PlatformFeature, PlatformSpec
 from .bilibili import BilibiliLoginProvider, BilibiliParser
 from .douyin import DouyinLoginProvider, DouyinParser
 from .fanqie import FanqieParser
@@ -56,6 +57,19 @@ def validate_platform_registry() -> None:
     keys = [item.key for item in PLATFORM_REGISTRY]
     if len(keys) != len(set(keys)):
         raise ValueError("平台注册表包含重复的解析键")
+
+    for item in PLATFORM_REGISTRY:
+        parser_type = item.parser_type
+        if not callable(getattr(parser_type, "match", None)) or not callable(
+            getattr(parser_type, "parse", None)
+        ):
+            raise ValueError(f"{item.key} 缺少 match 或 parse 解析接口")
+        if not inspect.iscoroutinefunction(
+            parser_type.match
+        ) or not inspect.iscoroutinefunction(parser_type.parse):
+            raise ValueError(f"{item.key} 的 match 和 parse 必须是异步方法")
+        if PlatformFeature.PARSE not in item.features:
+            raise ValueError(f"{item.key} 必须声明 parse 能力")
 
     display_names = [item.display_name for item in login_platforms()]
     if len(display_names) != len(set(display_names)):

@@ -84,6 +84,25 @@ def test_registered_parsers_implement_parser_contract():
         assert parser_type.parse is not BaseParser.parse
 
 
+def test_parser_registry_rejects_non_async_contract(monkeypatch):
+    from astrbot_multi_parser.core.platform import PlatformSpec
+    from astrbot_multi_parser.platforms import registry
+
+    class InvalidParser:
+        name = "invalid"
+
+        def match(self, context):
+            return True
+
+        def parse(self, context):
+            return None
+
+    monkeypatch.setattr(registry, "PLATFORM_REGISTRY", (PlatformSpec(InvalidParser),))
+
+    with pytest.raises(ValueError, match="必须是异步方法"):
+        registry.validate_platform_registry()
+
+
 @pytest.mark.parametrize("platform", ["fanqie", "qqchannel", "qzone"])
 def test_public_parser_only_platforms_are_enabled_by_default(platform):
     registration = next(

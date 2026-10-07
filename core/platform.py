@@ -4,7 +4,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 
-from .parser import BaseParser
+from .parser import Parser
 from .platform_login import PlatformLoginProvider
 
 
@@ -19,7 +19,7 @@ class PlatformFeature(str, Enum):
     SHARE_CARD = "share_card"
 
 
-ParserFactory = Callable[[Mapping[str, object]], BaseParser]
+ParserFactory = Callable[[Mapping[str, object]], Parser]
 LoginFactory = Callable[[Mapping[str, object]], PlatformLoginProvider]
 
 
@@ -27,7 +27,7 @@ LoginFactory = Callable[[Mapping[str, object]], PlatformLoginProvider]
 class PlatformSpec:
     """平台解析、登录和配置装配所需的唯一元数据。"""
 
-    parser_type: type[BaseParser]
+    parser_type: type[Parser]
     login_provider_type: type[PlatformLoginProvider] | None = None
     enabled_by_default: bool = True
     parser_priority: int = 0

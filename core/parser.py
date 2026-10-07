@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 from contextlib import asynccontextmanager
+from typing import Protocol, runtime_checkable
 
 import httpx
 
@@ -18,11 +19,21 @@ from .http import (
 from .media import ImageMaterializer
 
 
-class BaseParser:
-    """平台解析器的基础实现与扩展契约。
+@runtime_checkable
+class Parser(Protocol):
+    """自动解析编排依赖的平台解析器最小接口。"""
 
-    平台适配器必须覆写 ``match`` 和 ``parse``；基础类本身仍可直接实例化，
-    用于复用图片物化、Cookie 和 HTTP 配置能力。
+    name: str
+
+    async def match(self, context: ParseContext) -> bool: ...
+
+    async def parse(self, context: ParseContext) -> ParseResult: ...
+
+
+class BaseParser:
+    """平台解析器的公共 HTTP、Cookie 和媒体能力基类。
+
+    自动解析使用独立的 ``Parser`` 协议；本类保留可实例化，供基础能力复用。
     """
 
     name = "base"
@@ -61,11 +72,11 @@ class BaseParser:
             yield client
 
     async def match(self, context: ParseContext) -> bool:
-        """判断当前消息是否属于本平台。"""
+        """基础类不提供平台匹配规则。"""
         raise NotImplementedError
 
     async def parse(self, context: ParseContext) -> ParseResult:
-        """解析消息并返回统一结果。"""
+        """基础类不提供平台解析规则。"""
         raise NotImplementedError
 
     def cookie_access_error(self) -> CookieAccessError:

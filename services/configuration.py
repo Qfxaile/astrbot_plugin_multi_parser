@@ -1,11 +1,11 @@
 from collections.abc import Mapping
 
-from ..core.parser import BaseParser
+from ..core.parser import Parser
 from ..core.settings import PluginSettings
 from ..platforms.registry import parser_platforms
 
 
-def build_parsers(config) -> dict[str, BaseParser]:
+def build_parsers(config) -> dict[str, Parser]:
     """按稳定优先级创建所有平台解析器。"""
     return {
         registration.parser_type.name: registration.parser_type(config)
@@ -15,7 +15,7 @@ def build_parsers(config) -> dict[str, BaseParser]:
     }
 
 
-def enabled_parsers(config, parsers: Mapping[str, BaseParser]) -> list[BaseParser]:
+def enabled_parsers(config, parsers: Mapping[str, Parser]) -> list[Parser]:
     """按注册顺序返回当前启用的平台解析器。"""
     defaults = {
         registration.key: registration.enabled_by_default
