@@ -294,7 +294,7 @@ astrbot_plugin_multi_parser/
 └── _conf_schema.json
 ```
 
-解析器统一继承 `core/parser.py` 中的 `BaseParser`，平台注册实现必须覆写 `match` 和 `parse` 两个方法，返回 `core/contracts.py` 中的 `ParseResult`。后处理服务应使用 `ParseResult.content_lines` 和 `ParseResult.image_references` 获取有序文本与图片引用，媒体投递和视频处理使用 `ParseResult.media_metadata` 获取媒体请求元数据，临时文件由 `core/media.py` 的 `TemporaryFileRegistry` 管理，合并转发由 `services/forward_delivery.py` 统一编排，消息组件生成统一通过 `core/rendering.py` 的 `ParseResultRenderer` 完成。配置类型转换和平台开关读取统一使用 `core/settings.py` 的 `PluginSettings`。`BaseParser` 本身保留公共 HTTP、Cookie 和媒体能力，供基础能力复用。平台能力元数据使用 `core/platform.py` 的 `PlatformSpec`，自动解析编排位于 `services/parsing.py`。新增平台时应复用 `core/` 和 `services/` 的公共能力，并同步注册、配置和测试。京东、淘宝、拼多多源码仍保留用于后续维护，但当前不注册、不接入自动解析。
+解析器统一继承 `core/parser.py` 中的 `BaseParser`，平台注册实现必须覆写 `match` 和 `parse` 两个方法，返回 `core/contracts.py` 中的 `ParseResult`。后处理服务应使用 `ParseResult.content_lines` 和 `ParseResult.image_references` 获取有序文本与图片引用，媒体投递和视频处理使用 `ParseResult.media` 获取媒体请求元数据，临时文件由 `core/media.py` 的 `TemporaryFileRegistry` 管理，合并转发由 `services/forward_delivery.py` 统一编排，消息组件生成统一通过 `core/rendering.py` 的 `ParseResultRenderer` 完成。配置类型转换和平台开关读取统一使用 `core/settings.py` 的 `PluginSettings`。`BaseParser` 本身保留公共 HTTP、Cookie 和媒体能力，供基础能力复用。平台能力元数据使用 `core/platform.py` 的 `PlatformSpec`，自动解析编排位于 `services/parsing.py`。新增平台时应复用 `core/` 和 `services/` 的公共能力，并同步注册、配置和测试。京东、淘宝、拼多多源码仍保留用于后续维护，但当前不注册、不接入自动解析。
 
 平台注册表提供注册项和配置 Schema 一致性校验；新增或调整平台时，注册表、配置项和对应测试必须一起更新。核心契约与公共服务优先从 `core`、`services` 包入口导入，具体实现模块通过惰性导出保持包加载轻量。
 

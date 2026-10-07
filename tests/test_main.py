@@ -1679,6 +1679,50 @@ async def test_notice_delivery_failure_still_hides_video_url():
 
 
 @pytest.mark.asyncio
+async def test_fallback_error_message_uses_media_video_url():
+    class FailingDelivery:
+        def video_over_limit_action(self):
+            return "direct_link"
+
+        async def send_video_over_limit(self, *args):
+            raise RuntimeError("delivery failed")
+
+    plugin = make_plugin(ParseResult(platform="test"))
+    plugin._delivery = FailingDelivery()
+    result = ParseResult(
+        platform="test",
+        media=MediaBundle(video_url="https://example.com/video.mp4"),
+    )
+
+    messages = [
+        item
+        async for item in plugin._forward_with_fallback(
+            FakeEvent(), result, "视频超过限制"
+        )
+    ]
+
+    assert "视频链接: https://example.com/video.mp4" in messages[0][0].text
+
+
+@pytest.mark.asyncio
+async def test_terminate_closes_container_authentication_service():
+    class FakeAuthentication:
+        def __init__(self):
+            self.closed = False
+
+        async def close(self):
+            self.closed = True
+
+    plugin = make_plugin(ParseResult(platform="test"))
+    authentication = FakeAuthentication()
+    plugin._services = SimpleNamespace(authentication=authentication)
+
+    await plugin.terminate()
+
+    assert authentication.closed
+
+
+@pytest.mark.asyncio
 async def test_always_mode_forwards_text_only_result(monkeypatch):
     messages = await collect_results(
         monkeypatch,

@@ -237,11 +237,16 @@ class MultiParserPlugin(Star):
             logger.warning(f"视频超限处理失败: {exc}")
             message = f"{reason}\n视频超限处理失败: {exc}"
             if self._delivery_service().video_over_limit_action() != "notice":
-                message = f"{message}\n视频链接: {result.video_url}"
+                message = f"{message}\n视频链接: {result.media.video_url}"
             yield event.plain_result(message)
 
     async def terminate(self):
         """插件卸载时取消仍在进行的平台登录。"""
-        authentication = getattr(self, "_authentication", None)
+        services = getattr(self, "_services", None)
+        authentication = (
+            services.authentication
+            if services is not None
+            else getattr(self, "_authentication", None)
+        )
         if authentication is not None:
             await authentication.close()
