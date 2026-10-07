@@ -1,4 +1,4 @@
-from astrbot_multi_parser.services.onebot_image_downloader import OneBotImageDownloader
+from astrbot_multi_parser.services.delivery.onebot_images import OneBotImageDownloader
 
 
 def test_downloaded_file_path_accepts_nested_response():

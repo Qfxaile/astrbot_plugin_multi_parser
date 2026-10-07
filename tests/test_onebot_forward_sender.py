@@ -1,5 +1,5 @@
 import pytest
-from astrbot_multi_parser.services.onebot_forward_sender import OneBotForwardSender
+from astrbot_multi_parser.services.delivery.onebot_sender import OneBotForwardSender
 
 
 class Bot:

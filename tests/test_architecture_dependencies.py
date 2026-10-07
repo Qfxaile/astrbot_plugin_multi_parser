@@ -73,7 +73,10 @@ def test_registered_platforms_have_single_parser_entrypoint():
 
 def test_service_platform_dependencies_are_limited_to_assembly_modules():
     root = Path(__file__).parents[1]
-    allowed = {"services/configuration.py", "services/authentication.py"}
+    allowed = {
+        "services/composition/configuration.py",
+        "services/authentication/service.py",
+    }
     violations = []
     for path in (root / "services").rglob("*.py"):
         if str(path.relative_to(root)) in allowed:

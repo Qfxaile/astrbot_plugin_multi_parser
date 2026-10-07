@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
-from astrbot_multi_parser.services.video_delivery import VideoDeliveryService
+from astrbot_multi_parser.services.delivery.video_delivery import VideoDeliveryService
 
 
 class Event:

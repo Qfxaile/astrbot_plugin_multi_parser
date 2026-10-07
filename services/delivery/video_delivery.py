@@ -6,9 +6,9 @@ from pathlib import Path
 from astrbot.api.event import AstrMessageEvent, MessageChain
 from astrbot.api.message_components import Video
 
-from ..core.contracts import ParseResult
-from ..core.media import TemporaryFileRegistry, VideoMaterializer
-from ..core.rendering import ParseResultRenderer
+from ...core.contracts import ParseResult
+from ...core.media import TemporaryFileRegistry, VideoMaterializer
+from ...core.rendering import ParseResultRenderer
 
 
 class VideoDeliveryService:

@@ -1,8 +1,8 @@
 from collections.abc import Mapping
 
-from ..core.parser import Parser
-from ..core.settings import PluginSettings
-from ..platforms.registry import parser_platforms
+from ...core.parser import Parser
+from ...core.settings import PluginSettings
+from ...platforms.registry import parser_platforms
 
 
 def build_parsers(config) -> dict[str, Parser]:

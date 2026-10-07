@@ -1,5 +1,7 @@
 from astrbot.api.message_components import Node, Plain
-from astrbot_multi_parser.services.onebot_forward import OneBotForwardSerializer
+from astrbot_multi_parser.services.delivery.onebot_forward import (
+    OneBotForwardSerializer,
+)
 
 
 def test_onebot_forward_serializer_builds_native_text_node():

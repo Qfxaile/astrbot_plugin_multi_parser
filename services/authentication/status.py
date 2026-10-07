@@ -2,10 +2,10 @@
 
 from collections.abc import Awaitable, Callable, Mapping
 
-from ..core.http import parse_cookie_header
-from ..core.platform_login import PlatformLoginProvider, PlatformUser
+from ...core.http import parse_cookie_header
+from ...core.platform_login import PlatformLoginProvider, PlatformUser
 from .cookie_store import CookieStore
-from .login_messages import LoginMessageFormatter
+from .messages import LoginMessageFormatter
 
 ProviderFactory = Callable[[], PlatformLoginProvider]
 UserLookup = Callable[[PlatformLoginProvider, str], Awaitable[PlatformUser | None]]

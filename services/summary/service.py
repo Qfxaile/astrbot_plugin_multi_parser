@@ -7,9 +7,9 @@ from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
 from astrbot.core.utils.media_utils import MediaResolver
 
-from ..core.contracts import ParseResult
-from ..core.settings import PluginSettings
-from .summary_provider import SummaryProviderResolver
+from ...core.contracts import ParseResult
+from ...core.settings import PluginSettings
+from .provider import SummaryProviderResolver
 
 DEFAULT_PROMPT = """请对下面的互联网内容做准确、简洁、易读的中文总结。
 要求：

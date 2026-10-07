@@ -11,7 +11,7 @@ from astrbot_multi_parser.core.platform_login import (
     PlatformUser,
     QRLoginChallenge,
 )
-from astrbot_multi_parser.services.authentication import AuthenticationService
+from astrbot_multi_parser.services.authentication.service import AuthenticationService
 
 
 class SavingConfig(dict):

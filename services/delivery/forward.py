@@ -5,15 +5,15 @@ from collections.abc import Mapping
 from astrbot.api.event import AstrMessageEvent, MessageChain
 from astrbot.api.message_components import Image, Node, Nodes, Plain
 
-from ..core.contracts import ParseResult
-from ..core.rendering import ParseResultRenderer
-from .content_assembly import ContentAssembler
-from .delivery_policy import DeliveryPolicy
-from .event_identity import EventIdentity
+from ...core.contracts import ParseResult
+from ...core.rendering import ParseResultRenderer
+from ..content_assembly import ContentAssembler
+from ..event_identity import EventIdentity
 from .onebot_forward import OneBotForwardSerializer
-from .onebot_forward_sender import OneBotForwardSender
 from .onebot_identity import OneBotIdentityResolver
-from .onebot_image_downloader import OneBotImageDownloader
+from .onebot_images import OneBotImageDownloader
+from .onebot_sender import OneBotForwardSender
+from .policy import DeliveryPolicy
 
 
 class ForwardDeliveryService:

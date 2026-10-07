@@ -7,19 +7,19 @@ from functools import partial
 from astrbot.api.event import AstrMessageEvent, MessageChain
 from astrbot.api.message_components import Image, Plain
 
-from ..core.http import parse_cookie_header
-from ..core.platform_login import (
+from ...core.http import parse_cookie_header
+from ...core.platform_login import (
     LoginPollState,
     PlatformLoginError,
     PlatformLoginProvider,
     PlatformUser,
 )
-from ..platforms.registry import login_platforms
+from ...platforms.registry import login_platforms
 from .cookie_store import CookieStore
-from .login_messages import LoginMessageFormatter
-from .login_polling import QRLoginPoller
-from .login_sessions import LoginAttempt, LoginSessionRegistry
-from .login_status import LoginStatusService
+from .messages import LoginMessageFormatter
+from .polling import QRLoginPoller
+from .sessions import LoginAttempt, LoginSessionRegistry
+from .status import LoginStatusService
 
 ProviderFactory = Callable[[], PlatformLoginProvider]
 

@@ -1,5 +1,5 @@
 from astrbot_multi_parser.core.contracts import OrderedContent
-from astrbot_multi_parser.services import conversation_history
+from astrbot_multi_parser.services.conversation import history as conversation_history
 from result_factory import build_result
 
 

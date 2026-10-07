@@ -5,21 +5,21 @@ from astrbot.api.star import Context, Star
 
 from .core.contracts import ParseResult
 from .core.settings import PluginSettings
-from .services.ai_summary import AISummaryService
-from .services.authentication import AuthenticationService
-from .services.configuration import build_parsers, enabled_parsers
-from .services.container import ServiceContainer
-from .services.conversation_history import ConversationHistoryService
-from .services.delivery import DeliveryService
-from .services.message_context import extract_context
-from .services.parsing import ParseCoordinator
-from .services.video import (
+from .services.authentication.service import AuthenticationService
+from .services.composition.configuration import build_parsers, enabled_parsers
+from .services.composition.container import ServiceContainer
+from .services.conversation.history import ConversationHistoryService
+from .services.delivery.service import DeliveryService
+from .services.delivery.video import (
     VideoSendPolicy,
     VideoSizeInfo,
     VideoSizeProbe,
     format_video_size,
     parse_content_range,
 )
+from .services.message_context import extract_context
+from .services.parsing import ParseCoordinator
+from .services.summary.service import AISummaryService
 
 __all__ = ["MultiParserPlugin", "VideoSizeInfo"]
 
@@ -54,7 +54,7 @@ class MultiParserPlugin(Star):
     def _conversation_history_service(self) -> ConversationHistoryService:
         services = getattr(self, "_services", None)
         if services is not None:
-            return services.conversation_history
+            return services.conversation.history
         history = getattr(self, "_conversation_history", None)
         if history is None:
             history = ConversationHistoryService(self.context.conversation_manager)

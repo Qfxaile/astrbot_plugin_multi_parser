@@ -1,4 +1,4 @@
-from astrbot_multi_parser.services.delivery_policy import DeliveryPolicy
+from astrbot_multi_parser.services.delivery.policy import DeliveryPolicy
 
 
 def test_forward_policy_uses_strict_thresholds_and_fallbacks():

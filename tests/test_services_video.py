@@ -1,7 +1,7 @@
 import httpx
 import pytest
-from astrbot_multi_parser.services import video
-from astrbot_multi_parser.services.video import (
+from astrbot_multi_parser.services.delivery import video
+from astrbot_multi_parser.services.delivery.video import (
     VideoSendPolicy,
     VideoSizeInfo,
     VideoSizeProbe,

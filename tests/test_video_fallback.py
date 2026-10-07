@@ -1,4 +1,4 @@
-from astrbot_multi_parser.services.video_fallback import VideoFallbackService
+from astrbot_multi_parser.services.delivery.video_fallback import VideoFallbackService
 from result_factory import build_result
 
 

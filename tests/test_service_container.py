@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from astrbot_multi_parser.services.container import ServiceContainer
+from astrbot_multi_parser.services.composition.container import ServiceContainer
 
 
 def test_service_container_lazily_creates_conversation_history():

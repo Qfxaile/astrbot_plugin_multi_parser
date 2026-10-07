@@ -2,8 +2,8 @@
 
 from collections.abc import MutableMapping
 
-from ..core.http import cookie_config_value, set_cookie_config_value
-from ..core.platform_login import PlatformLoginError
+from ...core.http import cookie_config_value, set_cookie_config_value
+from ...core.platform_login import PlatformLoginError
 
 
 class CookieStore:

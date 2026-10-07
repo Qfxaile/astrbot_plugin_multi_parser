@@ -10,7 +10,7 @@ from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
 from astrbot.core.utils.media_utils import MediaResolver
 
-from ..core.contracts import ParseResult
+from ...core.contracts import ParseResult
 
 
 class ConversationHistoryService:

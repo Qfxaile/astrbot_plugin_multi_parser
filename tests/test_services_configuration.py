@@ -1,4 +1,4 @@
-from astrbot_multi_parser.services.configuration import build_parsers
+from astrbot_multi_parser.services.composition.configuration import build_parsers
 
 
 def test_registry_order_is_stable():
@@ -21,7 +21,7 @@ def test_registry_order_is_stable():
 
 def test_github_is_enabled_and_pixiv_is_disabled_when_switch_is_missing():
     parsers = build_parsers({})
-    from astrbot_multi_parser.services.configuration import enabled_parsers
+    from astrbot_multi_parser.services.composition.configuration import enabled_parsers
 
     enabled = [parser.name for parser in enabled_parsers({}, parsers)]
     assert "github" in enabled

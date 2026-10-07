@@ -2,7 +2,10 @@ from types import SimpleNamespace
 
 import pytest
 from astrbot_multi_parser.core.contracts import MediaBundle, OrderedContent
-from astrbot_multi_parser.services.ai_summary import DEFAULT_PROMPT, AISummaryService
+from astrbot_multi_parser.services.summary.service import (
+    DEFAULT_PROMPT,
+    AISummaryService,
+)
 from result_factory import build_result
 
 

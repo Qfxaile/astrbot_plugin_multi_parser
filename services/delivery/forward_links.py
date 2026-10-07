@@ -5,8 +5,8 @@ from collections.abc import Awaitable, Callable, Mapping
 from astrbot.api.event import AstrMessageEvent, MessageChain
 from astrbot.api.message_components import Node, Nodes, Plain
 
-from ..core.contracts import ParseResult
-from .event_identity import EventIdentity
+from ...core.contracts import ParseResult
+from ..event_identity import EventIdentity
 from .onebot_gateway import OneBotGateway
 
 

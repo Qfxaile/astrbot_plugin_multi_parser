@@ -4,8 +4,8 @@ from collections.abc import Mapping
 
 from astrbot.api.message_components import Plain
 
-from .delivery_policy import DeliveryPolicy
-from .text_processing import replace_links
+from ..text_processing import replace_links
+from .policy import DeliveryPolicy
 
 
 class LinkFilter:

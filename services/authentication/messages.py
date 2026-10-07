@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable
 
-from ..core.platform_login import (
+from ...core.platform_login import (
     PlatformLoginError,
     PlatformLoginProvider,
     PlatformUser,

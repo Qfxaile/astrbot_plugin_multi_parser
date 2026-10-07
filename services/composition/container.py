@@ -2,10 +2,10 @@
 
 from collections.abc import Mapping
 
-from .ai_summary import AISummaryService
-from .authentication import AuthenticationService
-from .conversation_history import ConversationHistoryService
-from .delivery import DeliveryService
+from ..authentication.service import AuthenticationService
+from ..conversation.history import ConversationHistoryService
+from ..delivery.service import DeliveryService
+from ..summary.service import AISummaryService
 
 
 class ServiceContainer:

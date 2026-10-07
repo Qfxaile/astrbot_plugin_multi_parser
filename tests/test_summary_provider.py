@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
-from astrbot_multi_parser.services.summary_provider import SummaryProviderResolver
+from astrbot_multi_parser.services.summary.provider import SummaryProviderResolver
 
 
 class Context:

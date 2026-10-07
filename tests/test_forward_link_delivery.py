@@ -1,4 +1,4 @@
-from astrbot_multi_parser.services.forward_link_delivery import (
+from astrbot_multi_parser.services.delivery.forward_links import (
     ForwardLinkDeliveryService,
 )
 

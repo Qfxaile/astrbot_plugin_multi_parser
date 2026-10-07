@@ -9,10 +9,10 @@ from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, MessageChain
 from astrbot.api.message_components import Plain
 
-from ..core.contracts import ParseResult
-from .delivery_policy import DeliveryPolicy
-from .event_identity import EventIdentity
+from ...core.contracts import ParseResult
+from ..event_identity import EventIdentity
 from .onebot_gateway import OneBotGateway
+from .policy import DeliveryPolicy
 
 
 class VideoFallbackService:

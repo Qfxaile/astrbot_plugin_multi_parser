@@ -1,5 +1,5 @@
 from astrbot.api.message_components import Plain
-from astrbot_multi_parser.services.link_filter import LinkFilter
+from astrbot_multi_parser.services.delivery.link_filter import LinkFilter
 
 
 def test_link_filter_changes_plain_text_but_preserves_other_components():

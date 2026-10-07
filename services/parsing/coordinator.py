@@ -6,12 +6,12 @@ from typing import Any, Protocol
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
 
-from ..core.contracts import ParseContext, ParseResult
-from ..core.http import CookieAccessError
-from ..core.media import cleanup_temporary_files
-from ..core.parser import Parser
-from ..core.rendering import ParseResultRenderer
-from ..core.settings import PluginSettings
+from ...core.contracts import ParseContext, ParseResult
+from ...core.http import CookieAccessError
+from ...core.media import cleanup_temporary_files
+from ...core.parser import Parser
+from ...core.rendering import ParseResultRenderer
+from ...core.settings import PluginSettings
 
 
 class ParseRuntime(Protocol):

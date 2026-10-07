@@ -4,15 +4,15 @@ from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
 from astrbot.api.message_components import Nodes
 
-from ..core.contracts import ParseResult
-from ..core.rendering import ParseResultRenderer
-from ..core.settings import PluginSettings
-from .delivery_policy import DeliveryPolicy
-from .event_identity import EventIdentity
-from .forward_delivery import ForwardDeliveryService
-from .forward_link_delivery import ForwardLinkDeliveryService
+from ...core.contracts import ParseResult
+from ...core.rendering import ParseResultRenderer
+from ...core.settings import PluginSettings
+from ..event_identity import EventIdentity
+from .forward import ForwardDeliveryService
+from .forward_links import ForwardLinkDeliveryService
 from .link_filter import LinkFilter
 from .onebot_gateway import OneBotGateway
+from .policy import DeliveryPolicy
 from .video_delivery import VideoDeliveryService
 from .video_fallback import VideoFallbackService
 

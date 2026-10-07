@@ -1,5 +1,5 @@
 import pytest
-from astrbot_multi_parser.services.onebot_gateway import OneBotGateway
+from astrbot_multi_parser.services.delivery.onebot_gateway import OneBotGateway
 
 
 class Bot:

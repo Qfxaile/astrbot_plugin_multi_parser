@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 
-from ..core.settings import PluginSettings
+from ...core.settings import PluginSettings
 
 
 class SummaryProviderResolver:

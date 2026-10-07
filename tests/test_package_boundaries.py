@@ -27,7 +27,7 @@ def test_platform_registry_is_owned_by_platform_package():
         ("astrbot_multi_parser.core", "astrbot_multi_parser.core.parser"),
         (
             "astrbot_multi_parser.services",
-            "astrbot_multi_parser.services.authentication",
+            "astrbot_multi_parser.services.authentication.service",
         ),
         ("astrbot_multi_parser.platforms", "astrbot_multi_parser.platforms.zhihu"),
     ],
@@ -66,22 +66,22 @@ def test_package_initializers_do_not_eagerly_import_implementation_modules(
         (
             "astrbot_multi_parser.services",
             "AuthenticationService",
-            "astrbot_multi_parser.services.authentication",
+            "astrbot_multi_parser.services.authentication.service",
         ),
         (
             "astrbot_multi_parser.services",
             "VideoFallbackService",
-            "astrbot_multi_parser.services.video_fallback",
+            "astrbot_multi_parser.services.delivery.video_fallback",
         ),
         (
             "astrbot_multi_parser.services",
             "LoginSessionRegistry",
-            "astrbot_multi_parser.services.login_sessions",
+            "astrbot_multi_parser.services.authentication.sessions",
         ),
         (
             "astrbot_multi_parser.services",
             "ServiceContainer",
-            "astrbot_multi_parser.services.container",
+            "astrbot_multi_parser.services.composition.container",
         ),
         (
             "astrbot_multi_parser.core",

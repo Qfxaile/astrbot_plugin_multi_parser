@@ -2,7 +2,7 @@
 
 from astrbot.api.event import AstrMessageEvent
 
-from .event_identity import EventIdentity
+from ..event_identity import EventIdentity
 from .onebot_gateway import OneBotGateway
 
 

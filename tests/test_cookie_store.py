@@ -1,5 +1,5 @@
 import pytest
-from astrbot_multi_parser.services.cookie_store import CookieStore
+from astrbot_multi_parser.services.authentication.cookie_store import CookieStore
 
 
 class Config(dict):

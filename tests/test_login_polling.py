@@ -6,7 +6,7 @@ from astrbot_multi_parser.core.platform_login import (
     LoginPollState,
     QRLoginChallenge,
 )
-from astrbot_multi_parser.services.login_polling import QRLoginPoller
+from astrbot_multi_parser.services.authentication.polling import QRLoginPoller
 
 
 class FakeProvider:

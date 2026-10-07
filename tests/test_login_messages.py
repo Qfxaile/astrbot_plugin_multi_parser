@@ -1,5 +1,5 @@
 from astrbot_multi_parser.core.platform_login import PlatformUser
-from astrbot_multi_parser.services.login_messages import LoginMessageFormatter
+from astrbot_multi_parser.services.authentication.messages import LoginMessageFormatter
 
 
 def test_login_message_formatter_sanitizes_user_fields():

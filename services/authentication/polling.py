@@ -6,7 +6,7 @@ import time
 from astrbot.api.event import AstrMessageEvent, MessageChain
 from astrbot.api.message_components import Plain
 
-from ..core.platform_login import (
+from ...core.platform_login import (
     LoginPollResult,
     LoginPollState,
     PlatformLoginProvider,

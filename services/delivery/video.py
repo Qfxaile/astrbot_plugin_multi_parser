@@ -5,9 +5,9 @@ from dataclasses import dataclass
 import httpx
 from astrbot.api import logger
 
-from ..core.http import http_client_proxy_options
-from ..core.media import sanitize_media_headers
-from ..core.settings import PluginSettings
+from ...core.http import http_client_proxy_options
+from ...core.media import sanitize_media_headers
+from ...core.settings import PluginSettings
 
 
 @dataclass
