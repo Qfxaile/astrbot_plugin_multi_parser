@@ -7,7 +7,7 @@ import httpx
 
 from ...core.contracts import ParseContext, ParseResult
 from ...core.http import build_cookies, cookie_config_value
-from ...core.media import mark_invalid_legacy_images
+from ...core.media import mark_invalid_image_slots
 from ...core.parser import BaseParser
 from .client import DouyinRedirectError, resolve_short_link, trusted_redirect_url
 from .common import DouyinContentSupport
@@ -122,7 +122,7 @@ class DouyinParser(
                     self.raise_for_response_status(response)
                     self._raise_for_auth_page(response)
                 result = parse_qishui_track_html(response.text, platform=self.name)
-                mark_invalid_legacy_images(result, self.INVALID_IMAGE_URL)
+                mark_invalid_image_slots(result, self.INVALID_IMAGE_URL)
                 return await self.materialize_images(result, client, url)
 
             if reflow_match := re.search(self.LIVE_REFLOW_PATTERN, url):
@@ -131,7 +131,7 @@ class DouyinParser(
                     self.raise_for_response_status(response)
                     self._raise_for_auth_page(response)
                 result = self._parse_live_reflow_html(response.text)
-                mark_invalid_legacy_images(result, self.INVALID_IMAGE_URL)
+                mark_invalid_image_slots(result, self.INVALID_IMAGE_URL)
                 return await self.materialize_images(
                     result, client, reflow_match.group(0)
                 )
@@ -184,7 +184,7 @@ class DouyinParser(
                 if probed_url:
                     result.media.video_url = probed_url
 
-            mark_invalid_legacy_images(result, self.INVALID_IMAGE_URL)
+            mark_invalid_image_slots(result, self.INVALID_IMAGE_URL)
             return await self.materialize_images(result, client, share_url)
 
     @classmethod

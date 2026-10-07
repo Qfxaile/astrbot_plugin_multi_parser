@@ -73,25 +73,25 @@ def sanitize_media_headers(
     return sanitized
 
 
-def mark_invalid_legacy_images(
+def mark_invalid_image_slots(
     result: ParseResult,
     invalid_marker: str,
     *,
     error_detail: str = "InvalidURL",
 ) -> None:
-    """将旧版图片列表中的无效候选转换为保持原索引的错误槽位。"""
+    """将图片列表中的无效候选转换为保持原索引的错误槽位。"""
     image_number = 0
-    legacy_index = 0
+    image_index = 0
     for field_name in ("cover_urls", "image_urls"):
         image_values = getattr(result.content, field_name)
         for field_index, image_url in enumerate(image_values):
             image_number += 1
             if image_url == invalid_marker:
                 image_values[field_index] = ""
-                result.diagnostics.image_errors[legacy_index] = (
+                result.diagnostics.image_errors[image_index] = (
                     f"第 {image_number} 张图片获取失败：{error_detail}"
                 )
-            legacy_index += 1
+            image_index += 1
 
 
 class ImageMaterializer:
@@ -153,25 +153,25 @@ class ImageMaterializer:
                         )
                 return result
 
-            legacy_index = 0
+            image_index = 0
             candidates = []
             for field_name in ("cover_urls", "image_urls"):
                 image_values = getattr(result.content, field_name)
                 for field_index, image_url in enumerate(image_values):
                     image_number += 1
                     if not image_url or image_url.startswith("base64://"):
-                        legacy_index += 1
+                        image_index += 1
                         continue
                     candidates.append(
                         (
                             image_number,
-                            legacy_index,
+                            image_index,
                             image_values,
                             field_index,
                             image_url,
                         )
                     )
-                    legacy_index += 1
+                    image_index += 1
 
             outcomes = await self._download_images(
                 client,

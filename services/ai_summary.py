@@ -79,13 +79,13 @@ class AISummaryService:
         return summaries
 
     def _content(self, result: ParseResult) -> str:
-        return "\n".join(result.content_lines).strip()[: self._max_chars()]
+        return "\n".join(result.visible_text_lines).strip()[: self._max_chars()]
 
     def _max_chars(self) -> int:
         return self.settings.integer("ai_summary_max_input_chars", 30000, minimum=1000)
 
     async def _image_inputs(self, result: ParseResult) -> list[str]:
-        refs = result.image_references
+        refs = result.ordered_image_references
         limit = self.settings.integer("ai_summary_max_images", 8, minimum=0)
         images: list[str] = []
         for index, ref in enumerate(refs[:limit], 1):

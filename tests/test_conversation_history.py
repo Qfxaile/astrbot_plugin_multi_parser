@@ -1,5 +1,6 @@
-from astrbot_multi_parser.core.contracts import OrderedContent, ParseResult
+from astrbot_multi_parser.core.contracts import OrderedContent
 from astrbot_multi_parser.services import conversation_history
+from result_factory import build_result
 
 
 async def test_local_image_history_does_not_use_media_resolver(tmp_path, monkeypatch):
@@ -11,7 +12,7 @@ async def test_local_image_history_does_not_use_media_resolver(tmp_path, monkeyp
             raise AssertionError("local history images must bypass MediaResolver")
 
     monkeypatch.setattr(conversation_history, "MediaResolver", FailingResolver)
-    result = ParseResult(
+    result = build_result(
         platform="test",
         ordered_contents=[OrderedContent("image", str(image_path))],
     )

@@ -17,6 +17,7 @@ from astrbot_multi_parser.core.contracts import (
 from astrbot_multi_parser.core.http import CookieAccessError
 from astrbot_multi_parser.main import MultiParserPlugin, VideoSizeInfo
 from astrbot_multi_parser.services.delivery import DeliveryService
+from result_factory import build_result
 
 TEST_PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
@@ -281,7 +282,7 @@ async def test_parse_delivery_restores_unsent_event_state(monkeypatch):
         "extract_context",
         lambda event: SimpleNamespace(combined_text="https://example.com/post"),
     )
-    plugin = make_plugin(ParseResult(platform="测试平台", title="解析结果"))
+    plugin = make_plugin(build_result(platform="测试平台", title="解析结果"))
     event = FakeEvent(has_send_oper=False)
 
     async for _ in plugin.handle_parse(event):
@@ -298,7 +299,7 @@ async def test_parse_delivery_preserves_existing_sent_event_state(monkeypatch):
         "extract_context",
         lambda event: SimpleNamespace(combined_text="https://example.com/post"),
     )
-    plugin = make_plugin(ParseResult(platform="测试平台", title="解析结果"))
+    plugin = make_plugin(build_result(platform="测试平台", title="解析结果"))
     event = FakeEvent(has_send_oper=True)
 
     async for _ in plugin.handle_parse(event):
@@ -314,7 +315,7 @@ async def test_parse_failure_restores_unsent_event_state(monkeypatch):
         "extract_context",
         lambda event: SimpleNamespace(combined_text="https://example.com/post"),
     )
-    plugin = make_plugin(ParseResult(platform="fake"))
+    plugin = make_plugin(build_result(platform="fake"))
     plugin.parsers = {"fake": FailingParser()}
     event = FakeEvent(has_send_oper=False)
 
@@ -331,7 +332,7 @@ async def test_match_failure_restores_unsent_event_state(monkeypatch):
         "extract_context",
         lambda event: SimpleNamespace(combined_text="https://example.com/post"),
     )
-    plugin = make_plugin(ParseResult(platform="fake"))
+    plugin = make_plugin(build_result(platform="fake"))
     plugin.parsers = {"fake": MatchFailingParser()}
     event = FakeEvent(has_send_oper=False)
 
@@ -349,7 +350,7 @@ async def test_unmatched_parse_keeps_event_state(monkeypatch, has_send_oper):
         "extract_context",
         lambda event: SimpleNamespace(combined_text="ordinary message"),
     )
-    plugin = make_plugin(ParseResult(platform="fake"))
+    plugin = make_plugin(build_result(platform="fake"))
     plugin.parsers = {"fake": NonMatchingParser()}
     event = FakeEvent(has_send_oper=has_send_oper)
 
@@ -366,7 +367,7 @@ async def test_conversation_history_is_disabled_by_default(monkeypatch):
     )
     conversation_manager = FakeConversationManager()
     plugin = make_plugin(
-        ParseResult(platform="测试平台", title="测试标题"),
+        build_result(platform="测试平台", title="测试标题"),
         conversation_manager=conversation_manager,
     )
 
@@ -387,7 +388,7 @@ async def test_conversation_history_defaults_to_text_only(monkeypatch, tmp_path)
     image_path.write_bytes(TEST_PNG)
     conversation_manager = FakeConversationManager()
     plugin = make_plugin(
-        ParseResult(
+        build_result(
             platform="测试平台",
             ordered_contents=[
                 OrderedContent("text", "正文内容"),
@@ -416,7 +417,7 @@ async def test_successful_parse_is_added_to_current_conversation(monkeypatch, tm
     conversation_manager = FakeConversationManager()
     image_path = tmp_path / "cover.png"
     image_path.write_bytes(TEST_PNG)
-    result = ParseResult(
+    result = build_result(
         platform="测试平台",
         title="测试标题",
         author="测试作者",
@@ -493,7 +494,7 @@ async def test_conversation_history_preserves_ordered_text_and_images(
     second_image.write_bytes(TEST_PNG)
     conversation_manager = FakeConversationManager()
     plugin = make_plugin(
-        ParseResult(
+        build_result(
             platform="测试平台",
             ordered_contents=[
                 OrderedContent("text", "第一段"),
@@ -531,7 +532,7 @@ async def test_successful_parse_creates_conversation_when_missing(monkeypatch):
     )
     conversation_manager = FakeConversationManager(current_conversation_id=None)
     plugin = make_plugin(
-        ParseResult(platform="测试平台", title="测试标题"),
+        build_result(platform="测试平台", title="测试标题"),
         conversation_manager=conversation_manager,
         enable_conversation_history=True,
     )
@@ -556,7 +557,7 @@ async def test_conversation_write_failure_does_not_break_parse_delivery(monkeypa
         failure=RuntimeError("database unavailable")
     )
     plugin = make_plugin(
-        ParseResult(platform="测试平台", title="仍应发送"),
+        build_result(platform="测试平台", title="仍应发送"),
         conversation_manager=conversation_manager,
         forward_mode="never",
         enable_conversation_history=True,
@@ -571,7 +572,7 @@ async def test_conversation_write_failure_does_not_break_parse_delivery(monkeypa
 @pytest.mark.asyncio
 @pytest.mark.parametrize("platform_name", ["知乎", "微信", "小黑盒"])
 async def test_platform_login_rejects_group_chat_before_starting_login(platform_name):
-    plugin = make_plugin(ParseResult(platform="fake"))
+    plugin = make_plugin(build_result(platform="fake"))
     authentication = SimpleNamespace(login=None)
     plugin._authentication = authentication
     event = FakeEvent()
@@ -593,7 +594,7 @@ async def test_platform_login_status_allows_admin_group_query():
             self.calls += 1
             return "平台登录状态：\n- B站：已配置｜当前用户：测试用户（UID：12345）"
 
-    plugin = make_plugin(ParseResult(platform="fake"))
+    plugin = make_plugin(build_result(platform="fake"))
     authentication = FakeAuthentication()
     plugin._authentication = authentication
     event = FakeEvent()
@@ -618,7 +619,7 @@ async def test_platform_login_delegates_chinese_platform_name_in_private_chat(
             self.calls.append((event, platform_name))
             return f"{platform_name}登录成功，Cookies 已保存。"
 
-    plugin = make_plugin(ParseResult(platform="fake"))
+    plugin = make_plugin(build_result(platform="fake"))
     authentication = FakeAuthentication()
     plugin._authentication = authentication
     event = FakeEvent()
@@ -639,7 +640,7 @@ async def test_platform_login_delegates_tieba_name_in_private_chat():
             self.calls.append((event, platform_name))
             return "贴吧登录成功，Cookies 已保存。"
 
-    plugin = make_plugin(ParseResult(platform="fake"))
+    plugin = make_plugin(build_result(platform="fake"))
     authentication = FakeAuthentication()
     plugin._authentication = authentication
     event = FakeEvent()
@@ -660,7 +661,7 @@ async def test_platform_login_delegates_weibo_chinese_platform_name():
             self.calls.append((event, platform_name))
             return "微博登录成功，Cookies 已保存。"
 
-    plugin = make_plugin(ParseResult(platform="fake"))
+    plugin = make_plugin(build_result(platform="fake"))
     authentication = FakeAuthentication()
     plugin._authentication = authentication
     event = FakeEvent()
@@ -681,7 +682,7 @@ async def test_platform_login_delegates_xiaoheihe_chinese_platform_name():
             self.calls.append((event, platform_name))
             return "小黑盒登录成功，Cookies 已保存。"
 
-    plugin = make_plugin(ParseResult(platform="fake"))
+    plugin = make_plugin(build_result(platform="fake"))
     authentication = FakeAuthentication()
     plugin._authentication = authentication
     event = FakeEvent()
@@ -697,7 +698,7 @@ async def test_handle_parse_outputs_cookie_failure_without_generic_prefix(monkey
     monkeypatch.setattr(
         main, "extract_context", lambda event: SimpleNamespace(combined_text="url")
     )
-    plugin = make_plugin(ParseResult(platform="fake"))
+    plugin = make_plugin(build_result(platform="fake"))
     plugin.parsers = {"fake": FailingParser()}
 
     messages = await collect_plugin_results(plugin, FakeEvent())
@@ -712,7 +713,7 @@ async def test_handle_parse_outputs_cookie_failure_without_generic_prefix(monkey
 async def test_handle_parse_cleans_temporary_images_after_send(monkeypatch, tmp_path):
     image_path = tmp_path / "original.webp"
     image_path.write_bytes(b"original-image")
-    result = ParseResult(
+    result = build_result(
         platform="test",
         image_urls=[str(image_path)],
         temporary_files=[image_path],
@@ -728,7 +729,7 @@ async def test_handle_parse_cleans_temporary_images_after_send(monkeypatch, tmp_
 
 @pytest.mark.asyncio
 async def test_two_images_keep_legacy_info_chain_order(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="标题",
         cover_urls=["base64://cover"],
@@ -749,7 +750,7 @@ async def test_two_images_keep_legacy_info_chain_order(monkeypatch):
 async def test_exactly_three_images_are_sent_as_one_forward_message(
     monkeypatch,
 ):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="标题",
         image_urls=["base64://1", "base64://2", "base64://3"],
@@ -770,7 +771,7 @@ async def test_exactly_three_images_are_sent_as_one_forward_message(
 
 @pytest.mark.asyncio
 async def test_four_images_create_four_nodes(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         image_urls=[f"base64://{index}" for index in range(4)],
     )
@@ -799,7 +800,7 @@ async def test_adjacent_forward_text_is_merged_with_newlines(monkeypatch):
 
     messages = await collect_results(
         monkeypatch,
-        ParseResult(platform="test", ordered_contents=contents),
+        build_result(platform="test", ordered_contents=contents),
         forward_mode="always",
     )
 
@@ -812,7 +813,7 @@ async def test_adjacent_forward_text_is_merged_with_newlines(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_forward_is_split_at_official_node_limit(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         image_urls=[f"base64://{index}" for index in range(101)],
     )
@@ -834,7 +835,7 @@ async def test_rejected_forward_batch_is_not_split_or_retried(
     monkeypatch,
 ):
     event = FakeEvent(forward_failure_limit=6)
-    result = ParseResult(
+    result = build_result(
         platform="test",
         image_urls=[f"base64://{index}" for index in range(7)],
     )
@@ -860,7 +861,7 @@ async def test_rejected_single_forward_node_is_not_retried(
 
     messages = await collect_results(
         monkeypatch,
-        ParseResult(platform="test", title="正文"),
+        build_result(platform="test", title="正文"),
         event=event,
         forward_mode="always",
     )
@@ -880,7 +881,7 @@ async def test_aiocqhttp_forward_uses_remote_image_url_without_base64(
     source_urls = [f"https://img.example/original-{index}.jpg" for index in range(7)]
     for image_path in image_paths:
         image_path.write_bytes(b"large-original-image")
-    result = ParseResult(
+    result = build_result(
         platform="test",
         image_urls=[str(image_path) for image_path in image_paths],
         temporary_files=image_paths,
@@ -934,7 +935,7 @@ async def test_pixiv_forward_asks_napcat_to_download_images_with_headers(
     ]
     for image_path in image_paths:
         image_path.write_bytes(b"pixiv-image")
-    result = ParseResult(
+    result = build_result(
         platform="pixiv",
         title="Pixiv作品",
         image_urls=[str(image_path) for image_path in image_paths],
@@ -1005,7 +1006,7 @@ async def test_pixiv_forward_falls_back_to_single_image_upload_when_url_terminat
     ]
     for image_path in image_paths:
         image_path.write_bytes(b"pixiv-image")
-    result = ParseResult(
+    result = build_result(
         platform="pixiv",
         title="Pixiv作品",
         image_urls=[str(image_path) for image_path in image_paths],
@@ -1062,7 +1063,7 @@ async def test_pixiv_forward_falls_back_to_single_image_upload_when_url_terminat
 
 @pytest.mark.asyncio
 async def test_onebot_result_can_disable_forward_without_splitting(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="标题",
         image_urls=["base64://1", "base64://2", "base64://3"],
@@ -1086,7 +1087,7 @@ async def test_onebot_result_can_disable_forward_without_splitting(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_onebot_delivery_flags_do_not_change_other_adapters(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="标题",
         image_urls=["base64://1"],
@@ -1110,7 +1111,7 @@ async def test_onebot_delivery_flags_do_not_change_other_adapters(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_description_without_images_stays_in_plain_message(monkeypatch):
-    result = ParseResult(platform="test", description="只有简介")
+    result = build_result(platform="test", description="只有简介")
 
     messages = await collect_results(monkeypatch, result)
 
@@ -1121,7 +1122,7 @@ async def test_description_without_images_stays_in_plain_message(monkeypatch):
 
 
 def test_onebot_direct_delivery_merges_summary_and_leading_text():
-    result = ParseResult(
+    result = build_result(
         platform="xiaoheihe",
         title="新拍照功能太权威了",
         author="Deepsucker",
@@ -1151,7 +1152,7 @@ def test_onebot_direct_delivery_merges_summary_and_leading_text():
 async def test_ordered_text_success_failure_success_preserves_component_order(
     monkeypatch,
 ):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="摘要",
         ordered_contents=[
@@ -1188,7 +1189,7 @@ async def test_ordered_text_success_failure_success_preserves_component_order(
 
 @pytest.mark.asyncio
 async def test_empty_summary_sends_only_nodes(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         image_urls=["base64://1", "base64://2", "base64://3"],
     )
@@ -1211,7 +1212,7 @@ async def test_empty_summary_sends_only_nodes(monkeypatch):
 async def test_forward_nodes_use_sender_name_fallbacks(
     monkeypatch, sender, sender_name, sender_id, expected_name, expected_id
 ):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         image_urls=["base64://1", "base64://2", "base64://3"],
     )
@@ -1231,7 +1232,7 @@ async def test_forward_nodes_use_sender_name_fallbacks(
 
 @pytest.mark.asyncio
 async def test_onebot_forward_nodes_use_qq_name_and_self_id(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         image_urls=["base64://1", "base64://2", "base64://3"],
     )
@@ -1258,7 +1259,7 @@ async def test_onebot_forward_nodes_use_qq_name_and_self_id(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_non_dict_raw_message_uses_public_sender_name(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         image_urls=["base64://1", "base64://2", "base64://3"],
     )
@@ -1279,7 +1280,7 @@ async def test_non_dict_raw_message_uses_public_sender_name(monkeypatch):
 async def test_unsupported_or_empty_platform_keeps_one_normal_chain(
     monkeypatch, platform_name
 ):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="标题",
         image_urls=["base64://1", "base64://2", "base64://3"],
@@ -1305,7 +1306,7 @@ async def test_unsupported_or_empty_platform_keeps_one_normal_chain(
 
 @pytest.mark.asyncio
 async def test_satori_supports_forward_nodes(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="标题",
         image_urls=["base64://1", "base64://2", "base64://3"],
@@ -1352,7 +1353,7 @@ async def test_onebot_reaction_still_calls_configured_action():
 async def test_video_fallback_uses_plain_message_on_generic_platform(platform_name):
     bot = FakeBot()
     event = FakeEvent(bot=bot, platform_name=platform_name)
-    result = ParseResult(
+    result = build_result(
         platform="测试平台",
         title="测试标题",
         media=MediaBundle(video_url="https://example.com/video.mp4"),
@@ -1375,7 +1376,7 @@ async def test_video_fallback_uses_plain_message_on_generic_platform(platform_na
 @pytest.mark.asyncio
 async def test_video_fallback_uses_nodes_on_satori():
     event = FakeEvent(platform_name="satori")
-    result = ParseResult(
+    result = build_result(
         platform="测试平台",
         title="测试标题",
         media=MediaBundle(video_url="https://example.com/video.mp4"),
@@ -1392,7 +1393,7 @@ async def test_video_fallback_uses_nodes_on_satori():
 
 
 def test_output_link_filter_is_disabled_by_default():
-    result = ParseResult(
+    result = build_result(
         platform="测试平台",
         description="正文 https://example.com/detail",
     )
@@ -1407,7 +1408,7 @@ def test_output_link_filter_is_disabled_by_default():
 
 
 def test_output_link_filter_replaces_visible_links_with_configured_text():
-    result = ParseResult(
+    result = build_result(
         platform="测试平台",
         title="标题 https://example.com/title",
         description="正文 https://example.com/detail。",
@@ -1438,7 +1439,7 @@ def test_output_link_filter_replaces_visible_links_with_configured_text():
 @pytest.mark.asyncio
 async def test_direct_link_fallback_is_not_filtered():
     event = FakeEvent(platform_name="telegram")
-    result = ParseResult(
+    result = build_result(
         platform="测试平台",
         title="测试标题",
         media=MediaBundle(video_url="https://example.com/video.mp4"),
@@ -1454,7 +1455,7 @@ async def test_direct_link_fallback_is_not_filtered():
 @pytest.mark.asyncio
 async def test_notice_fallback_does_not_include_video_url():
     event = FakeEvent(platform_name="telegram")
-    result = ParseResult(
+    result = build_result(
         platform="测试平台",
         title="测试标题",
         media=MediaBundle(video_url="https://example.com/video.mp4"),
@@ -1470,7 +1471,7 @@ async def test_notice_fallback_does_not_include_video_url():
 @pytest.mark.asyncio
 async def test_group_file_falls_back_to_direct_link_outside_onebot_group():
     event = FakeEvent(platform_name="telegram")
-    result = ParseResult(
+    result = build_result(
         platform="测试平台",
         title="测试标题",
         media=MediaBundle(video_url="https://example.com/video.mp4"),
@@ -1497,7 +1498,7 @@ async def test_group_file_upload_failure_falls_back_to_direct_link():
         bot=bot,
         raw_message={"group_id": 456, "sender": {}},
     )
-    result = ParseResult(
+    result = build_result(
         platform="测试平台",
         title="测试标题",
         media=MediaBundle(video_url="https://example.com/video.mp4"),
@@ -1523,7 +1524,7 @@ async def test_group_file_upload_uses_remote_url_without_local_download():
         bot=bot,
         raw_message={"group_id": 456, "sender": {}},
     )
-    result = ParseResult(
+    result = build_result(
         platform="测试平台",
         title="测试/标题",
         media=MediaBundle(video_url="https://example.com/video.mp4"),
@@ -1551,7 +1552,7 @@ async def test_group_file_upload_uses_remote_url_without_local_download():
 
 @pytest.mark.asyncio
 async def test_main_uses_notice_action_for_over_limit_video(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="摘要",
         media=MediaBundle(video_url="https://example.com/video.mp4"),
@@ -1599,7 +1600,7 @@ async def test_main_uses_group_file_action_when_video_send_fails(
                 raise RuntimeError("video send failed")
             await super().send(message)
 
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="摘要",
         media=MediaBundle(video_url="https://example.com/video.mp4"),
@@ -1656,10 +1657,10 @@ async def test_notice_delivery_failure_still_hides_video_url():
             raise RuntimeError("send failed")
 
     plugin = make_plugin(
-        ParseResult(platform="test"),
+        build_result(platform="test"),
         video_over_limit_action="notice",
     )
-    result = ParseResult(
+    result = build_result(
         platform="test",
         media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
@@ -1687,9 +1688,9 @@ async def test_fallback_error_message_uses_media_video_url():
         async def send_video_over_limit(self, *args):
             raise RuntimeError("delivery failed")
 
-    plugin = make_plugin(ParseResult(platform="test"))
+    plugin = make_plugin(build_result(platform="test"))
     plugin._delivery = FailingDelivery()
-    result = ParseResult(
+    result = build_result(
         platform="test",
         media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
@@ -1713,7 +1714,7 @@ async def test_terminate_closes_container_authentication_service():
         async def close(self):
             self.closed = True
 
-    plugin = make_plugin(ParseResult(platform="test"))
+    plugin = make_plugin(build_result(platform="test"))
     authentication = FakeAuthentication()
     plugin._services = SimpleNamespace(authentication=authentication)
 
@@ -1726,7 +1727,7 @@ async def test_terminate_closes_container_authentication_service():
 async def test_always_mode_forwards_text_only_result(monkeypatch):
     messages = await collect_results(
         monkeypatch,
-        ParseResult(platform="test", title="标题"),
+        build_result(platform="test", title="标题"),
         forward_mode="always",
     )
 
@@ -1737,7 +1738,7 @@ async def test_always_mode_forwards_text_only_result(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_never_mode_keeps_many_images_in_normal_chain(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="标题",
         image_urls=["base64://1", "base64://2", "base64://3"],
@@ -1760,7 +1761,7 @@ async def test_never_mode_keeps_many_images_in_normal_chain(monkeypatch):
 async def test_text_threshold_is_strictly_greater(monkeypatch, length, should_forward):
     messages = await collect_results(
         monkeypatch,
-        ParseResult(platform="test", title="字" * length),
+        build_result(platform="test", title="字" * length),
         forward_mode="threshold",
         forward_image_threshold=99,
         forward_text_threshold=200,
@@ -1772,7 +1773,7 @@ async def test_text_threshold_is_strictly_greater(monkeypatch, length, should_fo
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("count", "should_forward"), [(2, False), (3, True)])
 async def test_image_threshold_is_strictly_greater(monkeypatch, count, should_forward):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         image_urls=[f"base64://{index}" for index in range(count)],
     )
@@ -1790,7 +1791,7 @@ async def test_image_threshold_is_strictly_greater(monkeypatch, count, should_fo
 
 @pytest.mark.asyncio
 async def test_text_threshold_counts_summary_and_ordered_body(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="题" * 100,
         ordered_contents=[OrderedContent("text", "文" * 101)],
@@ -1809,7 +1810,7 @@ async def test_text_threshold_counts_summary_and_ordered_body(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_invalid_forward_mode_falls_back_to_threshold(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         image_urls=["base64://1", "base64://2", "base64://3"],
     )
@@ -1825,7 +1826,7 @@ async def test_invalid_forward_mode_falls_back_to_threshold(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_invalid_thresholds_fall_back_to_defaults(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="字" * 200,
         image_urls=["base64://1", "base64://2"],
@@ -1844,7 +1845,7 @@ async def test_invalid_thresholds_fall_back_to_defaults(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_negative_thresholds_are_treated_as_zero(monkeypatch):
-    result = ParseResult(platform="test", image_urls=["base64://1"])
+    result = build_result(platform="test", image_urls=["base64://1"])
 
     messages = await collect_results(
         monkeypatch,
@@ -1859,7 +1860,7 @@ async def test_negative_thresholds_are_treated_as_zero(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_threshold_forward_keeps_regular_video_as_separate_message(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="摘要",
         image_urls=["base64://1", "base64://2", "base64://3"],
@@ -1886,7 +1887,7 @@ async def test_threshold_forward_keeps_regular_video_as_separate_message(monkeyp
 
 @pytest.mark.asyncio
 async def test_threshold_forward_keeps_xiaoheihe_game_video_inside(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="xiaoheihe",
         title="游戏详情",
         description="游戏简介",
@@ -1914,7 +1915,7 @@ async def test_threshold_forward_keeps_xiaoheihe_game_video_inside(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_always_forward_keeps_regular_video_inside(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="摘要",
         media=MediaBundle(video_url="https://example.com/video.mp4"),
@@ -1938,7 +1939,7 @@ async def test_always_forward_keeps_regular_video_inside(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_forward_description_matches_plain_chain_format(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="标题",
         description="第一行\n第二行",
@@ -1965,7 +1966,7 @@ async def test_forward_description_matches_plain_chain_format(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_non_forward_content_keeps_video_as_separate_message(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="summary",
         image_urls=["base64://1"],
@@ -1992,7 +1993,7 @@ async def test_non_forward_content_keeps_video_as_separate_message(monkeypatch):
 async def test_kook_materializes_remote_video_before_send(monkeypatch, tmp_path):
     video_path = tmp_path / "video.mp4"
     video_path.write_bytes(b"video")
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="summary",
         media=MediaBundle(video_url="https://example.com/video.mp4"),
@@ -2056,7 +2057,7 @@ async def test_kook_materializes_video_with_platform_headers(monkeypatch):
             materialized_platforms.append(platform_name) or {}
         ),
     )
-    result = ParseResult(
+    result = build_result(
         platform="bilibili",
         title="summary",
         media=MediaBundle(
@@ -2118,7 +2119,7 @@ async def test_kook_video_rejects_untrusted_download_redirect(monkeypatch):
         return async_client(transport=httpx.MockTransport(handler), **kwargs)
 
     monkeypatch.setattr(media.httpx, "AsyncClient", create_client)
-    result = ParseResult(
+    result = build_result(
         platform="bilibili",
         title="summary",
         media=MediaBundle(
@@ -2158,7 +2159,7 @@ async def test_kook_video_rejects_untrusted_download_redirect(monkeypatch):
 async def test_kook_video_materialization_failure_falls_back_to_direct_link(
     monkeypatch,
 ):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="summary",
         media=MediaBundle(video_url="https://example.com/video.mp4"),
@@ -2193,7 +2194,7 @@ async def test_kook_video_materialization_failure_falls_back_to_direct_link(
 
 @pytest.mark.asyncio
 async def test_audio_is_sent_after_track_summary(monkeypatch):
-    result = ParseResult(
+    result = build_result(
         platform="douyin",
         title="歌曲标题",
         media=MediaBundle(audio_url="https://v3-luna.douyinvod.com/song.m4a"),
@@ -2212,7 +2213,7 @@ async def test_audio_is_sent_after_track_summary(monkeypatch):
 async def test_video_url_is_only_in_summary_when_direct_send_is_disabled(
     monkeypatch,
 ):
-    result = ParseResult(
+    result = build_result(
         platform="test",
         title="摘要",
         image_urls=["base64://1", "base64://2", "base64://3"],

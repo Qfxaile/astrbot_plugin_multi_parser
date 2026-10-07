@@ -1,8 +1,9 @@
-from astrbot_multi_parser.core.contracts import OrderedContent, ParseResult
+from astrbot_multi_parser.core.contracts import OrderedContent
+from result_factory import build_result
 
 
 def test_parse_result_views_preserve_text_and_image_order():
-    result = ParseResult(
+    result = build_result(
         platform="test",
         description="简介",
         extra_lines=["附加"],
@@ -13,5 +14,5 @@ def test_parse_result_views_preserve_text_and_image_order():
         ],
     )
 
-    assert result.content_lines == ["简介", "附加", "正文", "图片失败"]
-    assert result.image_references == ["https://img.example/a.jpg"]
+    assert result.visible_text_lines == ["简介", "附加", "正文", "图片失败"]
+    assert result.ordered_image_references == ["https://img.example/a.jpg"]

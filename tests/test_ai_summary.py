@@ -1,8 +1,9 @@
 from types import SimpleNamespace
 
 import pytest
-from astrbot_multi_parser.core.contracts import MediaBundle, OrderedContent, ParseResult
+from astrbot_multi_parser.core.contracts import MediaBundle, OrderedContent
 from astrbot_multi_parser.services.ai_summary import DEFAULT_PROMPT, AISummaryService
+from result_factory import build_result
 
 
 class FakeProvider:
@@ -36,7 +37,7 @@ async def test_summary_is_disabled_by_default():
     provider = FakeProvider()
     service = AISummaryService(FakeContext(provider), {})
 
-    assert await service.summarize(FakeEvent(), ParseResult(platform="测试")) == []
+    assert await service.summarize(FakeEvent(), build_result(platform="测试")) == []
     assert provider.calls == []
 
 
@@ -47,7 +48,7 @@ async def test_text_summary_uses_current_provider_and_default_prompt():
         FakeContext(provider),
         {"enable_ai_summary": True, "ai_summary_mode": "text_only"},
     )
-    result = ParseResult(
+    result = build_result(
         platform="测试平台",
         title="标题",
         author="作者",
@@ -78,7 +79,7 @@ async def test_all_mode_skips_empty_subtitles_and_uses_configured_provider():
         },
     )
 
-    result = ParseResult(
+    result = build_result(
         platform="测试",
         media=MediaBundle(subtitle_text="  字幕文本  "),
     )
@@ -103,7 +104,7 @@ async def test_vision_without_provider_id_falls_back_to_text_provider():
         },
     )
     assert await service._provider(FakeEvent(), "vision") is text
-    result = ParseResult(platform="测试")
+    result = build_result(platform="测试")
     assert await service.summarize(FakeEvent(), result) == ["文本模型"]
     assert len(text.calls) == 1
     assert current.calls == []
@@ -119,7 +120,7 @@ async def test_invalid_prompt_and_provider_failure_are_silent():
             "ai_summary_prompt": "{unknown}",
         },
     )
-    assert await service.summarize(FakeEvent(), ParseResult(platform="测试")) == []
+    assert await service.summarize(FakeEvent(), build_result(platform="测试")) == []
 
 
 @pytest.mark.asyncio
@@ -138,9 +139,9 @@ async def test_invalid_summary_configuration_uses_safe_defaults():
     assert service.enabled() is True
     assert service.mode() == "text_only"
     assert service._max_chars() == 30000
-    assert await service.summarize(FakeEvent(), ParseResult(platform="测试")) == [
+    assert await service.summarize(FakeEvent(), build_result(platform="测试")) == [
         "总结内容"
     ]
 
     service.context = FakeContext(None)
-    assert await service.summarize(FakeEvent(), ParseResult(platform="测试")) == []
+    assert await service.summarize(FakeEvent(), build_result(platform="测试")) == []

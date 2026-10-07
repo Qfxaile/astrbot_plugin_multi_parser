@@ -1,8 +1,9 @@
 import httpx
 import pytest
-from astrbot_multi_parser.core.contracts import ParseContext, ParseResult
+from astrbot_multi_parser.core.contracts import ParseContext
 from astrbot_multi_parser.core.http import CookieAccessError
 from astrbot_multi_parser.platforms.bilibili import parser as bilibili
+from result_factory import build_result
 
 
 @pytest.mark.parametrize(
@@ -1128,7 +1129,7 @@ async def test_bilibili_rejects_external_image_without_request():
         return httpx.Response(200, content=b"unexpected", request=request)
 
     parser = bilibili.BilibiliParser({})
-    result = ParseResult(
+    result = build_result(
         platform="bilibili", image_urls=["https://img.example/external.jpg"]
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:

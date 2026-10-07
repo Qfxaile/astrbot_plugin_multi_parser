@@ -8,7 +8,9 @@ from astrbot.api.event import AstrMessageEvent
 
 from ..core.contracts import ParseContext, ParseResult
 from ..core.http import CookieAccessError
+from ..core.media import cleanup_temporary_files
 from ..core.parser import Parser
+from ..core.rendering import ParseResultRenderer
 from ..core.settings import PluginSettings
 
 
@@ -134,7 +136,7 @@ class ParseCoordinator:
                         yield message
 
                 if result.media.audio_url:
-                    yield event.chain_result(result.audio_chain())
+                    yield event.chain_result(ParseResultRenderer.audio_chain(result))
 
                 if send_video_by_url and result.media.video_url:
                     if should_send_video and not video_embedded:
@@ -171,6 +173,6 @@ class ParseCoordinator:
                 return
             finally:
                 if result is not None:
-                    result.cleanup_temporary_files()
+                    cleanup_temporary_files(result)
                 if restore_send_state and original_has_send_oper is not None:
                     event._has_send_oper = original_has_send_oper

@@ -7,6 +7,7 @@ from astrbot.api.message_components import Image, Plain, Record
 from astrbot_multi_parser import core as models
 from astrbot_multi_parser.core.contracts import MediaBundle
 from astrbot_multi_parser.core.media import TemporaryFileRegistry
+from result_factory import build_result
 
 
 def test_core_exports_contracts():
@@ -16,15 +17,15 @@ def test_core_exports_contracts():
 
 
 def test_invalid_legacy_image_slots_are_marked_in_original_order():
-    from astrbot_multi_parser.core.media import mark_invalid_legacy_images
+    from astrbot_multi_parser.core.media import mark_invalid_image_slots
 
-    result = models.ParseResult(
+    result = build_result(
         platform="test",
         cover_urls=["unsafe-image-url"],
         image_urls=["https://safe.test/1.jpg", "unsafe-image-url"],
     )
 
-    mark_invalid_legacy_images(result, "unsafe-image-url")
+    mark_invalid_image_slots(result, "unsafe-image-url")
 
     assert result.content.cover_urls == [""]
     assert result.content.image_urls == ["https://safe.test/1.jpg", ""]
@@ -53,7 +54,7 @@ async def test_materialize_images_respects_download_concurrency(monkeypatch, tmp
 
     monkeypatch.setattr(ImageMaterializer, "_download_image", fake_download)
     image_urls = [f"https://img.example/{index}.jpg" for index in range(4)]
-    result = models.ParseResult(platform="test", image_urls=image_urls.copy())
+    result = build_result(platform="test", image_urls=image_urls.copy())
 
     async with httpx.AsyncClient() as client:
         await models.BaseParser({"image_download_concurrency": 2}).materialize_images(
@@ -85,7 +86,7 @@ async def test_materialize_images_streams_original_bytes_to_temporary_file(tmp_p
             request=request,
         )
 
-    result = models.ParseResult(
+    result = build_result(
         platform="douyin",
         image_urls=["https://img.example/original.webp"],
     )
@@ -123,7 +124,7 @@ async def test_materialize_images_preserves_bytes_headers_and_temporary_slots(
         requests.append(request)
         return httpx.Response(200, content=b"\x00raw-image\xff", request=request)
 
-    result = models.ParseResult(
+    result = build_result(
         platform="douyin",
         cover_urls=["base64://YWxyZWFkeQ=="],
         image_urls=["https://img.example/raw.webp"],
@@ -155,7 +156,7 @@ async def test_materialize_images_keeps_failed_legacy_slot_and_index(
             return httpx.Response(403, request=request)
         return httpx.Response(200, content=request.url.path.encode(), request=request)
 
-    result = models.ParseResult(
+    result = build_result(
         platform="douyin",
         cover_urls=["https://img.example/cover.jpg"],
         image_urls=[
@@ -186,7 +187,7 @@ async def test_materialize_images_preserves_ordered_text_and_marks_failure(
             raise httpx.ReadTimeout("timed out", request=request)
         return httpx.Response(200, content=b"ordered-image", request=request)
 
-    result = models.ParseResult(
+    result = build_result(
         platform="bilibili",
         image_urls=["https://legacy.example/should-not-download.jpg"],
         ordered_contents=[
@@ -228,7 +229,7 @@ async def test_materialize_images_propagates_non_http_errors():
     def handler(request: httpx.Request) -> httpx.Response:
         raise RuntimeError("unexpected decoder failure")
 
-    result = models.ParseResult(
+    result = build_result(
         platform="douyin",
         image_urls=["https://img.example/image.jpg"],
     )
@@ -246,7 +247,7 @@ async def test_materialize_images_logs_only_hostname_and_error_summary(caplog):
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(401, request=request)
 
-    result = models.ParseResult(platform="douyin", image_urls=[image_url])
+    result = build_result(platform="douyin", image_urls=[image_url])
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         await models.BaseParser({}).materialize_images(
             result, client, "https://share.example/post/1"
@@ -273,7 +274,7 @@ async def test_materialize_images_skips_ordered_base64_image():
         return httpx.Response(200, content=b"unexpected", request=request)
 
     original_value = "base64://b3JkZXJlZC1pbWFnZQ=="
-    result = models.ParseResult(
+    result = build_result(
         platform="bilibili",
         ordered_contents=[models.OrderedContent(kind="image", value=original_value)],
     )
@@ -290,7 +291,7 @@ async def test_materialize_images_skips_ordered_base64_image():
 
 @pytest.mark.asyncio
 async def test_materialize_images_converts_malformed_legacy_url_to_error(caplog):
-    result = models.ParseResult(platform="douyin", image_urls=["http://[::1"])
+    result = build_result(platform="douyin", image_urls=["http://[::1"])
 
     async with httpx.AsyncClient(
         transport=httpx.MockTransport(lambda _: None)
@@ -309,7 +310,7 @@ async def test_materialize_images_converts_malformed_legacy_url_to_error(caplog)
 
 @pytest.mark.asyncio
 async def test_materialize_images_converts_malformed_ordered_url_to_error(caplog):
-    result = models.ParseResult(
+    result = build_result(
         platform="bilibili",
         ordered_contents=[models.OrderedContent(kind="image", value="http://[::1")],
     )
@@ -353,7 +354,7 @@ async def test_materialize_images_rejects_unsafe_legacy_urls_without_requests(
         requested_urls.append(str(request.url))
         return httpx.Response(200, content=b"unexpected", request=request)
 
-    result = models.ParseResult(
+    result = build_result(
         platform="bilibili",
         image_urls=[*unsafe_urls, "https://img.example:443/ok.jpg"],
     )
@@ -383,7 +384,7 @@ async def test_materialize_images_rejects_unsafe_ordered_urls_and_allows_public_
         requested_urls.append(str(request.url))
         return httpx.Response(200, content=b"public-image", request=request)
 
-    result = models.ParseResult(
+    result = build_result(
         platform="bilibili",
         ordered_contents=[
             models.OrderedContent(kind="image", value="https://10.0.0.1/private.jpg"),
@@ -416,7 +417,7 @@ async def test_materialize_images_rejects_nonstandard_port_before_request():
 
     parser = models.BaseParser({})
     parser.image_host_suffixes = ("trusted.example",)
-    result = models.ParseResult(
+    result = build_result(
         platform="test", image_urls=["https://cdn.trusted.example:8443/image.jpg"]
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
@@ -439,7 +440,7 @@ async def test_materialize_images_rejects_redirect_to_private_host():
 
     parser = models.BaseParser({})
     parser.image_host_suffixes = ("trusted.example",)
-    result = models.ParseResult(
+    result = build_result(
         platform="test", image_urls=["https://cdn.trusted.example/start.jpg"]
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
@@ -466,7 +467,7 @@ async def test_materialize_images_follows_safe_relative_redirect(
 
     parser = models.BaseParser({})
     parser.image_host_suffixes = ("trusted.example",)
-    result = models.ParseResult(
+    result = build_result(
         platform="test", image_urls=["https://cdn.trusted.example/start.jpg"]
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
@@ -494,7 +495,7 @@ async def test_materialize_images_stops_after_five_redirects():
 
     parser = models.BaseParser({})
     parser.image_host_suffixes = ("trusted.example",)
-    result = models.ParseResult(
+    result = build_result(
         platform="test", image_urls=["https://cdn.trusted.example/hop-0.jpg"]
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
@@ -508,7 +509,7 @@ async def test_materialize_images_stops_after_five_redirects():
 
 
 def test_info_chain_preserves_ordered_text_and_images():
-    result = models.ParseResult(
+    result = build_result(
         platform="bilibili",
         title="标题",
         author="作者",
@@ -529,7 +530,7 @@ def test_info_chain_preserves_ordered_text_and_images():
 
 
 def test_info_chain_keeps_legacy_media_order_without_ordered_content():
-    result = models.ParseResult(
+    result = build_result(
         platform="douyin",
         title="标题",
         image_urls=["https://img.example/1.jpg"],
@@ -543,7 +544,7 @@ def test_info_chain_keeps_legacy_media_order_without_ordered_content():
 
 
 def test_info_chain_accepts_materialized_base64_image():
-    result = models.ParseResult(
+    result = build_result(
         platform="douyin",
         title="图文标题",
         image_urls=["base64://aW1hZ2U="],
@@ -557,7 +558,7 @@ def test_info_chain_accepts_materialized_base64_image():
 
 
 def test_image_count_includes_successful_and_failed_image_slots():
-    result = models.ParseResult(
+    result = build_result(
         platform="bilibili",
         cover_urls=["https://img.example/cover.jpg", ""],
         image_urls=["https://img.example/1.jpg"],
@@ -573,7 +574,7 @@ def test_image_count_includes_successful_and_failed_image_slots():
 
 
 def test_info_chain_can_render_summary_only():
-    result = models.ParseResult(
+    result = build_result(
         platform="bilibili",
         title="标题",
         author="作者",
@@ -599,7 +600,7 @@ def test_info_chain_can_render_summary_only():
 
 
 def test_info_chain_can_render_ordered_content_only_with_image_error():
-    result = models.ParseResult(
+    result = build_result(
         platform="bilibili",
         title="标题",
         ordered_contents=[
@@ -618,7 +619,7 @@ def test_info_chain_can_render_ordered_content_only_with_image_error():
 
 
 def test_info_chain_keeps_legacy_slots_and_errors_before_summary():
-    result = models.ParseResult(
+    result = build_result(
         platform="douyin",
         title="标题",
         cover_urls=["https://img.example/cover.jpg", ""],
@@ -639,7 +640,7 @@ def test_info_chain_keeps_legacy_slots_and_errors_before_summary():
 
 
 def test_info_chain_can_render_legacy_content_only():
-    result = models.ParseResult(
+    result = build_result(
         platform="douyin",
         title="标题",
         image_urls=["https://img.example/1.jpg"],
@@ -653,7 +654,7 @@ def test_info_chain_can_render_legacy_content_only():
 def test_parse_result_preserves_legacy_positional_arguments():
     ordered_contents = [models.OrderedContent(kind="text", value="正文")]
 
-    result = models.ParseResult(
+    result = build_result(
         platform="bilibili",
         title="标题",
         author="作者",
@@ -674,7 +675,7 @@ def test_parse_result_preserves_legacy_positional_arguments():
 
 
 def test_audio_chain_builds_remote_record_component():
-    result = models.ParseResult(
+    result = build_result(
         platform="douyin",
         media=MediaBundle(audio_url="https://v3-luna.douyinvod.com/song.m4a"),
     )
@@ -687,7 +688,7 @@ def test_audio_chain_builds_remote_record_component():
 
 
 def test_info_chain_returns_empty_when_summary_and_content_are_disabled():
-    result = models.ParseResult(
+    result = build_result(
         platform="douyin",
         title="标题",
         image_urls=["https://img.example/1.jpg"],
@@ -697,7 +698,7 @@ def test_info_chain_returns_empty_when_summary_and_content_are_disabled():
 
 
 def test_info_chain_can_render_legacy_summary_only():
-    result = models.ParseResult(
+    result = build_result(
         platform="douyin",
         title="标题",
         image_urls=["https://img.example/1.jpg"],
@@ -710,7 +711,7 @@ def test_info_chain_can_render_legacy_summary_only():
 
 
 def test_info_chain_skips_empty_ordered_content_values():
-    result = models.ParseResult(
+    result = build_result(
         platform="bilibili",
         ordered_contents=[
             models.OrderedContent(kind="text", value=""),
@@ -724,7 +725,7 @@ def test_info_chain_skips_empty_ordered_content_values():
 
 
 def test_info_chain_skips_legacy_empty_url_without_error_but_counts_slot():
-    result = models.ParseResult(
+    result = build_result(
         platform="douyin",
         title="标题",
         image_urls=[""],

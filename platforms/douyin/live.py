@@ -4,7 +4,7 @@ import re
 import httpx
 
 from ...core.contracts import ParseResult
-from ...core.media import mark_invalid_legacy_images
+from ...core.media import mark_invalid_image_slots
 
 
 class DouyinLiveContent:
@@ -107,7 +107,7 @@ class DouyinLiveContent:
         )
         self.raise_for_response_status(response)
         result = self._parse_live_data(response.json())
-        mark_invalid_legacy_images(result, self.INVALID_IMAGE_URL)
+        mark_invalid_image_slots(result, self.INVALID_IMAGE_URL)
         return await self.materialize_images(result, client, referer)
 
     def _parse_live_data(self, payload: dict) -> ParseResult:

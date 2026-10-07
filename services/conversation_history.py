@@ -122,14 +122,14 @@ def _build_text_only_content(result: ParseResult) -> str:
     base_line_count = sum(
         bool(line) for line in [result.content.description, *result.content.extra_lines]
     )
-    lines.extend(result.content_lines[base_line_count:])
+    lines.extend(result.visible_text_lines[base_line_count:])
     if result.content.ordered_contents:
-        image_count = len(result.image_references)
+        image_count = len(result.ordered_image_references)
     else:
         lines.extend(
             error for error in result.diagnostics.image_errors.values() if error
         )
-        image_count = len(result.image_references)
+        image_count = len(result.ordered_image_references)
 
     if image_count:
         lines.append(f"图片: {image_count} 张")

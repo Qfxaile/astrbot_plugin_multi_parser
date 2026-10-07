@@ -8,7 +8,7 @@ import httpx
 
 from ...core.contracts import ParseContext, ParseResult
 from ...core.http import build_cookies, cookie_config_value
-from ...core.media import mark_invalid_legacy_images
+from ...core.media import mark_invalid_image_slots
 from ...core.parser import BaseParser
 from .client import resolve_short_link
 from .gallery import RedBookGalleryContent
@@ -132,7 +132,7 @@ class RedBookParser(
             image_referer = urlunsplit(
                 parsed_content_url._replace(query="", fragment="")
             )
-            mark_invalid_legacy_images(result, self.INVALID_IMAGE_URL)
+            mark_invalid_image_slots(result, self.INVALID_IMAGE_URL)
             client.cookies.clear()
             return await self.materialize_images(result, client, image_referer)
 

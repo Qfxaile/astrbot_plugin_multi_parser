@@ -5,6 +5,7 @@ from astrbot.api.event import AstrMessageEvent
 from astrbot.api.message_components import Nodes
 
 from ..core.contracts import ParseResult
+from ..core.rendering import ParseResultRenderer
 from ..core.settings import PluginSettings
 from .delivery_policy import DeliveryPolicy
 from .event_identity import EventIdentity
@@ -111,7 +112,7 @@ class DeliveryService:
         include_video: bool = False,
     ) -> tuple[list, bool]:
         info_chain = self._filter_output_links(
-            result.info_chain(include_video_url=include_video_url)
+            ParseResultRenderer.info_chain(result, include_video_url=include_video_url)
         )
         if not info_chain:
             return [], False

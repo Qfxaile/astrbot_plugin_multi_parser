@@ -8,6 +8,7 @@ from astrbot.api.message_components import Video
 
 from ..core.contracts import ParseResult
 from ..core.media import TemporaryFileRegistry, VideoMaterializer
+from ..core.rendering import ParseResultRenderer
 
 
 class VideoDeliveryService:
@@ -19,7 +20,7 @@ class VideoDeliveryService:
         self.config = config
 
     async def send(self, event: AstrMessageEvent, result: ParseResult) -> None:
-        video_chain = result.video_chain()
+        video_chain = ParseResultRenderer.video_chain(result)
         if self._platform_name(event) == self.KOOK_PLATFORM and video_chain:
             if result.media.video_download_host_suffixes:
                 video_path = await VideoMaterializer(

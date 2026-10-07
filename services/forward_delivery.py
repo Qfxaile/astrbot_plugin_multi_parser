@@ -6,6 +6,7 @@ from astrbot.api.event import AstrMessageEvent, MessageChain
 from astrbot.api.message_components import Image, Node, Nodes, Plain
 
 from ..core.contracts import ParseResult
+from ..core.rendering import ParseResultRenderer
 from .content_assembly import ContentAssembler
 from .delivery_policy import DeliveryPolicy
 from .event_identity import EventIdentity
@@ -57,7 +58,7 @@ class ForwardDeliveryService:
             )
         )
         if embedded:
-            components.extend(result.video_chain())
+            components.extend(ParseResultRenderer.video_chain(result))
         sender_name, sender_id = self._cached_identity(event)
         nodes = [
             Node(content=[component], name=sender_name, uin=sender_id)

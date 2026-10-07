@@ -1,11 +1,12 @@
 from pathlib import Path
 
-from astrbot_multi_parser.core.contracts import ParseDiagnostics, ParseResult
+from astrbot_multi_parser.core.contracts import ParseDiagnostics
 from astrbot_multi_parser.core.media import TemporaryFileRegistry
+from result_factory import build_result
 
 
 def test_parse_result_domain_views_share_storage():
-    result = ParseResult(
+    result = build_result(
         platform="测试",
         title="标题",
         image_urls=["https://example.test/image.jpg"],
@@ -30,7 +31,7 @@ def test_parse_result_domain_views_share_storage():
 
 def test_parse_result_rejects_unknown_constructor_fields():
     try:
-        ParseResult(platform="测试", unknown_field="value")
+        build_result(platform="测试", unknown_field="value")
     except TypeError:
         pass
     else:
@@ -38,7 +39,7 @@ def test_parse_result_rejects_unknown_constructor_fields():
 
 
 def test_media_bundle_exposes_request_headers():
-    result = ParseResult(platform="测试")
+    result = build_result(platform="测试")
     result.media.image_download_headers["Referer"] = "https://example.test/"
 
     assert result.media.image_download_headers == {"Referer": "https://example.test/"}
