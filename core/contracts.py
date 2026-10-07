@@ -70,12 +70,7 @@ class ParseResult:
     platform: str
     content: ContentDocument = field(default_factory=ContentDocument)
     media: MediaBundle = field(default_factory=MediaBundle)
-    video_url: str = ""
     diagnostics: ParseDiagnostics = field(default_factory=ParseDiagnostics)
-    video_download_headers: dict[str, str] = field(default_factory=dict, repr=False)
-    video_download_host_suffixes: tuple[str, ...] = field(
-        default_factory=tuple, repr=False
-    )
     delivery: DeliveryHints = field(default_factory=DeliveryHints)
 
     def __init__(
@@ -85,70 +80,66 @@ class ParseResult:
         content: ContentDocument | None = None,
         media: MediaBundle | None = None,
         video_url: str = "",
+        video_download_headers: dict[str, str] | None = None,
+        video_download_host_suffixes: tuple[str, ...] | None = None,
+        title: str | None = None,
+        author: str | None = None,
+        description: str | None = None,
+        cover_urls: list[str] | None = None,
+        image_urls: list[str] | None = None,
+        extra_lines: list[str] | None = None,
+        ordered_contents: list[OrderedContent] | None = None,
+        temporary_files: list[object] | None = None,
+        image_source_urls: dict[str, str] | None = None,
+        image_download_headers: dict[str, str] | None = None,
         diagnostics: ParseDiagnostics | None = None,
         delivery: DeliveryHints | None = None,
-        **legacy: object,
     ) -> None:
-        """构造领域结果；旧测试夹具参数仅在迁移期间转换到领域对象。"""
-        content_values = {
-            name: legacy.pop(name, None)
-            for name in (
-                "title",
-                "author",
-                "description",
-                "cover_urls",
-                "image_urls",
-                "extra_lines",
-                "ordered_contents",
-            )
-        }
         if content is None:
             content = ContentDocument(
-                title=content_values["title"] or "",
-                author=content_values["author"] or "",
-                description=content_values["description"] or "",
-                cover_urls=content_values["cover_urls"] or [],
-                image_urls=content_values["image_urls"] or [],
-                extra_lines=content_values["extra_lines"] or [],
-                ordered_contents=content_values["ordered_contents"] or [],
+                title=title or "",
+                author=author or "",
+                description=description or "",
+                cover_urls=cover_urls or [],
+                image_urls=image_urls or [],
+                extra_lines=extra_lines or [],
+                ordered_contents=ordered_contents or [],
             )
-        elif any(value is not None for value in content_values.values()):
+        elif any(
+            value is not None
+            for value in (
+                title,
+                author,
+                description,
+                cover_urls,
+                image_urls,
+                extra_lines,
+                ordered_contents,
+            )
+        ):
             raise TypeError("content cannot be combined with legacy content fields")
-        media_values = {
-            name: legacy.pop(name, None)
-            for name in (
-                "temporary_files",
-                "image_source_urls",
-                "image_download_headers",
-            )
-        }
         if media is None:
             media = MediaBundle(
-                image_source_urls=media_values["image_source_urls"] or {},
-                image_download_headers=media_values["image_download_headers"] or {},
+                image_source_urls=image_source_urls or {},
+                image_download_headers=image_download_headers or {},
             )
-        if media_values["temporary_files"]:
+        if temporary_files:
             from .media import TemporaryFileRegistry
 
-            for path in media_values["temporary_files"]:
+            for path in temporary_files:
                 TemporaryFileRegistry.register(self, path)
-        if media is not None and media_values["image_source_urls"]:
-            media.image_source_urls.update(media_values["image_source_urls"])
-        if media is not None and media_values["image_download_headers"]:
-            media.image_download_headers.update(media_values["image_download_headers"])
-            if media_values["image_source_urls"]:
-                media.image_source_urls.update(media_values["image_source_urls"])
-            if media_values["image_download_headers"]:
-                media.image_download_headers.update(
-                    media_values["image_download_headers"]
-                )
-        if legacy:
-            unexpected = ", ".join(sorted(legacy))
-            raise TypeError(f"unexpected ParseResult arguments: {unexpected}")
+        if media is not None and image_source_urls:
+            media.image_source_urls.update(image_source_urls)
+        if media is not None and image_download_headers:
+            media.image_download_headers.update(image_download_headers)
         self.platform = platform
         self.content = content
         self.media = media
-        self.video_url = video_url
+        media.video_url = video_url or media.video_url
+        if video_download_headers:
+            media.video_download_headers.update(video_download_headers)
+        if video_download_host_suffixes:
+            media.video_download_host_suffixes = video_download_host_suffixes
         self.diagnostics = diagnostics or ParseDiagnostics()
         self.delivery = delivery or DeliveryHints()
 

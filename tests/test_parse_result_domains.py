@@ -4,7 +4,7 @@ from astrbot_multi_parser.core.contracts import ParseDiagnostics, ParseResult
 from astrbot_multi_parser.core.media import TemporaryFileRegistry
 
 
-def test_parse_result_domain_views_share_legacy_storage():
+def test_parse_result_domain_views_share_storage():
     result = ParseResult(
         platform="测试",
         title="标题",
@@ -25,6 +25,16 @@ def test_parse_result_domain_views_share_legacy_storage():
     assert result.content.title == "新标题"
     assert result.media.video_url.endswith("video.mp4")
     assert result.diagnostics.error == "新错误"
+    assert not hasattr(result, "video_url")
+
+
+def test_parse_result_rejects_unknown_constructor_fields():
+    try:
+        ParseResult(platform="测试", unknown_field="value")
+    except TypeError:
+        pass
+    else:
+        raise AssertionError("unknown ParseResult fields must be rejected")
 
 
 def test_media_bundle_exposes_request_headers():
