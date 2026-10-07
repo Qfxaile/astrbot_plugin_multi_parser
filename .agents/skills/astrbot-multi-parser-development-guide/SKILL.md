@@ -15,26 +15,26 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 ## 选择修改位置
 
 - 插件注册、命令权限和服务装配：`main.py`
-- 解析结果和上下文契约：`core/contracts.py`
+- 解析结果和上下文契约：`core/contracts/`
 - 登录契约、HTTP 登录基类和二维码渲染：`core/platform_login.py`
-- 安全 HTTP、平台代理、媒体和结果渲染：`core/http.py`、`core/media.py`、`core/rendering.py`
+- 安全 HTTP、平台代理、媒体和结果渲染：`core/http.py`、`core/media/operations.py`、`core/rendering/result_renderer.py`
 - 解析器公共流程：`core/parser.py`
-- 解析结果后处理视图：`core/contracts.py` 中 `ParseResult.content_lines`、`ParseResult.image_references`
-- 解析结果领域视图：`core/contracts.py` 中的 `ContentDocument`、`MediaBundle`、`ParseDiagnostics`
-- 解析结果消息组件渲染：`core/rendering.py` 的 `ParseResultRenderer`
+- 解析结果后处理视图：`core/contracts/` 中 `ParseResult.visible_text_lines`、`ParseResult.ordered_image_references`
+- 解析结果领域视图：`core/contracts/` 中的 `ContentDocument`、`MediaBundle`、`ParseDiagnostics`
+- 解析结果消息组件渲染：`core/rendering/result_renderer.py` 的 `ParseResultRenderer`
 - 平台统一 HTTP 客户端：`core/parser.py` 的 `BaseParser.http_client()`
-- 平台扩展接口与能力元数据：`core/platform.py`
-- 配置类型读取：`core/settings.py` 的 `PluginSettings`
-- 登录文案格式化：`services/login_messages.py` 的 `LoginMessageFormatter`
-- 活动登录会话管理：`services/login_sessions.py` 的 `LoginSessionRegistry`
-- 二维码登录轮询：`services/login_polling.py` 的 `QRLoginPoller`
-- 登录状态查询：`services/login_status.py` 的 `LoginStatusService`
-- 视频直链摘要与路由：`services/forward_link_delivery.py` 的 `ForwardLinkDeliveryService`
-- 合并转发构建与发送：`services/forward_delivery.py` 的 `ForwardDeliveryService`
-- OneBot 机器人身份缓存：`services/onebot_identity.py` 的 `OneBotIdentityResolver`
+- 平台扩展接口与能力元数据：`core/ports/platform.py`
+- 配置类型读取：`core/settings/values.py` 的 `PluginSettings`
+- 登录文案格式化：`services/authentication/messages.py` 的 `LoginMessageFormatter`
+- 活动登录会话管理：`services/authentication/sessions.py` 的 `LoginSessionRegistry`
+- 二维码登录轮询：`services/authentication/polling.py` 的 `QRLoginPoller`
+- 登录状态查询：`services/authentication/status.py` 的 `LoginStatusService`
+- 视频直链摘要与路由：`services/delivery/forward_links.py` 的 `ForwardLinkDeliveryService`
+- 合并转发构建与发送：`services/delivery/forward.py` 的 `ForwardDeliveryService`
+- OneBot 机器人身份缓存：`services/delivery/onebot_identity.py` 的 `OneBotIdentityResolver`
 - 配置、登录、会话历史、消息投递、视频策略、OneBot 适配和 AI 总结编排：`services/`
-- 自动解析事件编排：`services/parsing.py` 的 `ParseCoordinator`
-- 插件级服务装配：`services/container.py` 的 `ServiceContainer`
+- 自动解析事件编排：`services/parsing/coordinator.py` 的 `ParseCoordinator`
+- 插件级服务装配：`services/composition/container.py` 的 `ServiceContainer`
 - 平台清单以及解析器、登录适配器对应关系：`platforms/registry.py`
 - 平台入口和协议实现：`platforms/<platform>/parser.py`、支持登录平台的 `platforms/<platform>/login.py` 及同目录 `client.py`、`models.py`、`content.py` 模块
 - 配置声明：`_conf_schema.json`
@@ -47,16 +47,16 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 ### 修改解析器
 
 平台解析器和业务服务不直接拼装 AstrBot 消息组件；结果渲染统一通过
-`core/rendering.py` 的 `ParseResultRenderer` 完成。
+`core/rendering/result_renderer.py` 的 `ParseResultRenderer` 完成。
 
 平台请求优先使用 `BaseParser.http_client()`，统一超时、平台代理参数和重定向策略；仅在需要特殊客户端选项时直接创建 `httpx.AsyncClient`。
 
-后处理服务优先使用 `ParseResult.content`、`ParseResult.media`、`ParseResult.diagnostics` 获取领域数据；`content_lines`、`image_references` 继续作为兼容视图。媒体投递和视频处理使用统一媒体视图；临时文件通过 `core/media.py` 的 `TemporaryFileRegistry` 登记和清理。合并转发决策与节点发送复用 `ForwardDeliveryService`，不要在 `DeliveryService` 重建 OneBot 序列化流程。
+后处理服务优先使用 `ParseResult.content`、`ParseResult.media`、`ParseResult.diagnostics` 获取领域数据；`visible_text_lines`、`ordered_image_references` 作为统一后处理视图。媒体投递和视频处理使用统一媒体视图；临时文件通过 `core/media/operations.py` 的 `TemporaryFileRegistry` 登记和清理。合并转发决策与节点发送复用 `ForwardDeliveryService`，不要在 `DeliveryService` 重建 OneBot 序列化流程。
 修改媒体元数据访问时运行 `tests/test_media_metadata_boundaries.py`，确保服务层没有绕过统一视图。
 
 新增平台或跨层依赖时运行 `tests/test_architecture_dependencies.py`，保持平台适配器不依赖服务层、核心不依赖平台实现。
 
-复用 `BaseParser`、`PlatformSpec`、`PluginSettings`、统一契约、安全 HTTP、平台代理、媒体和投递服务。新增解析器必须覆写 `BaseParser` 的 `match` 与 `parse`，并只通过平台注册表接入；`BaseParser` 本身提供可复用的 HTTP、Cookie 和媒体基础能力。配置值的布尔、数值、枚举和平台开关读取统一使用 `PluginSettings`，不要在服务或基础设施模块重复转换。AI 总结、会话历史等后处理优先使用 `ParseResult.content_lines` 和 `ParseResult.image_references`，不要重复遍历平台字段。新增请求客户端时接入 `core/http.py` 的平台代理参数，确保解析、登录和插件侧媒体请求遵循同一平台开关。保持内容顺序，区分鉴权失败、网络失败、内容不存在和部分媒体失败。新增平台时更新平台包导出、`platforms/registry.py`、`platforms/__init__.py`、`_conf_schema.json`、README、项目事实文档和测试，并运行注册表的 `validate_platform_registry()`、`validate_platform_configuration()` 校验；按用户可见程度更新 CHANGELOG。核心与服务公共扩展点优先通过 `core/__init__.py`、`services/__init__.py` 惰性导出，并同步包边界测试；`services/configuration.py` 与 `services/authentication.py` 从注册表装配，只有装配语义变化时才修改。
+复用 `BaseParser`、`PlatformSpec`、`PluginSettings`、统一契约、安全 HTTP、平台代理、媒体和投递服务。新增解析器必须覆写 `BaseParser` 的 `match` 与 `parse`，并只通过平台注册表接入；`BaseParser` 本身提供可复用的 HTTP、Cookie 和媒体基础能力。配置值的布尔、数值、枚举和平台开关读取统一使用 `PluginSettings`，不要在服务或基础设施模块重复转换。AI 总结、会话历史等后处理优先使用 `ParseResult.visible_text_lines` 和 `ParseResult.ordered_image_references`，不要重复遍历平台字段。新增请求客户端时接入 `core/http.py` 的平台代理参数，确保解析、登录和插件侧媒体请求遵循同一平台开关。保持内容顺序，区分鉴权失败、网络失败、内容不存在和部分媒体失败。新增平台时更新平台包导出、`platforms/registry.py`、`platforms/__init__.py`、`_conf_schema.json`、README、项目事实文档和测试，并运行注册表的 `validate_platform_registry()`、`validate_platform_configuration()` 校验；按用户可见程度更新 CHANGELOG。核心与服务公共扩展点优先通过 `core/__init__.py`、`services/__init__.py` 惰性导出，并同步包边界测试；`services/composition/configuration.py` 与 `services/authentication/service.py` 从注册表装配，只有装配语义变化时才修改。
 
 修改自动链接解析入口、平台解析器、表情回应或投递流程时，先核对 AstrBot 的事件传播和默认 LLM 触发条件。自动解析只能附加解析输出，禁止停止事件、修改或消费原消息、设置 LLM 禁用状态，或主动请求 LLM 接管后续流程；发送解析结果后仍须让后续插件与 AstrBot 默认流程按原规则处理。若发送副作用会改变事件状态，恢复进入解析处理器前的原值，并用成功解析、匹配异常、解析异常、未匹配和入口已有发送状态测试防止回归。
 
@@ -72,7 +72,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 视频超限回退只负责选择动作；视频直链摘要和群/私聊路由统一复用 `ForwardLinkDeliveryService`。
 
-复用 `core/platform_login.py` 的契约和 HTTP 基类，以及 `services/authentication.py` 的编排。保留管理员权限边界，以 `main.py` 和测试确认每条命令是否限制私聊。限制二维码与重定向域名，只持久化最小 Cookie；成功、状态和错误输出不得泄漏凭据。遇到风控或设备验证时终止，不尝试绕过。
+复用 `core/platform_login.py` 的契约和 HTTP 基类，以及 `services/authentication/service.py` 的编排。保留管理员权限边界，以 `main.py` 和测试确认每条命令是否限制私聊。限制二维码与重定向域名，只持久化最小 Cookie；成功、状态和错误输出不得泄漏凭据。遇到风控或设备验证时终止，不尝试绕过。
 
 ### 修改配置或依赖
 

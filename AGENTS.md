@@ -48,27 +48,27 @@ uv run ruff check .
 
 | 需求 | 首选位置 |
 | --- | --- |
-| 插件注册、事件入口 | `main.py`；插件级服务装配由 `services/container.py` 的 `ServiceContainer` 负责 |
-| 解析结果和上下文契约 | `core/contracts.py`；`ContentDocument`、`MediaBundle`、`ParseDiagnostics` 分别提供内容、媒体和诊断领域视图；所有平台源码已迁移生产读取/写入到领域视图；京东、淘宝、拼多多仍保留源码且不注册；`ParseResult.content_lines`、`ParseResult.image_references` 保持后处理兼容视图 |
+| 插件注册、事件入口 | `main.py`；插件级服务装配由 `services/composition/container.py` 的 `ServiceContainer` 负责 |
+| 解析结果和上下文契约 | `core/contracts/`；`ContentDocument`、`MediaBundle`、`ParseDiagnostics` 分别提供内容、媒体和诊断领域视图；所有平台源码已迁移生产读取/写入到领域视图；京东、淘宝、拼多多仍保留源码且不注册；`ParseResult.visible_text_lines`、`ParseResult.ordered_image_references` 提供后处理视图 |
 | 登录契约、登录 HTTP 基类和二维码渲染 | `core/platform_login.py` |
-| 安全 HTTP、可信 URL、Cookie、平台代理、商品网页元数据、媒体和渲染 | `core/http.py`、`core/webpage.py`、`core/product_metadata.py`、`core/media.py`、`core/rendering.py`；`ParseResultRenderer` 负责结果到消息组件的转换 |
-| 配置类型读取与平台开关 | `core/settings.py`；基础设施和服务不得重复实现配置类型转换 |
+| 安全 HTTP、可信 URL、Cookie、平台代理、商品网页元数据、媒体和渲染 | `core/http.py`、`core/webpage.py`、`core/product_metadata.py`、`core/media/operations.py`、`core/rendering/result_renderer.py`；`ParseResultRenderer` 负责结果到消息组件的转换 |
+| 配置类型读取与平台开关 | `core/settings/values.py`；基础设施和服务不得重复实现配置类型转换 |
 | 解析器窄扩展契约、公共 HTTP 客户端和基础能力 | `core/parser.py` 的 `Parser` Protocol 与可实例化 `BaseParser`；平台适配器优先复用 `BaseParser.http_client()` |
-| 平台扩展接口与能力描述 | `core/platform.py` |
+| 平台扩展接口与能力描述 | `core/ports/platform.py` |
 | 平台清单及解析器、登录适配器对应关系 | `platforms/registry.py` |
-| 配置读取和解析器创建 | `services/configuration.py` |
-| 登录编排、二维码轮询、登录状态、会话互斥与取消、凭据持久化和文案 | `services/authentication.py`、`services/login_polling.py`、`services/login_status.py`、`services/login_sessions.py`、`services/cookie_store.py`、`services/login_messages.py` |
-| 消息上下文、分享卡片、自动解析编排、文本处理和投递 | `services/message_context.py`、`services/share_card.py`、`services/parsing.py`、`services/text_processing.py`、`services/delivery.py` |
-| 投递策略、内容组装、链接过滤、直链投递、事件身份和 OneBot 适配 | `services/delivery_policy.py`、`services/content_assembly.py`、`services/link_filter.py`、`services/forward_link_delivery.py`、`services/event_identity.py`、`services/onebot_*.py` |
-| 合并转发编排与 OneBot 昵称缓存 | `services/forward_delivery.py`、`services/onebot_identity.py` |
-| LLM 会话历史写入与媒体序列化 | `services/conversation_history.py` |
-| AI 总结、Provider 选择和多模态输入 | `services/ai_summary.py`、`services/summary_provider.py` |
-| 视频大小探测、发送和回退策略 | `services/video.py`、`services/video_delivery.py`、`services/video_fallback.py` |
+| 配置读取和解析器创建 | `services/composition/configuration.py` |
+| 登录编排、二维码轮询、登录状态、会话互斥与取消、凭据持久化和文案 | `services/authentication/service.py`、`services/authentication/polling.py`、`services/authentication/status.py`、`services/authentication/sessions.py`、`services/authentication/cookie_store.py`、`services/authentication/messages.py` |
+| 消息上下文、分享卡片、自动解析编排、文本处理和投递 | `services/message_context.py`、`services/share_card.py`、`services/parsing/coordinator.py`、`services/text_processing.py`、`services/delivery/service.py` |
+| 投递策略、内容组装、链接过滤、直链投递、事件身份和 OneBot 适配 | `services/delivery/policy.py`、`services/content_assembly.py`、`services/link_filter.py`、`services/delivery/forward_links.py`、`services/event_identity.py`、`services/onebot_*.py` |
+| 合并转发编排与 OneBot 昵称缓存 | `services/delivery/forward.py`、`services/delivery/onebot_identity.py` |
+| LLM 会话历史写入与媒体序列化 | `services/conversation/history.py` |
+| AI 总结、Provider 选择和多模态输入 | `services/summary/service.py`、`services/summary/provider.py` |
+| 视频大小探测、发送和回退策略 | `services/delivery/video.py`、`services/delivery/video_delivery.py`、`services/delivery/video_fallback.py` |
 | 平台请求、签名、登录和载荷转换 | `platforms/<platform>/` |
 
-跨平台规则放入 `core/` 或 `services/`；平台协议细节留在对应平台目录。Controller/命令入口只做权限与参数检查、调用服务并返回结果。自动解析由 `services/parsing.py` 的 `ParseCoordinator` 编排；解析器通过 `core/parser.py` 的 `Parser` Protocol 提供异步 `match` 和 `parse`，并通过 `PlatformSpec` 注册，校验要求声明 `PARSE` 能力。平台适配器不得反向依赖服务层，核心模块不得依赖平台实现；依赖方向由 `tests/test_architecture_dependencies.py` 校验。`BaseParser` 本身保留可实例化的公共 HTTP、Cookie 和媒体能力，供基础能力复用。京东、淘宝、拼多多源码和测试保留，但不注册、不出现在配置开关和自动解析主流程中。
+跨平台规则放入 `core/` 或 `services/`；平台协议细节留在对应平台目录。Controller/命令入口只做权限与参数检查、调用服务并返回结果。自动解析由 `services/parsing/coordinator.py` 的 `ParseCoordinator` 编排；解析器通过 `core/parser.py` 的 `Parser` Protocol 提供异步 `match` 和 `parse`，并通过 `PlatformSpec` 注册，校验要求声明 `PARSE` 能力。平台适配器不得反向依赖服务层，核心模块不得依赖平台实现；依赖方向由 `tests/test_architecture_dependencies.py` 校验。`BaseParser` 本身保留可实例化的公共 HTTP、Cookie 和媒体能力，供基础能力复用。京东、淘宝、拼多多源码和测试保留，但不注册、不出现在配置开关和自动解析主流程中。
 
-服务层和媒体渲染适配器读取解析结果媒体请求元数据时必须使用 `ParseResult.media`；临时文件登记和清理由 `core/media.py` 的 `TemporaryFileRegistry` 负责。合并转发决策、节点构建和 OneBot 图片序列化由 `ForwardDeliveryService` 负责，`DeliveryService` 只做服务编排。边界由 `tests/test_media_metadata_boundaries.py` 校验。
+服务层和媒体渲染适配器读取解析结果媒体请求元数据时必须使用 `ParseResult.media`；临时文件登记和清理由 `core/media/operations.py` 的 `TemporaryFileRegistry` 负责。合并转发决策、节点构建和 OneBot 图片序列化由 `ForwardDeliveryService` 负责，`DeliveryService` 只做服务编排。边界由 `tests/test_media_metadata_boundaries.py` 校验。
 
 每个平台只保留一个顶层解析入口，当前平台清单以 `platforms/registry.py` 中的 `PLATFORM_REGISTRY` 为准。平台实现使用 `platforms/<platform>/` 目录，`parser.py` 负责顶层入口和路由，内容逻辑按职责拆入同目录模块；复杂平台按职责拆分为 `client.py`、`models.py` 和 `content.py`，番茄小说、抖音、微博、小红书、Pixiv、腾讯频道已按实际职责拆出客户端或内容模块；支持登录的平台另有 `login.py`。各平台从自己的 `__init__.py` 导出解析器或登录提供者。新增平台或调整导出时，同步检查：
 
@@ -82,7 +82,7 @@ uv run ruff check .
 和对应测试同时通过。核心与服务公共类型优先从包入口惰性导出，新增公共扩展点时同步
 检查 `core/__init__.py`、`services/__init__.py` 和包边界测试。
 
-`services/configuration.py` 和 `services/authentication.py` 从注册表装配解析器与登录适配器，只有装配语义变化时才修改。
+`services/composition/configuration.py` 和 `services/authentication/service.py` 从注册表装配解析器与登录适配器，只有装配语义变化时才修改。
 
 ## 登录与安全边界
 
@@ -96,14 +96,14 @@ uv run ruff check .
 ## 实现约束
 
 - 优先复用现有契约、服务和平台模式，只修改完成任务必需的文件。
-- 解析器统一返回 `core/contracts.py` 中的契约，保持图文顺序和可读的失败信息。
+- 解析器统一返回 `core/contracts/` 中的契约，保持图文顺序和可读的失败信息。
 - 自动链接解析必须透明传播原消息：`handle_parse`、平台解析器和投递服务只能附加解析结果，不得调用 `event.stop_event()`、不得通过 LLM 禁用状态或主动 LLM 请求接管后续流程、不得修改或消费原消息，也不得因表情回应、解析结果或错误提示的发送副作用阻止后续插件与 AstrBot 默认 LLM 按原规则处理。本规则仅适用于自动链接解析事件；平台登录等显式管理命令按其现有命令语义处理。
 - 若 AstrBot 以事件“是否已发送消息”的状态决定默认 LLM，自动解析完成后必须恢复进入解析处理器前的原状态：既不能把本插件的发送标记遗留给后续流程，也不能固定清空并覆盖更早处理器已有的发送状态。相关变更至少覆盖成功解析、匹配异常、解析异常、未匹配和入口已有发送状态测试。
 - 外部请求复用 `core/http.py` 的安全能力和平台代理参数；新增网络路径时检查 URL、重定向、超时、响应大小边界，并确保对应平台的代理开关能够覆盖该请求。
 - 登录适配器复用 `HTTPPlatformLoginProvider`、`read_login_response_body` 和公共二维码渲染；可信域、Cookie 值及 CookieJar 白名单序列化复用 `core/http.py`。
 - 平台解析器或登录适配器的增删与顺序只在 `platforms/registry.py` 声明，配置和认证服务从注册表装配，不维护平行清单。
 - 公开 API 和关键异步入口使用准确的中文文档字符串。注释解释边界、顺序、并发和降级原因，不逐行复述代码。
-- 配置变化同步 `_conf_schema.json`、README 和测试，并检查 `services/configuration.py` 是否需要调整；注册表已经提供所需装配语义时不要制造无意义改动。
+- 配置变化同步 `_conf_schema.json`、README 和测试，并检查 `services/composition/configuration.py` 是否需要调整；注册表已经提供所需装配语义时不要制造无意义改动。
 - `_conf_schema.json` 的用户可见文案保持简洁：平台开关用一句话概括支持的内容类型；Cookies 配置只说明是否选填及用途；登录状态、填写格式、兼容限制和故障处理等详细说明放入 README，不堆叠在配置提示中。Cookies 分组仍需保留简短的敏感信息警告。
 - 不为单次需求增加兼容层、重复入口或无调用方的扩展点。
 

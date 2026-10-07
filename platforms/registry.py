@@ -35,9 +35,7 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
     PlatformSpec(TiebaParser, TiebaLoginProvider, features=_LOGIN_FEATURES),
     PlatformSpec(WeiboParser, WeiboLoginProvider, features=_LOGIN_FEATURES),
     PlatformSpec(WeChatParser, WeChatLoginProvider, features=_LOGIN_FEATURES),
-    PlatformSpec(
-        XiaoheiheParser, XiaoheiheLoginProvider, features=_LOGIN_FEATURES
-    ),
+    PlatformSpec(XiaoheiheParser, XiaoheiheLoginProvider, features=_LOGIN_FEATURES),
     PlatformSpec(ZhihuParser, ZhihuLoginProvider, features=_LOGIN_FEATURES),
     PlatformSpec(GitHubParser, None),
     PlatformSpec(QQChannelParser, None),

@@ -58,4 +58,3 @@ class PlatformSpec:
     def supports(self, feature: PlatformFeature) -> bool:
         """返回平台注册项是否声明指定能力。"""
         return feature in self.features
-
