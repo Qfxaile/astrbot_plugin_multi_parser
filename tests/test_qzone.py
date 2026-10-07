@@ -176,15 +176,15 @@ def test_qzone_page_extracts_only_main_post_in_original_order():
         res_uin="1725825686",
     )
 
-    assert result.title == "QQ空间说说"
-    assert result.author == "测试作者"
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert result.content.title == "QQ空间说说"
+    assert result.content.author == "测试作者"
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("text", "第一行\n第二行"),
         ("image", "https://m.qpic.cn/a.jpg"),
         ("image", "https://r.photo.store.qq.com/b.jpg"),
     ]
-    assert result.video_url == "https://video.qq.com/c.mp4"
-    assert "评论" not in "".join(item.value for item in result.ordered_contents)
+    assert result.media.video_url == "https://video.qq.com/c.mp4"
+    assert "评论" not in "".join(item.value for item in result.content.ordered_contents)
 
 
 def test_qzone_page_falls_back_to_uin_and_filters_untrusted_media():
@@ -201,10 +201,10 @@ def test_qzone_page_falls_back_to_uin_and_filters_untrusted_media():
         res_uin="1725825686",
     )
 
-    assert result.author == "QQ 1725825686"
-    assert result.ordered_contents == []
-    assert result.video_url == ""
-    assert result.extra_lines == ["QQ空间说说正文为空。"]
+    assert result.content.author == "QQ 1725825686"
+    assert result.content.ordered_contents == []
+    assert result.media.video_url == ""
+    assert result.content.extra_lines == ["QQ空间说说正文为空。"]
 
 
 def test_qzone_page_reports_missing_main_post():
@@ -213,7 +213,10 @@ def test_qzone_page_reports_missing_main_post():
         res_uin="1725825686",
     )
 
-    assert result.error == "未找到QQ空间说说内容，页面可能需要登录或结构已变化。"
+    assert (
+        result.diagnostics.error
+        == "未找到QQ空间说说内容，页面可能需要登录或结构已变化。"
+    )
 
 
 @pytest.mark.parametrize(
@@ -235,7 +238,7 @@ def test_qzone_page_extracts_video_from_real_template_attributes(video_markup):
         res_uin="1725825686",
     )
 
-    assert result.video_url == "https://video.qq.com/a.mp4"
+    assert result.media.video_url == "https://video.qq.com/a.mp4"
 
 
 def test_qzone_page_extracts_lazy_image_from_real_template_attribute():
@@ -251,7 +254,7 @@ def test_qzone_page_extracts_lazy_image_from_real_template_attribute():
         res_uin="1725825686",
     )
 
-    assert result.ordered_contents[0].value == "https://m.qpic.cn/lazy.jpg"
+    assert result.content.ordered_contents[0].value == "https://m.qpic.cn/lazy.jpg"
 
 
 def test_qzone_page_promotes_psc_thumbnails_to_large_images():
@@ -272,7 +275,7 @@ def test_qzone_page_promotes_psc_thumbnails_to_large_images():
         res_uin="123456",
     )
 
-    assert [item.value for item in result.ordered_contents] == [
+    assert [item.value for item in result.content.ordered_contents] == [
         "https://a.photo.store.qq.com/psc?/album/first/b&ek=1",
         "https://m.qpic.cn/psc?/album/second/b&bo=size",
         "https://m.qpic.cn/psc?/album/third/b&bo=size",
@@ -313,7 +316,7 @@ def test_qzone_page_extracts_all_images_from_front_page_data():
     )
 
     image_urls = [
-        item.value for item in result.ordered_contents if item.kind == "image"
+        item.value for item in result.content.ordered_contents if item.kind == "image"
     ]
     assert len(image_urls) == 26
     assert image_urls[0] == "https://m.qpic.cn/psc?/album/0/b&ek=0"
@@ -337,8 +340,8 @@ def test_qzone_album_page_extracts_direct_feed_image():
         title="QQ空间相册",
     )
 
-    assert result.title == "QQ空间相册"
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert result.content.title == "QQ空间相册"
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("image", "https://m.qpic.cn/album.jpg"),
         ("text", "上传了1张照片"),
     ]
@@ -360,8 +363,8 @@ async def test_qzone_parse_requests_original_url_without_automatic_redirects(
 
     result = await QzoneParser({}).parse(ParseContext(text=VALID_URL))
 
-    assert result.author == "测试作者"
-    assert result.ordered_contents[0].value == "正文"
+    assert result.content.author == "测试作者"
+    assert result.content.ordered_contents[0].value == "正文"
     assert client.requested_urls == [VALID_URL]
     assert options["follow_redirects"] is False
 
@@ -393,9 +396,9 @@ async def test_qzone_parse_follows_mobile_album_share(monkeypatch):
 
     result = await parser.parse(ParseContext(text=MOBILE_ALBUM_URL))
 
-    assert result.title == "QQ空间相册"
-    assert result.author == "QQ 21518887"
-    assert result.ordered_contents[0].value == "https://m.qpic.cn/album.jpg"
+    assert result.content.title == "QQ空间相册"
+    assert result.content.author == "QQ 21518887"
+    assert result.content.ordered_contents[0].value == "https://m.qpic.cn/album.jpg"
     assert client.requested_urls == [MOBILE_ALBUM_URL, redirected_url]
 
 
@@ -444,13 +447,13 @@ async def test_qzone_parse_reads_universal_share_nuxt_data(monkeypatch):
 
     result = await parser.parse(ParseContext(text=UNIVERSAL_URL))
 
-    assert result.title == "QQ空间动态"
-    assert result.author == "QQ 1725825686"
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert result.content.title == "QQ空间动态"
+    assert result.content.author == "QQ 1725825686"
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("text", "动态正文"),
         ("image", "https://m.qpic.cn/big.jpg"),
     ]
-    assert result.video_url == "https://video.qq.com/share.mp4"
+    assert result.media.video_url == "https://video.qq.com/share.mp4"
 
 
 async def test_qzone_parse_materializes_images_with_share_referer(monkeypatch):
@@ -477,7 +480,7 @@ async def test_qzone_parse_materializes_images_with_share_referer(monkeypatch):
 
     result = await parser.parse(ParseContext(text=VALID_URL))
 
-    assert result.ordered_contents[0].value == "https://m.qpic.cn/a.jpg"
+    assert result.content.ordered_contents[0].value == "https://m.qpic.cn/a.jpg"
     assert referers == [VALID_URL]
 
 
@@ -493,7 +496,7 @@ async def test_qzone_parse_reports_private_or_login_required_page(
 
     result = await QzoneParser({}).parse(ParseContext(text=VALID_URL))
 
-    assert result.error == "该QQ空间说说需要登录或无权访问。"
+    assert result.diagnostics.error == "该QQ空间说说需要登录或无权访问。"
 
 
 async def test_qzone_parse_reports_deleted_page(monkeypatch):
@@ -504,7 +507,7 @@ async def test_qzone_parse_reports_deleted_page(monkeypatch):
 
     result = await QzoneParser({}).parse(ParseContext(text=VALID_URL))
 
-    assert result.error == "该QQ空间说说已删除或不存在。"
+    assert result.diagnostics.error == "该QQ空间说说已删除或不存在。"
 
 
 async def test_qzone_parse_rejects_untrusted_redirect(monkeypatch):
@@ -520,7 +523,7 @@ async def test_qzone_parse_rejects_untrusted_redirect(monkeypatch):
 
     result = await QzoneParser({}).parse(ParseContext(text=VALID_URL))
 
-    assert result.error == "QQ空间分享链接跳转到不可信域名。"
+    assert result.diagnostics.error == "QQ空间分享链接跳转到不可信域名。"
 
 
 async def test_qzone_parse_follows_only_bounded_trusted_redirects(monkeypatch):
@@ -541,7 +544,7 @@ async def test_qzone_parse_follows_only_bounded_trusted_redirects(monkeypatch):
 
     result = await QzoneParser({}).parse(ParseContext(text=VALID_URL))
 
-    assert not result.error
+    assert not result.diagnostics.error
     assert client.requested_urls == [VALID_URL, redirected_url]
 
 
@@ -559,7 +562,7 @@ async def test_qzone_parse_rejects_oversized_page(monkeypatch, response):
 
     result = await parser.parse(ParseContext(text=VALID_URL))
 
-    assert result.error == "QQ空间页面响应过大，已停止解析。"
+    assert result.diagnostics.error == "QQ空间页面响应过大，已停止解析。"
 
 
 async def test_qzone_parse_hides_url_when_network_fails(monkeypatch):
@@ -571,8 +574,8 @@ async def test_qzone_parse_hides_url_when_network_fails(monkeypatch):
 
     result = await QzoneParser({}).parse(ParseContext(text=VALID_URL))
 
-    assert result.error == "QQ空间说说请求失败，请稍后重试。"
-    assert "public-tag" not in result.error
+    assert result.diagnostics.error == "QQ空间说说请求失败，请稍后重试。"
+    assert "public-tag" not in result.diagnostics.error
 
 
 @pytest.mark.parametrize(
@@ -594,7 +597,7 @@ async def test_qzone_parse_maps_successful_error_pages(
 
     result = await QzoneParser({}).parse(ParseContext(text=VALID_URL))
 
-    assert result.error == expected_error
+    assert result.diagnostics.error == expected_error
 
 
 async def test_qzone_parse_rejects_excessive_trusted_redirects(monkeypatch):
@@ -609,13 +612,13 @@ async def test_qzone_parse_rejects_excessive_trusted_redirects(monkeypatch):
 
     result = await QzoneParser({}).parse(ParseContext(text=VALID_URL))
 
-    assert result.error == "QQ空间分享链接重定向次数超过安全限制。"
+    assert result.diagnostics.error == "QQ空间分享链接重定向次数超过安全限制。"
 
 
 async def test_qzone_parse_returns_error_when_share_url_is_missing():
     result = await QzoneParser({}).parse(ParseContext(text="没有分享链接"))
 
-    assert result.error == "未找到QQ空间说说链接。"
+    assert result.diagnostics.error == "未找到QQ空间说说链接。"
 
 
 async def test_qzone_parse_sets_video_download_boundaries(monkeypatch):
@@ -632,8 +635,8 @@ async def test_qzone_parse_sets_video_download_boundaries(monkeypatch):
 
     result = await QzoneParser({}).parse(ParseContext(text=VALID_URL))
 
-    assert result.video_download_headers == {
+    assert result.media.video_download_headers == {
         "Referer": VALID_URL,
         "User-Agent": QzoneParser.HEADERS["User-Agent"],
     }
-    assert result.video_download_host_suffixes == ("qq.com", "gtimg.cn")
+    assert result.media.video_download_host_suffixes == ("qq.com", "gtimg.cn")
