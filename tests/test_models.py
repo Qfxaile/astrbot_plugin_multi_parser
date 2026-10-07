@@ -5,6 +5,7 @@ import httpx
 import pytest
 from astrbot.api.message_components import Image, Plain, Record
 from astrbot_multi_parser import core as models
+from astrbot_multi_parser.core.contracts import MediaBundle
 
 
 def test_core_exports_contracts():
@@ -668,7 +669,7 @@ def test_parse_result_preserves_legacy_positional_arguments():
 def test_audio_chain_builds_remote_record_component():
     result = models.ParseResult(
         platform="douyin",
-        audio_url="https://v3-luna.douyinvod.com/song.m4a",
+        media=MediaBundle(audio_url="https://v3-luna.douyinvod.com/song.m4a"),
     )
 
     chain = result.audio_chain()

@@ -10,6 +10,7 @@ from astrbot_multi_parser import main
 from astrbot_multi_parser.core import media
 from astrbot_multi_parser.core.contracts import (
     DeliveryHints,
+    MediaBundle,
     OrderedContent,
     ParseResult,
 )
@@ -420,8 +421,10 @@ async def test_successful_parse_is_added_to_current_conversation(monkeypatch, tm
         title="测试标题",
         author="测试作者",
         description="测试简介",
-        video_url="https://video.example/play.mp4?token=secret",
-        audio_url="https://audio.example/play.m4a?token=secret",
+        media=MediaBundle(
+            video_url="https://video.example/play.mp4?token=secret",
+            audio_url="https://audio.example/play.m4a?token=secret",
+        ),
         extra_lines=["附加信息"],
         ordered_contents=[
             OrderedContent("text", "正文内容"),
@@ -2145,7 +2148,7 @@ async def test_audio_is_sent_after_track_summary(monkeypatch):
     result = ParseResult(
         platform="douyin",
         title="歌曲标题",
-        audio_url="https://v3-luna.douyinvod.com/song.m4a",
+        media=MediaBundle(audio_url="https://v3-luna.douyinvod.com/song.m4a"),
     )
 
     messages = await collect_results(monkeypatch, result, forward_mode="never")

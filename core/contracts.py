@@ -89,7 +89,6 @@ class ParseResult:
         default_factory=tuple, repr=False
     )
     delivery: DeliveryHints = field(default_factory=DeliveryHints)
-    audio_url: str = ""
 
     def __post_init__(self) -> None:
         """将旧构造参数一次性装载到内容对象，后续读取统一走领域对象。"""
@@ -106,13 +105,21 @@ class ParseResult:
         if self.media == MediaBundle():
             self.media = MediaBundle(
                 video_url=self.video_url,
-                audio_url=self.audio_url,
                 temporary_files=self.temporary_files,
                 image_source_urls=self.image_source_urls,
                 image_download_headers=self.image_download_headers,
                 video_download_headers=self.video_download_headers,
                 video_download_host_suffixes=self.video_download_host_suffixes,
             )
+        else:
+            self.media.temporary_files.extend(self.temporary_files)
+            self.media.image_source_urls.update(self.image_source_urls)
+            self.media.image_download_headers.update(self.image_download_headers)
+            self.media.video_download_headers.update(self.video_download_headers)
+            if self.video_download_host_suffixes:
+                self.media.video_download_host_suffixes = (
+                    self.video_download_host_suffixes
+                )
 
     @property
     def image_count(self) -> int:
