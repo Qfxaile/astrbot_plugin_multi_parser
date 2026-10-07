@@ -159,7 +159,7 @@ class PinduoduoParser(BaseParser):
                     return self._error_result(str(self.cookie_access_error()))
 
                 result = self._build_result(metadata, canonical_url)
-                if not result.cover_urls:
+                if not result.content.cover_urls:
                     return result
                 return await self.materialize_public_images(
                     result,

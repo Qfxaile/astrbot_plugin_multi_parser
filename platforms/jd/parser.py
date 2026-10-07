@@ -93,7 +93,7 @@ class JDParser(BaseParser):
                         "未找到京东商品信息，页面可能需要登录或结构已变化。"
                     )
                 result = self._build_result(metadata, canonical_url)
-                if not result.cover_urls:
+                if not result.content.cover_urls:
                     return result
                 return await self.materialize_public_images(
                     result,
