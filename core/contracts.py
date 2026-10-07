@@ -159,35 +159,13 @@ class ParseDiagnostics:
         return self._result.image_errors
 
 
+@dataclass
 class DeliveryHints:
     """解析结果携带的协议投递提示。"""
 
-    def __init__(self, result: "ParseResult") -> None:
-        self._result = result
-
-    @property
-    def disable_onebot_forward(self) -> bool:
-        return self._result.disable_onebot_forward
-
-    @disable_onebot_forward.setter
-    def disable_onebot_forward(self, value: bool) -> None:
-        self._result.disable_onebot_forward = value
-
-    @property
-    def split_media_for_onebot(self) -> bool:
-        return self._result.split_media_for_onebot
-
-    @split_media_for_onebot.setter
-    def split_media_for_onebot(self, value: bool) -> None:
-        self._result.split_media_for_onebot = value
-
-    @property
-    def keep_video_in_forward(self) -> bool:
-        return self._result.keep_video_in_forward
-
-    @keep_video_in_forward.setter
-    def keep_video_in_forward(self, value: bool) -> None:
-        self._result.keep_video_in_forward = value
+    disable_onebot_forward: bool = False
+    split_media_for_onebot: bool = False
+    keep_video_in_forward: bool = False
 
 
 @dataclass
@@ -210,9 +188,7 @@ class ParseResult:
     video_download_host_suffixes: tuple[str, ...] = field(
         default_factory=tuple, repr=False
     )
-    disable_onebot_forward: bool = False
-    split_media_for_onebot: bool = False
-    keep_video_in_forward: bool = False
+    delivery: DeliveryHints = field(default_factory=DeliveryHints)
     audio_url: str = ""
     subtitle_text: str = ""
     subtitle_language: str = ""
@@ -231,11 +207,6 @@ class ParseResult:
     def diagnostics(self) -> ParseDiagnostics:
         """返回解析诊断视图。"""
         return ParseDiagnostics(self)
-
-    @property
-    def delivery(self) -> DeliveryHints:
-        """返回协议投递提示视图。"""
-        return DeliveryHints(self)
 
     @property
     def image_count(self) -> int:

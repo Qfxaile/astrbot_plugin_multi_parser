@@ -8,7 +8,11 @@ from astrbot.core.star.filter.permission import PermissionType, PermissionTypeFi
 from astrbot.core.star.star_handler import star_handlers_registry
 from astrbot_multi_parser import main
 from astrbot_multi_parser.core import media
-from astrbot_multi_parser.core.contracts import OrderedContent, ParseResult
+from astrbot_multi_parser.core.contracts import (
+    DeliveryHints,
+    OrderedContent,
+    ParseResult,
+)
 from astrbot_multi_parser.core.http import CookieAccessError
 from astrbot_multi_parser.main import MultiParserPlugin, VideoSizeInfo
 from astrbot_multi_parser.services.delivery import DeliveryService
@@ -1059,7 +1063,7 @@ async def test_onebot_result_can_disable_forward_without_splitting(monkeypatch):
         platform="test",
         title="标题",
         image_urls=["base64://1", "base64://2", "base64://3"],
-        disable_onebot_forward=True,
+        delivery=DeliveryHints(disable_onebot_forward=True),
     )
 
     messages = await collect_results(
@@ -1083,8 +1087,10 @@ async def test_onebot_delivery_flags_do_not_change_other_adapters(monkeypatch):
         platform="test",
         title="标题",
         image_urls=["base64://1"],
-        disable_onebot_forward=True,
-        split_media_for_onebot=True,
+        delivery=DeliveryHints(
+            disable_onebot_forward=True,
+            split_media_for_onebot=True,
+        ),
     )
     event = FakeEvent(platform_name="satori")
 
@@ -1839,7 +1845,7 @@ async def test_threshold_forward_keeps_xiaoheihe_game_video_inside(monkeypatch):
         description="游戏简介",
         image_urls=["base64://1", "base64://2", "base64://3"],
         video_url="https://example.com/game.mp4",
-        keep_video_in_forward=True,
+        delivery=DeliveryHints(keep_video_in_forward=True),
     )
     plugin = make_plugin(result)
     monkeypatch.setattr(
