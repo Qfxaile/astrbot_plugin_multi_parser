@@ -75,15 +75,15 @@ def parse_post_payload(payload: object) -> ParseResult:
     if not link.get("has_video"):
         video_url = ""
     description = clean_text(str(link.get("description") or "")) if video_url else ""
-    return ParseResult(
-        platform="xiaoheihe",
-        title=clean_text(str(link.get("title") or "")) or "小黑盒帖子",
-        author=author,
-        description=description,
-        video_url=video_url,
-        ordered_contents=contents,
-        extra_lines=[] if contents or video_url else ["未找到可发送的媒体。"],
-    )
+    result = ParseResult(platform="xiaoheihe")
+    result.content.title = clean_text(str(link.get("title") or "")) or "小黑盒帖子"
+    result.content.author = author
+    result.content.description = description
+    result.content.ordered_contents.extend(contents)
+    result.media.video_url = video_url
+    if not (contents or video_url):
+        result.content.extra_lines.append("未找到可发送的媒体。")
+    return result
 
 
 def parse_post_contents(raw_text: object) -> list[OrderedContent]:

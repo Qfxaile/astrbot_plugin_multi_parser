@@ -44,15 +44,14 @@ def build_game_result(
     extra_lines.extend(f"备用视频: {url}" for url in video_urls if is_hls_url(url))
     if not image_urls and not video_url:
         extra_lines.append("未找到可发送的媒体。")
-    return ParseResult(
-        platform="xiaoheihe",
-        title=build_game_title(game),
-        description=build_game_desc(html_text, game, intro),
-        image_urls=image_urls,
-        video_url=video_url,
-        keep_video_in_forward=True,
-        extra_lines=extra_lines,
-    )
+    result = ParseResult(platform="xiaoheihe")
+    result.content.title = build_game_title(game)
+    result.content.description = build_game_desc(html_text, game, intro)
+    result.content.image_urls.extend(image_urls)
+    result.media.video_url = video_url
+    result.keep_video_in_forward = True
+    result.content.extra_lines.extend(extra_lines)
+    return result
 
 
 def extract_game_root(html_text: str, appid: str) -> dict:

@@ -131,10 +131,10 @@ def test_post_payload_keeps_text_and_images_in_source_order():
 
     result = parse_post_payload(payload)
 
-    assert result.title == "帖子标题"
-    assert result.author == "盒友"
-    assert result.video_url == "https://video.max-c.com/bbs/post.mp4"
-    assert [(item.kind, item.value) for item in result.ordered_contents] == [
+    assert result.content.title == "帖子标题"
+    assert result.content.author == "盒友"
+    assert result.media.video_url == "https://video.max-c.com/bbs/post.mp4"
+    assert [(item.kind, item.value) for item in result.content.ordered_contents] == [
         ("text", "第一段"),
         ("image", "https://imgheybox.max-c.com/bbs/a.jpg?token=1"),
         ("text", "第二段"),
@@ -155,7 +155,7 @@ def test_video_post_keeps_description():
         }
     )
 
-    assert result.description == "视频简介"
+    assert result.content.description == "视频简介"
 
 
 def test_regular_post_removes_description():
@@ -169,8 +169,8 @@ def test_regular_post_removes_description():
         }
     )
 
-    assert result.description == ""
-    assert result.video_url == ""
+    assert result.content.description == ""
+    assert result.media.video_url == ""
 
 
 def test_post_payload_rejects_missing_link():
@@ -288,9 +288,11 @@ async def test_parse_post_requests_signed_tree_and_materializes_images(
         )
     )
 
-    assert result.title == "接口帖子"
-    assert result.author == "接口作者"
-    assert_temporary_image(result, result.ordered_contents[0].value, image_bytes)
+    assert result.content.title == "接口帖子"
+    assert result.content.author == "接口作者"
+    assert_temporary_image(
+        result, result.content.ordered_contents[0].value, image_bytes
+    )
     assert len(requests) == 3
 
 
@@ -363,12 +365,12 @@ def test_nuxt_state_resolves_game_and_extracts_metadata():
         },
     )
 
-    assert result.title == "反恐精英（Counter-Strike 2）"
-    assert result.description.startswith("一款合作游戏")
-    assert "类型：[ 射击 多人 ] [ 合作 ]" in result.description
-    assert "小黑盒评分：9.2（1.2 万人评价）" in result.description
-    assert result.image_urls == ["https://gameimg.max-c.com/screenshot.jpg"]
-    assert result.video_url == "https://video.max-c.com/game.mp4"
+    assert result.content.title == "反恐精英（Counter-Strike 2）"
+    assert result.content.description.startswith("一款合作游戏")
+    assert "类型：[ 射击 多人 ] [ 合作 ]" in result.content.description
+    assert "小黑盒评分：9.2（1.2 万人评价）" in result.content.description
+    assert result.content.image_urls == ["https://gameimg.max-c.com/screenshot.jpg"]
+    assert result.media.video_url == "https://video.max-c.com/game.mp4"
 
 
 def test_nuxt_state_rejects_missing_game():
@@ -483,14 +485,14 @@ async def test_parse_game_page_merges_intro_and_materializes_images(
         )
     )
 
-    assert result.title == "只只大冒险（Biped）"
-    assert "开发商：开发商" in result.description
-    assert "类型：[ 中文 单人/多人 ] [ 动作 ]" in result.description
-    assert "小黑盒评分：8.7（2212 人评价）" in result.description
-    assert result.video_url == "https://video.max-c.com/game.mp4?token=1"
-    assert "备用视频: https://video.max-c.com/game.m3u8" in result.extra_lines
-    assert len(result.image_urls) == 2
-    assert_temporary_image(result, result.image_urls[0], image_bytes)
+    assert result.content.title == "只只大冒险（Biped）"
+    assert "开发商：开发商" in result.content.description
+    assert "类型：[ 中文 单人/多人 ] [ 动作 ]" in result.content.description
+    assert "小黑盒评分：8.7（2212 人评价）" in result.content.description
+    assert result.media.video_url == "https://video.max-c.com/game.mp4?token=1"
+    assert "备用视频: https://video.max-c.com/game.m3u8" in result.content.extra_lines
+    assert len(result.content.image_urls) == 2
+    assert_temporary_image(result, result.content.image_urls[0], image_bytes)
     assert len(requests) == 4
 
 
