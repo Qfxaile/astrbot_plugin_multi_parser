@@ -45,7 +45,7 @@ class VideoFallbackService:
                     event,
                     "upload_group_file",
                     group_id=group_id,
-                    file=result.video_url,
+                    file=result.media.video_url,
                     name=self.file_name(result),
                 )
                 return
@@ -70,10 +70,10 @@ class VideoFallbackService:
 
     @staticmethod
     def file_name(result: ParseResult) -> str:
-        base_name = (result.title or f"{result.platform}视频").strip()
+        base_name = (result.content.title or f"{result.platform}视频").strip()
         base_name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", base_name)
         base_name = base_name.strip(" ._")[:80] or "video"
-        suffix = PurePosixPath(urlparse(result.video_url).path).suffix.lower()
+        suffix = PurePosixPath(urlparse(result.media.video_url).path).suffix.lower()
         if suffix not in {".mp4", ".mov", ".mkv", ".webm", ".flv", ".avi"}:
             suffix = ".mp4"
         return f"{base_name}{suffix}"

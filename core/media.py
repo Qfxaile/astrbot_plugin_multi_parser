@@ -118,9 +118,9 @@ class ImageMaterializer:
                     if isinstance(outcome, Path):
                         image_path = outcome
                         TemporaryFileRegistry.register(result, image_path)
-                        result.media_metadata.image_source_urls[
-                            str(image_path.resolve())
-                        ] = image_url
+                        result.media.image_source_urls[str(image_path.resolve())] = (
+                            image_url
+                        )
                         item.value = str(image_path)
                     else:
                         detail = self._image_error_detail(outcome)
@@ -161,9 +161,9 @@ class ImageMaterializer:
                 if isinstance(outcome, Path):
                     image_path = outcome
                     TemporaryFileRegistry.register(result, image_path)
-                    result.media_metadata.image_source_urls[
-                        str(image_path.resolve())
-                    ] = image_url
+                    result.media.image_source_urls[str(image_path.resolve())] = (
+                        image_url
+                    )
                     image_values[field_index] = str(image_path)
                 else:
                     image_values[field_index] = ""
@@ -352,7 +352,7 @@ class VideoMaterializer:
 
     async def materialize(self, result: ParseResult) -> Path:
         """下载视频、登记临时文件并返回本地路径。"""
-        headers = sanitize_media_headers(result.media_metadata.video_download_headers)
+        headers = sanitize_media_headers(result.media.video_download_headers)
         async with httpx.AsyncClient(
             timeout=request_timeout(self.config),
             headers=headers,
@@ -430,10 +430,10 @@ class VideoMaterializer:
 
 def cleanup_temporary_files(result: ParseResult) -> None:
     """删除解析结果登记的临时文件，并始终清空登记列表。"""
-    for path in result.media_metadata.temporary_files:
+    for path in result.media.temporary_files:
         try:
             path.unlink(missing_ok=True)
         except OSError as exc:
             logger.warning(f"清理临时图片失败 ({path.name}): {exc}")
-    result.media_metadata.temporary_files.clear()
-    result.media_metadata.image_source_urls.clear()
+    result.media.temporary_files.clear()
+    result.media.image_source_urls.clear()

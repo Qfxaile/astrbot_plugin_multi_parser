@@ -64,9 +64,9 @@ async def build_parse_history_content(
     parts: list[dict] = [{"type": "text", "text": _build_summary(result)}]
     contains_image = False
 
-    if result.ordered_contents:
+    if result.content.ordered_contents:
         image_number = 0
-        for item in result.ordered_contents:
+        for item in result.content.ordered_contents:
             if not item.value:
                 continue
             if item.kind != "image":
@@ -87,7 +87,9 @@ async def build_parse_history_content(
             contains_image = True
     else:
         image_number = 0
-        for index, image_ref in enumerate([*result.cover_urls, *result.image_urls]):
+        for index, image_ref in enumerate(
+            [*result.content.cover_urls, *result.content.image_urls]
+        ):
             image_number += 1
             if image_ref:
                 image_part = await _build_image_part(image_ref, image_number)
@@ -95,7 +97,7 @@ async def build_parse_history_content(
                     parts.append(image_part)
                     contains_image = True
                     continue
-            error = result.image_errors.get(index)
+            error = result.diagnostics.image_errors.get(index)
             if not image_ref and not error:
                 continue
             parts.append(
@@ -118,13 +120,15 @@ def _build_text_only_content(result: ParseResult) -> str:
     """生成仅包含文本、图片数量和媒体发送状态的解析历史。"""
     lines = [_build_summary(result)]
     base_line_count = sum(
-        bool(line) for line in [result.description, *result.extra_lines]
+        bool(line) for line in [result.content.description, *result.content.extra_lines]
     )
     lines.extend(result.content_lines[base_line_count:])
-    if result.ordered_contents:
+    if result.content.ordered_contents:
         image_count = len(result.image_references)
     else:
-        lines.extend(error for error in result.image_errors.values() if error)
+        lines.extend(
+            error for error in result.diagnostics.image_errors.values() if error
+        )
         image_count = len(result.image_references)
 
     if image_count:
@@ -137,24 +141,24 @@ def _build_text_only_content(result: ParseResult) -> str:
 def _build_summary(result: ParseResult) -> str:
     """生成解析历史中的平台与文本摘要。"""
     lines = ["[由多平台内容解析插件发送]", f"平台: {result.platform}"]
-    if result.title:
-        lines.append(f"标题: {result.title}")
-    if result.author:
-        lines.append(f"作者: {result.author}")
-    if result.description:
-        lines.append(f"简介:\n{result.description}")
-    lines.extend(line for line in result.extra_lines if line)
-    if result.error:
-        lines.append(result.error)
+    if result.content.title:
+        lines.append(f"标题: {result.content.title}")
+    if result.content.author:
+        lines.append(f"作者: {result.content.author}")
+    if result.content.description:
+        lines.append(f"简介:\n{result.content.description}")
+    lines.extend(line for line in result.content.extra_lines if line)
+    if result.diagnostics.error:
+        lines.append(result.diagnostics.error)
     return "\n".join(lines)
 
 
 def _build_media_status(result: ParseResult) -> str:
     """记录独立发送、但暂不写入多模态历史的视频和音频状态。"""
     lines = []
-    if result.video_url:
+    if result.media.video_url:
         lines.append("视频: 已发送")
-    if result.audio_url:
+    if result.media.audio_url:
         lines.append("音频: 已发送")
     return "\n".join(lines)
 

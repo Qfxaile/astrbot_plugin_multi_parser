@@ -88,10 +88,10 @@ class ParseCoordinator:
                 )
                 should_send_video = False
                 video_reason = ""
-                if send_video_by_url and result.video_url:
-                    headers = result.media_metadata.video_download_headers or None
+                if send_video_by_url and result.media.video_url:
+                    headers = result.media.video_download_headers or None
                     size_info = await self.runtime.probe_video_size(
-                        result.video_url,
+                        result.media.video_url,
                         headers,
                         parser.name,
                     )
@@ -127,10 +127,10 @@ class ParseCoordinator:
                     for message in content_results:
                         yield message
 
-                if result.audio_url:
+                if result.media.audio_url:
                     yield event.chain_result(result.audio_chain())
 
-                if send_video_by_url and result.video_url:
+                if send_video_by_url and result.media.video_url:
                     if should_send_video and not video_embedded:
                         try:
                             await self.runtime.send_video(event, result)

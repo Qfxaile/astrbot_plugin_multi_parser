@@ -87,7 +87,7 @@ def render_video_chain(result: ParseResult) -> list:
 
 def render_audio_chain(result: ParseResult) -> list:
     """将远程音频地址转换为 AstrBot 语音组件。"""
-    return [Record.fromURL(result.audio_url)] if result.audio_url else []
+    return [Record.fromURL(result.media.audio_url)] if result.media.audio_url else []
 
 
 def _image_component(result: ParseResult, value: str) -> Image:

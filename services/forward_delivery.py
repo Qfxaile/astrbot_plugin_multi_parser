@@ -50,7 +50,7 @@ class ForwardDeliveryService:
         components = list(info_chain)
         embedded = (
             include_video
-            and bool(result.video_url)
+            and bool(result.media.video_url)
             and (self.policy.forward_mode() == "always" or result.keep_video_in_forward)
         )
         if embedded:
@@ -81,14 +81,14 @@ class ForwardDeliveryService:
             nodes = chain[0].nodes
             for node in nodes:
                 node.name, node.uin = sender_name, sender_id
-            sources = parse_result.media_metadata.image_source_urls
+            sources = parse_result.media.image_source_urls
             if self._can_use_urls(event, nodes, sources):
-                if parse_result.media_metadata.image_download_headers:
+                if parse_result.media.image_download_headers:
                     sources = await self._downloader.download(
                         event,
                         nodes,
                         sources,
-                        parse_result.media_metadata.image_download_headers,
+                        parse_result.media.image_download_headers,
                     )
                 await OneBotForwardSender.send(
                     event, await OneBotForwardSerializer.serialize(nodes, sources)

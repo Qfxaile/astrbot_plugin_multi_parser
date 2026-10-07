@@ -66,13 +66,13 @@ class AISummaryService:
         )
         if text_summary:
             summaries.append(text_summary)
-        if mode == "all" and result.subtitle_text.strip():
+        if mode == "all" and result.media.subtitle_text.strip():
             subtitle = await self._call(
                 event,
                 result,
                 modality="subtitle",
                 content=self._content(result),
-                subtitle=result.subtitle_text,
+                subtitle=result.media.subtitle_text,
             )
             if subtitle:
                 summaries.append(subtitle)
@@ -114,8 +114,8 @@ class AISummaryService:
             prompt = self.settings.text("ai_summary_prompt") or DEFAULT_PROMPT
             values = {
                 "platform": result.platform,
-                "title": result.title,
-                "author": result.author,
+                "title": result.content.title,
+                "author": result.content.author,
                 "content": content,
                 "subtitle": subtitle[: self._max_chars()],
             }

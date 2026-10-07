@@ -68,7 +68,7 @@ uv run ruff check .
 
 跨平台规则放入 `core/` 或 `services/`；平台协议细节留在对应平台目录。Controller/命令入口只做权限与参数检查、调用服务并返回结果。自动解析由 `services/parsing.py` 的 `ParseCoordinator` 编排；平台注册的解析器必须覆写 `BaseParser` 的 `match` 和 `parse` 方法，并通过 `PlatformSpec` 注册。平台适配器不得反向依赖服务层，核心模块不得依赖平台实现；依赖方向由 `tests/test_architecture_dependencies.py` 校验。`BaseParser` 本身保留可实例化的公共 HTTP、Cookie 和媒体能力，供基础能力复用。京东、淘宝、拼多多源码和测试保留，但不注册、不出现在配置开关和自动解析主流程中。
 
-服务层和媒体渲染适配器读取解析结果媒体请求元数据时必须使用 `ParseResult.media_metadata`；临时文件登记和清理由 `core/media.py` 的 `TemporaryFileRegistry` 负责。合并转发决策、节点构建和 OneBot 图片序列化由 `ForwardDeliveryService` 负责，`DeliveryService` 只做服务编排。边界由 `tests/test_media_metadata_boundaries.py` 校验。
+服务层和媒体渲染适配器读取解析结果媒体请求元数据时必须使用 `ParseResult.media`；`ParseResult.media_metadata` 仅作为基础设施兼容视图；临时文件登记和清理由 `core/media.py` 的 `TemporaryFileRegistry` 负责。合并转发决策、节点构建和 OneBot 图片序列化由 `ForwardDeliveryService` 负责，`DeliveryService` 只做服务编排。边界由 `tests/test_media_metadata_boundaries.py` 校验。
 
 每个平台只保留一个顶层解析入口，当前平台清单以 `platforms/registry.py` 中的 `PLATFORM_REGISTRY` 为准。平台实现使用 `platforms/<platform>/` 目录，`parser.py` 负责顶层入口和路由，内容逻辑按职责拆入同目录模块；复杂平台按职责拆分为 `client.py`、`models.py` 和 `content.py`，番茄小说、抖音、微博、小红书、Pixiv、腾讯频道已按实际职责拆出客户端或内容模块；支持登录的平台另有 `login.py`。各平台从自己的 `__init__.py` 导出解析器或登录提供者。新增平台或调整导出时，同步检查：
 

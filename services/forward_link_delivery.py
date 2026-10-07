@@ -29,14 +29,14 @@ class ForwardLinkDeliveryService:
         sender_name, sender_id = await self.resolve_identity(event)
         summary_lines = [
             f"{result.platform} 解析链接",
-            f"标题: {result.title or '未命名内容'}",
+            f"标题: {result.content.title or '未命名内容'}",
         ]
-        if result.author:
-            summary_lines.append(f"作者: {result.author}")
+        if result.content.author:
+            summary_lines.append(f"作者: {result.content.author}")
         if reason:
             summary_lines.append(f"说明: {reason}")
         summary_text = "\n".join(summary_lines)
-        video_text = f"视频直链:\n{result.video_url}"
+        video_text = f"视频直链:\n{result.media.video_url}"
         platform_name = EventIdentity.platform_name(event)
         if platform_name != self.ONEBOT_PLATFORM and self.supports_forward(event):
             nodes = [
@@ -50,7 +50,9 @@ class ForwardLinkDeliveryService:
                 MessageChain(
                     [
                         Plain(
-                            "\n".join([*summary_lines, f"视频链接: {result.video_url}"])
+                            "\n".join(
+                                [*summary_lines, f"视频链接: {result.media.video_url}"]
+                            )
                         )
                     ]
                 )

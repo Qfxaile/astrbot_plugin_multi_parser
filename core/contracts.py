@@ -127,6 +127,14 @@ class MediaBundle:
     def video_download_host_suffixes(self, value: tuple[str, ...]) -> None:
         self._result.video_download_host_suffixes = value
 
+    @property
+    def subtitle_text(self) -> str:
+        return self._result.subtitle_text
+
+    @property
+    def subtitle_language(self) -> str:
+        return self._result.subtitle_language
+
 
 class ParseDiagnostics:
     """解析诊断领域视图，隔离错误和部分媒体失败信息。"""
