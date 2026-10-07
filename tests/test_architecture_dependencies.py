@@ -69,3 +69,18 @@ def test_registered_platforms_have_single_parser_entrypoint():
         if not (root / "platforms" / item.key / "parser.py").is_file()
     ]
     assert missing == []
+
+
+def test_service_platform_dependencies_are_limited_to_assembly_modules():
+    root = Path(__file__).parents[1]
+    allowed = {"services/configuration.py", "services/authentication.py"}
+    violations = []
+    for path in (root / "services").rglob("*.py"):
+        if str(path.relative_to(root)) in allowed:
+            continue
+        for module in _imports(path):
+            if module.startswith("platforms") or module.startswith(
+                "astrbot_multi_parser.platforms"
+            ):
+                violations.append(str(path.relative_to(root)))
+    assert violations == []
