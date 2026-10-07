@@ -1355,7 +1355,7 @@ async def test_video_fallback_uses_plain_message_on_generic_platform(platform_na
     result = ParseResult(
         platform="测试平台",
         title="测试标题",
-        video_url="https://example.com/video.mp4",
+        media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
 
     await DeliveryService({}).send_forward_links(event, result, "视频超过大小限制")
@@ -1378,7 +1378,7 @@ async def test_video_fallback_uses_nodes_on_satori():
     result = ParseResult(
         platform="测试平台",
         title="测试标题",
-        video_url="https://example.com/video.mp4",
+        media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
 
     await DeliveryService({}).send_forward_links(event, result, "视频超过大小限制")
@@ -1441,7 +1441,7 @@ async def test_direct_link_fallback_is_not_filtered():
     result = ParseResult(
         platform="测试平台",
         title="测试标题",
-        video_url="https://example.com/video.mp4",
+        media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
 
     await DeliveryService({"filter_output_links": True}).send_video_over_limit(
@@ -1457,7 +1457,7 @@ async def test_notice_fallback_does_not_include_video_url():
     result = ParseResult(
         platform="测试平台",
         title="测试标题",
-        video_url="https://example.com/video.mp4",
+        media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
 
     await DeliveryService({"video_over_limit_action": "notice"}).send_video_over_limit(
@@ -1473,7 +1473,7 @@ async def test_group_file_falls_back_to_direct_link_outside_onebot_group():
     result = ParseResult(
         platform="测试平台",
         title="测试标题",
-        video_url="https://example.com/video.mp4",
+        media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
 
     await DeliveryService(
@@ -1500,7 +1500,7 @@ async def test_group_file_upload_failure_falls_back_to_direct_link():
     result = ParseResult(
         platform="测试平台",
         title="测试标题",
-        video_url="https://example.com/video.mp4",
+        media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
     delivery = DeliveryService({"video_over_limit_action": "group_file"})
 
@@ -1526,7 +1526,7 @@ async def test_group_file_upload_uses_remote_url_without_local_download():
     result = ParseResult(
         platform="测试平台",
         title="测试/标题",
-        video_url="https://example.com/video.mp4",
+        media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
     delivery = DeliveryService({"video_over_limit_action": "group_file"})
 
@@ -1554,7 +1554,7 @@ async def test_main_uses_notice_action_for_over_limit_video(monkeypatch):
     result = ParseResult(
         platform="test",
         title="摘要",
-        video_url="https://example.com/video.mp4",
+        media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
     plugin = make_plugin(result, video_over_limit_action="notice")
     monkeypatch.setattr(
@@ -1602,7 +1602,7 @@ async def test_main_uses_group_file_action_when_video_send_fails(
     result = ParseResult(
         platform="test",
         title="摘要",
-        video_url="https://example.com/video.mp4",
+        media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
     plugin = make_plugin(
         result,
@@ -1661,7 +1661,7 @@ async def test_notice_delivery_failure_still_hides_video_url():
     )
     result = ParseResult(
         platform="test",
-        video_url="https://example.com/video.mp4",
+        media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
 
     messages = [
@@ -1819,7 +1819,7 @@ async def test_threshold_forward_keeps_regular_video_as_separate_message(monkeyp
         platform="test",
         title="摘要",
         image_urls=["base64://1", "base64://2", "base64://3"],
-        video_url="https://example.com/video.mp4",
+        media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
     plugin = make_plugin(result)
     monkeypatch.setattr(
@@ -1847,7 +1847,7 @@ async def test_threshold_forward_keeps_xiaoheihe_game_video_inside(monkeypatch):
         title="游戏详情",
         description="游戏简介",
         image_urls=["base64://1", "base64://2", "base64://3"],
-        video_url="https://example.com/game.mp4",
+        media=MediaBundle(video_url="https://example.com/game.mp4"),
         delivery=DeliveryHints(keep_video_in_forward=True),
     )
     plugin = make_plugin(result)
@@ -1873,7 +1873,7 @@ async def test_always_forward_keeps_regular_video_inside(monkeypatch):
     result = ParseResult(
         platform="test",
         title="摘要",
-        video_url="https://example.com/video.mp4",
+        media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
     plugin = make_plugin(result, forward_mode="always")
     monkeypatch.setattr(
@@ -1925,7 +1925,7 @@ async def test_non_forward_content_keeps_video_as_separate_message(monkeypatch):
         platform="test",
         title="summary",
         image_urls=["base64://1"],
-        video_url="https://example.com/video.mp4",
+        media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
     plugin = make_plugin(result, forward_mode="never")
     monkeypatch.setattr(
@@ -1951,7 +1951,7 @@ async def test_kook_materializes_remote_video_before_send(monkeypatch, tmp_path)
     result = ParseResult(
         platform="test",
         title="summary",
-        video_url="https://example.com/video.mp4",
+        media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
     plugin = make_plugin(result, forward_mode="never")
     monkeypatch.setattr(
@@ -2015,7 +2015,7 @@ async def test_kook_materializes_video_with_platform_headers(monkeypatch):
     result = ParseResult(
         platform="bilibili",
         title="summary",
-        video_url="https://upos-sz-estgoss.bilivideo.com/video.mp4",
+        media=MediaBundle(video_url="https://upos-sz-estgoss.bilivideo.com/video.mp4"),
         video_download_headers={
             "User-Agent": "BilibiliTestAgent/1.0",
             "Referer": "https://www.bilibili.com",
@@ -2075,7 +2075,7 @@ async def test_kook_video_rejects_untrusted_download_redirect(monkeypatch):
     result = ParseResult(
         platform="bilibili",
         title="summary",
-        video_url="https://upos-sz-estgoss.bilivideo.com/video.mp4",
+        media=MediaBundle(video_url="https://upos-sz-estgoss.bilivideo.com/video.mp4"),
         video_download_headers={"Referer": "https://www.bilibili.com"},
         video_download_host_suffixes=("bilivideo.com",),
     )
@@ -2113,7 +2113,7 @@ async def test_kook_video_materialization_failure_falls_back_to_direct_link(
     result = ParseResult(
         platform="test",
         title="summary",
-        video_url="https://example.com/video.mp4",
+        media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
     plugin = make_plugin(result, forward_mode="never")
     monkeypatch.setattr(
@@ -2168,7 +2168,7 @@ async def test_video_url_is_only_in_summary_when_direct_send_is_disabled(
         platform="test",
         title="摘要",
         image_urls=["base64://1", "base64://2", "base64://3"],
-        video_url="https://example.com/video.mp4",
+        media=MediaBundle(video_url="https://example.com/video.mp4"),
     )
     plugin = make_plugin(result, send_video_by_url=False)
     monkeypatch.setattr(

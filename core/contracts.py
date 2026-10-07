@@ -104,7 +104,6 @@ class ParseResult:
             )
         if self.media == MediaBundle():
             self.media = MediaBundle(
-                video_url=self.video_url,
                 temporary_files=self.temporary_files,
                 image_source_urls=self.image_source_urls,
                 image_download_headers=self.image_download_headers,
