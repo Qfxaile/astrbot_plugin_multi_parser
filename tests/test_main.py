@@ -2015,14 +2015,16 @@ async def test_kook_materializes_video_with_platform_headers(monkeypatch):
     result = ParseResult(
         platform="bilibili",
         title="summary",
-        media=MediaBundle(video_url="https://upos-sz-estgoss.bilivideo.com/video.mp4"),
-        video_download_headers={
-            "User-Agent": "BilibiliTestAgent/1.0",
-            "Referer": "https://www.bilibili.com",
-            "Cookie": "SESSDATA=must-not-leak",
-            "Authorization": "must-not-leak",
-        },
-        video_download_host_suffixes=("bilivideo.com",),
+        media=MediaBundle(
+            video_url="https://upos-sz-estgoss.bilivideo.com/video.mp4",
+            video_download_headers={
+                "User-Agent": "BilibiliTestAgent/1.0",
+                "Referer": "https://www.bilibili.com",
+                "Cookie": "SESSDATA=must-not-leak",
+                "Authorization": "must-not-leak",
+            },
+            video_download_host_suffixes=("bilivideo.com",),
+        ),
     )
     plugin = make_plugin(result, forward_mode="never")
     monkeypatch.setattr(
@@ -2075,9 +2077,11 @@ async def test_kook_video_rejects_untrusted_download_redirect(monkeypatch):
     result = ParseResult(
         platform="bilibili",
         title="summary",
-        media=MediaBundle(video_url="https://upos-sz-estgoss.bilivideo.com/video.mp4"),
-        video_download_headers={"Referer": "https://www.bilibili.com"},
-        video_download_host_suffixes=("bilivideo.com",),
+        media=MediaBundle(
+            video_url="https://upos-sz-estgoss.bilivideo.com/video.mp4",
+            video_download_headers={"Referer": "https://www.bilibili.com"},
+            video_download_host_suffixes=("bilivideo.com",),
+        ),
     )
     plugin = make_plugin(result, forward_mode="never")
     monkeypatch.setattr(

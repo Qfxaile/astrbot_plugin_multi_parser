@@ -9,7 +9,9 @@ def test_parse_result_exposes_media_bundle():
         platform="test",
         temporary_files=[path],
         image_source_urls={str(path): "https://img.example/image.jpg"},
-        video_download_host_suffixes=("example.com",),
+        media=MediaBundle(
+            video_download_host_suffixes=("example.com",),
+        ),
     )
 
     media = result.media

@@ -107,18 +107,11 @@ class ParseResult:
                 temporary_files=self.temporary_files,
                 image_source_urls=self.image_source_urls,
                 image_download_headers=self.image_download_headers,
-                video_download_headers=self.video_download_headers,
-                video_download_host_suffixes=self.video_download_host_suffixes,
             )
         else:
             self.media.temporary_files.extend(self.temporary_files)
             self.media.image_source_urls.update(self.image_source_urls)
             self.media.image_download_headers.update(self.image_download_headers)
-            self.media.video_download_headers.update(self.video_download_headers)
-            if self.video_download_host_suffixes:
-                self.media.video_download_host_suffixes = (
-                    self.video_download_host_suffixes
-                )
 
     @property
     def image_count(self) -> int:
