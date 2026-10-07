@@ -3,6 +3,7 @@ import ipaddress
 import mimetypes
 import os
 import tempfile
+import weakref
 from collections.abc import Mapping
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
@@ -21,19 +22,30 @@ FORBIDDEN_MEDIA_HEADERS = {"authorization", "cookie", "proxy-authorization"}
 class TemporaryFileRegistry:
     """登记解析期间创建的临时文件，并集中执行清理。"""
 
-    _files: dict[int, list[Path]] = {}
+    _files: dict[int, tuple[weakref.ReferenceType[ParseResult], list[Path]]] = {}
 
     @staticmethod
     def register(result: ParseResult, path: Path) -> None:
-        TemporaryFileRegistry._files.setdefault(id(result), []).append(path)
+        key = id(result)
+        entry = TemporaryFileRegistry._files.get(key)
+        if entry is None or entry[0]() is not result:
+            entry = (weakref.ref(result), [])
+            TemporaryFileRegistry._files[key] = entry
+        entry[1].append(path)
 
     @staticmethod
     def paths(result: ParseResult) -> tuple[Path, ...]:
-        return tuple(TemporaryFileRegistry._files.get(id(result), ()))
+        entry = TemporaryFileRegistry._files.get(id(result))
+        if entry is None or entry[0]() is not result:
+            return ()
+        return tuple(entry[1])
 
     @staticmethod
     def cleanup(result: ParseResult) -> None:
-        for path in TemporaryFileRegistry._files.pop(id(result), []):
+        entry = TemporaryFileRegistry._files.pop(id(result), None)
+        if entry is None or entry[0]() is not result:
+            return
+        for path in entry[1]:
             try:
                 path.unlink(missing_ok=True)
             except OSError as exc:

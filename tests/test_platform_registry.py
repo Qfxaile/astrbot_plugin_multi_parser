@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from astrbot_multi_parser.core.parser import BaseParser
+from astrbot_multi_parser.core.platform import PlatformFeature, PlatformSpec
 from astrbot_multi_parser.platforms.registry import (
     PLATFORM_REGISTRY,
     login_platforms,
@@ -48,6 +49,34 @@ def test_platform_registry_login_providers_declare_cookie_keys():
         "xiaoheihe_cookies",
         "zhihu_cookies",
     ]
+
+
+def test_platform_registry_declares_parse_and_login_capabilities():
+    for registration in PLATFORM_REGISTRY:
+        assert registration.supports(PlatformFeature.PARSE)
+        assert registration.supports(PlatformFeature.LOGIN) is (
+            registration.login_provider_type is not None
+        )
+
+
+def test_platform_registry_rejects_inconsistent_login_capability(monkeypatch):
+    from astrbot_multi_parser.platforms import registry
+
+    parser_type = PLATFORM_REGISTRY[0].parser_type
+    monkeypatch.setattr(
+        registry,
+        "PLATFORM_REGISTRY",
+        (
+            PlatformSpec(
+                parser_type,
+                None,
+                features=frozenset({PlatformFeature.PARSE, PlatformFeature.LOGIN}),
+            ),
+        ),
+    )
+
+    with pytest.raises(ValueError, match="login 能力声明"):
+        registry.validate_platform_registry()
 
 
 def test_login_provider_proxy_names_match_registered_parsers():

@@ -55,6 +55,10 @@ class PlatformSpec:
     def supports_login(self) -> bool:
         return self.login_provider_type is not None
 
+    def supports(self, feature: PlatformFeature) -> bool:
+        """返回平台注册项是否声明指定能力。"""
+        return feature in self.features
+
 
 # 旧名称只作为类型别名保留，注册表的语义由 PlatformSpec 定义。
 PlatformRegistration = PlatformSpec

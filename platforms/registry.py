@@ -20,21 +20,26 @@ from .zhihu import ZhihuLoginProvider, ZhihuParser
 
 PlatformRegistration = PlatformSpec
 
+_LOGIN_FEATURES = frozenset({PlatformFeature.PARSE, PlatformFeature.LOGIN})
+
 
 PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
     PlatformRegistration(
         BilibiliParser,
         BilibiliLoginProvider,
         parser_priority=1,
+        features=_LOGIN_FEATURES,
     ),
-    PlatformRegistration(DouyinParser, DouyinLoginProvider),
+    PlatformRegistration(DouyinParser, DouyinLoginProvider, features=_LOGIN_FEATURES),
     PlatformRegistration(FanqieParser, None),
-    PlatformRegistration(RedBookParser, RedBookLoginProvider),
-    PlatformRegistration(TiebaParser, TiebaLoginProvider),
-    PlatformRegistration(WeiboParser, WeiboLoginProvider),
-    PlatformRegistration(WeChatParser, WeChatLoginProvider),
-    PlatformRegistration(XiaoheiheParser, XiaoheiheLoginProvider),
-    PlatformRegistration(ZhihuParser, ZhihuLoginProvider),
+    PlatformRegistration(RedBookParser, RedBookLoginProvider, features=_LOGIN_FEATURES),
+    PlatformRegistration(TiebaParser, TiebaLoginProvider, features=_LOGIN_FEATURES),
+    PlatformRegistration(WeiboParser, WeiboLoginProvider, features=_LOGIN_FEATURES),
+    PlatformRegistration(WeChatParser, WeChatLoginProvider, features=_LOGIN_FEATURES),
+    PlatformRegistration(
+        XiaoheiheParser, XiaoheiheLoginProvider, features=_LOGIN_FEATURES
+    ),
+    PlatformRegistration(ZhihuParser, ZhihuLoginProvider, features=_LOGIN_FEATURES),
     PlatformRegistration(GitHubParser, None),
     PlatformRegistration(QQChannelParser, None),
     PlatformRegistration(QzoneParser, None),
@@ -70,6 +75,8 @@ def validate_platform_registry() -> None:
             raise ValueError(f"{item.key} 的 match 和 parse 必须是异步方法")
         if PlatformFeature.PARSE not in item.features:
             raise ValueError(f"{item.key} 必须声明 parse 能力")
+        if item.supports_login != item.supports(PlatformFeature.LOGIN):
+            raise ValueError(f"{item.key} 的 login 能力声明与 Provider 不一致")
 
     display_names = [item.display_name for item in login_platforms()]
     if len(display_names) != len(set(display_names)):
