@@ -13,8 +13,7 @@ def test_parse_result_domain_views_share_legacy_storage():
     )
 
     assert result.content.title == "标题"
-    assert result.content.image_urls == result.image_urls
-    assert result.content.image_urls == result.image_urls
+    assert result.content.image_urls == ["https://example.test/image.jpg"]
     assert result.media.temporary_files == result.media.temporary_files
     assert result.diagnostics.error == "请求失败"
 

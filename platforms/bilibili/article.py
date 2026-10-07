@@ -100,10 +100,10 @@ class BilibiliArticleContent:
         ordered_contents = [
             OrderedContent(kind="image", value=cover_url) for cover_url in cover_urls
         ]
-        ordered_contents.extend(parsed.ordered_contents)
+        ordered_contents.extend(parsed.content.ordered_contents)
         result = ParseResult(platform=self.name)
-        result.content.title = str(data.get("title") or parsed.title)
-        result.content.author = str(author.get("name") or parsed.author)
+        result.content.title = str(data.get("title") or parsed.content.title)
+        result.content.author = str(author.get("name") or parsed.content.author)
         result.content.ordered_contents.extend(ordered_contents)
         return result
 

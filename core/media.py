@@ -61,7 +61,7 @@ def mark_invalid_legacy_images(
     image_number = 0
     legacy_index = 0
     for field_name in ("cover_urls", "image_urls"):
-        image_values = getattr(result, field_name)
+        image_values = getattr(result.content, field_name)
         for field_index, image_url in enumerate(image_values):
             image_number += 1
             if image_url == invalid_marker:
@@ -134,7 +134,7 @@ class ImageMaterializer:
             legacy_index = 0
             candidates = []
             for field_name in ("cover_urls", "image_urls"):
-                image_values = getattr(result, field_name)
+                image_values = getattr(result.content, field_name)
                 for field_index, image_url in enumerate(image_values):
                     image_number += 1
                     if not image_url or image_url.startswith("base64://"):

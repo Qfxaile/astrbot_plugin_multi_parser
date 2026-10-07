@@ -67,19 +67,12 @@ class DeliveryHints:
     keep_video_in_forward: bool = False
 
 
-@dataclass
+@dataclass(init=False)
 class ParseResult:
     platform: str
     content: ContentDocument = field(default_factory=ContentDocument)
     media: MediaBundle = field(default_factory=MediaBundle)
-    title: str = ""
-    author: str = ""
-    description: str = ""
-    cover_urls: list[str] = field(default_factory=list)
-    image_urls: list[str] = field(default_factory=list)
     video_url: str = ""
-    extra_lines: list[str] = field(default_factory=list)
-    ordered_contents: list[OrderedContent] = field(default_factory=list)
     diagnostics: ParseDiagnostics = field(default_factory=ParseDiagnostics)
     temporary_files: list[Path] = field(default_factory=list, repr=False)
     image_source_urls: dict[str, str] = field(default_factory=dict, repr=False)
@@ -90,28 +83,74 @@ class ParseResult:
     )
     delivery: DeliveryHints = field(default_factory=DeliveryHints)
 
-    def __post_init__(self) -> None:
-        """将旧构造参数一次性装载到内容对象，后续读取统一走领域对象。"""
-        if self.content == ContentDocument():
-            self.content = ContentDocument(
-                title=self.title,
-                author=self.author,
-                description=self.description,
-                cover_urls=self.cover_urls,
-                image_urls=self.image_urls,
-                extra_lines=self.extra_lines,
-                ordered_contents=self.ordered_contents,
+    def __init__(
+        self,
+        platform: str,
+        *,
+        content: ContentDocument | None = None,
+        media: MediaBundle | None = None,
+        video_url: str = "",
+        diagnostics: ParseDiagnostics | None = None,
+        delivery: DeliveryHints | None = None,
+        **legacy: object,
+    ) -> None:
+        """构造领域结果；旧测试夹具参数仅在迁移期间转换到领域对象。"""
+        content_values = {
+            name: legacy.pop(name, None)
+            for name in (
+                "title",
+                "author",
+                "description",
+                "cover_urls",
+                "image_urls",
+                "extra_lines",
+                "ordered_contents",
             )
-        if self.media == MediaBundle():
-            self.media = MediaBundle(
-                temporary_files=self.temporary_files,
-                image_source_urls=self.image_source_urls,
-                image_download_headers=self.image_download_headers,
+        }
+        if content is None:
+            content = ContentDocument(
+                title=content_values["title"] or "",
+                author=content_values["author"] or "",
+                description=content_values["description"] or "",
+                cover_urls=content_values["cover_urls"] or [],
+                image_urls=content_values["image_urls"] or [],
+                extra_lines=content_values["extra_lines"] or [],
+                ordered_contents=content_values["ordered_contents"] or [],
+            )
+        elif any(value is not None for value in content_values.values()):
+            raise TypeError("content cannot be combined with legacy content fields")
+        media_values = {
+            name: legacy.pop(name, None)
+            for name in (
+                "temporary_files",
+                "image_source_urls",
+                "image_download_headers",
+            )
+        }
+        if media is None:
+            media = MediaBundle(
+                temporary_files=media_values["temporary_files"] or [],
+                image_source_urls=media_values["image_source_urls"] or {},
+                image_download_headers=media_values["image_download_headers"] or {},
             )
         else:
-            self.media.temporary_files.extend(self.temporary_files)
-            self.media.image_source_urls.update(self.image_source_urls)
-            self.media.image_download_headers.update(self.image_download_headers)
+            if media_values["temporary_files"]:
+                media.temporary_files.extend(media_values["temporary_files"])
+            if media_values["image_source_urls"]:
+                media.image_source_urls.update(media_values["image_source_urls"])
+            if media_values["image_download_headers"]:
+                media.image_download_headers.update(
+                    media_values["image_download_headers"]
+                )
+        if legacy:
+            unexpected = ", ".join(sorted(legacy))
+            raise TypeError(f"unexpected ParseResult arguments: {unexpected}")
+        self.platform = platform
+        self.content = content
+        self.media = media
+        self.video_url = video_url
+        self.diagnostics = diagnostics or ParseDiagnostics()
+        self.delivery = delivery or DeliveryHints()
 
     @property
     def image_count(self) -> int:

@@ -25,8 +25,8 @@ def test_invalid_legacy_image_slots_are_marked_in_original_order():
 
     mark_invalid_legacy_images(result, "unsafe-image-url")
 
-    assert result.cover_urls == [""]
-    assert result.image_urls == ["https://safe.test/1.jpg", ""]
+    assert result.content.cover_urls == [""]
+    assert result.content.image_urls == ["https://safe.test/1.jpg", ""]
     assert result.diagnostics.image_errors == {
         0: "第 1 张图片获取失败：InvalidURL",
         2: "第 3 张图片获取失败：InvalidURL",
@@ -60,7 +60,7 @@ async def test_materialize_images_respects_download_concurrency(monkeypatch, tmp
         )
 
     assert peak_downloads == 2
-    assert [Path(value).name for value in result.image_urls] == [
+    assert [Path(value).name for value in result.content.image_urls] == [
         "0.jpg",
         "1.jpg",
         "2.jpg",
@@ -92,11 +92,11 @@ async def test_materialize_images_streams_original_bytes_to_temporary_file(tmp_p
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         await parser.materialize_images(result, client, "https://share.example/post/1")
 
-    image_path = Path(result.image_urls[0])
+    image_path = Path(result.content.image_urls[0])
     assert image_path.parent == tmp_path
     assert image_path.suffix == ".webp"
     assert image_path.read_bytes() == b"original-image-bytes"
-    assert not result.image_urls[0].startswith("base64://")
+    assert not result.content.image_urls[0].startswith("base64://")
     assert result.media.temporary_files == [image_path]
     assert result.media.image_source_urls == {
         str(image_path.resolve()): "https://img.example/original.webp"
@@ -137,8 +137,8 @@ async def test_materialize_images_preserves_bytes_headers_and_temporary_slots(
         )
 
     assert returned is result
-    assert result.cover_urls == ["base64://YWxyZWFkeQ=="]
-    assert_temporary_image(result, result.image_urls[0], b"\x00raw-image\xff")
+    assert result.content.cover_urls == ["base64://YWxyZWFkeQ=="]
+    assert_temporary_image(result, result.content.image_urls[0], b"\x00raw-image\xff")
     assert len(requests) == 1
     assert requests[0].headers["Referer"] == "https://share.example/post/1"
     assert requests[0].headers["User-Agent"] == "session-agent"
@@ -167,9 +167,9 @@ async def test_materialize_images_keeps_failed_legacy_slot_and_index(
             result, client, "https://share.example/post/1"
         )
 
-    assert_temporary_image(result, result.cover_urls[0], b"/cover.jpg")
-    assert result.image_urls[0] == ""
-    assert_temporary_image(result, result.image_urls[1], b"/final.jpg")
+    assert_temporary_image(result, result.content.cover_urls[0], b"/cover.jpg")
+    assert result.content.image_urls[0] == ""
+    assert_temporary_image(result, result.content.image_urls[1], b"/final.jpg")
     assert result.diagnostics.image_errors == {1: "第 2 张图片获取失败：HTTP 403"}
 
 
@@ -202,16 +202,20 @@ async def test_materialize_images_preserves_ordered_text_and_marks_failure(
             result, client, "https://share.example/post/1"
         )
 
-    assert result.ordered_contents[:3] == [
+    assert result.content.ordered_contents[:3] == [
         models.OrderedContent(kind="text", value="第一段"),
         models.OrderedContent(
             kind="image_error", value="第 1 张图片获取失败：ReadTimeout"
         ),
         models.OrderedContent(kind="text", value="第二段"),
     ]
-    assert result.ordered_contents[3].kind == "image"
-    assert_temporary_image(result, result.ordered_contents[3].value, b"ordered-image")
-    assert result.image_urls == ["https://legacy.example/should-not-download.jpg"]
+    assert result.content.ordered_contents[3].kind == "image"
+    assert_temporary_image(
+        result, result.content.ordered_contents[3].value, b"ordered-image"
+    )
+    assert result.content.image_urls == [
+        "https://legacy.example/should-not-download.jpg"
+    ]
     assert requested_urls == [
         "https://img.example/failed.jpg",
         "https://img.example/working.jpg",
@@ -278,7 +282,7 @@ async def test_materialize_images_skips_ordered_base64_image():
         )
 
     assert requested_urls == []
-    assert result.ordered_contents == [
+    assert result.content.ordered_contents == [
         models.OrderedContent(kind="image", value=original_value)
     ]
 
@@ -294,7 +298,7 @@ async def test_materialize_images_converts_malformed_legacy_url_to_error(caplog)
             result, client, "https://share.example/post/1"
         )
 
-    assert result.image_urls == [""]
+    assert result.content.image_urls == [""]
     assert result.diagnostics.image_errors == {0: "第 1 张图片获取失败：InvalidURL"}
     assert any(
         record.message == "图片下载失败 (unknown): InvalidURL"
@@ -316,7 +320,7 @@ async def test_materialize_images_converts_malformed_ordered_url_to_error(caplog
             result, client, "https://share.example/post/1"
         )
 
-    assert result.ordered_contents == [
+    assert result.content.ordered_contents == [
         models.OrderedContent(
             kind="image_error", value="第 1 张图片获取失败：InvalidURL"
         )
@@ -358,14 +362,14 @@ async def test_materialize_images_rejects_unsafe_legacy_urls_without_requests(
         )
 
     assert requested_urls == ["https://img.example/ok.jpg"]
-    assert result.image_urls[: len(unsafe_urls)] == ["" for _ in unsafe_urls]
+    assert result.content.image_urls[: len(unsafe_urls)] == ["" for _ in unsafe_urls]
     assert all(
         result.diagnostics.image_errors[index].startswith(
             f"第 {index + 1} 张图片获取失败："
         )
         for index in range(len(unsafe_urls))
     )
-    assert_temporary_image(result, result.image_urls[-1], b"unexpected")
+    assert_temporary_image(result, result.content.image_urls[-1], b"unexpected")
 
 
 @pytest.mark.asyncio
@@ -393,10 +397,12 @@ async def test_materialize_images_rejects_unsafe_ordered_urls_and_allows_public_
         )
 
     assert requested_urls == ["https://[2001:4860:4860::8888]/public.jpg"]
-    assert result.ordered_contents[0] == models.OrderedContent(
+    assert result.content.ordered_contents[0] == models.OrderedContent(
         kind="image_error", value="第 1 张图片获取失败：InvalidURL"
     )
-    assert_temporary_image(result, result.ordered_contents[1].value, b"public-image")
+    assert_temporary_image(
+        result, result.content.ordered_contents[1].value, b"public-image"
+    )
 
 
 @pytest.mark.asyncio
@@ -416,7 +422,7 @@ async def test_materialize_images_rejects_nonstandard_port_before_request():
         await parser.materialize_images(result, client, "https://share.example/post/1")
 
     assert requested_urls == []
-    assert result.image_urls == [""]
+    assert result.content.image_urls == [""]
     assert result.diagnostics.image_errors == {0: "第 1 张图片获取失败：InvalidURL"}
 
 
@@ -439,7 +445,7 @@ async def test_materialize_images_rejects_redirect_to_private_host():
         await parser.materialize_images(result, client, "https://share.example/post/1")
 
     assert requested_urls == ["https://cdn.trusted.example/start.jpg"]
-    assert result.image_urls == [""]
+    assert result.content.image_urls == [""]
     assert result.diagnostics.image_errors == {0: "第 1 张图片获取失败：InvalidURL"}
 
 
@@ -469,7 +475,7 @@ async def test_materialize_images_follows_safe_relative_redirect(
         "https://cdn.trusted.example/start.jpg",
         "https://cdn.trusted.example/final.jpg",
     ]
-    assert_temporary_image(result, result.image_urls[0], b"redirected-image")
+    assert_temporary_image(result, result.content.image_urls[0], b"redirected-image")
 
 
 @pytest.mark.asyncio
@@ -496,7 +502,7 @@ async def test_materialize_images_stops_after_five_redirects():
     assert requested_urls == [
         f"https://cdn.trusted.example/hop-{index}.jpg" for index in range(6)
     ]
-    assert result.image_urls == [""]
+    assert result.content.image_urls == [""]
     assert result.diagnostics.image_errors == {0: "第 1 张图片获取失败：InvalidURL"}
 
 
@@ -661,8 +667,8 @@ def test_parse_result_preserves_legacy_positional_arguments():
 
     assert result.media.video_url == "https://video.example/1.mp4"
     assert result.diagnostics.error == "解析失败"
-    assert result.extra_lines == ["额外信息"]
-    assert result.ordered_contents is ordered_contents
+    assert result.content.extra_lines == ["额外信息"]
+    assert result.content.ordered_contents is ordered_contents
     assert result.diagnostics.image_errors == {}
 
 
