@@ -145,7 +145,7 @@ class DeliveryService:
     ) -> bool:
         return (
             cls._platform_name(event) == cls.ONEBOT_PLATFORM
-            and result.split_media_for_onebot
+            and result.delivery.split_media_for_onebot
         )
 
     def _forward_mode(self) -> str:

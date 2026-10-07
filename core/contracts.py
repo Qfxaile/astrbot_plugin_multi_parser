@@ -56,6 +56,10 @@ class ContentDocument:
     def extra_lines(self) -> list[str]:
         return self._result.extra_lines
 
+    @extra_lines.setter
+    def extra_lines(self, value: list[str]) -> None:
+        self._result.extra_lines = value
+
     @property
     def ordered_contents(self) -> list[OrderedContent]:
         return self._result.ordered_contents
@@ -155,6 +159,37 @@ class ParseDiagnostics:
         return self._result.image_errors
 
 
+class DeliveryHints:
+    """解析结果携带的协议投递提示。"""
+
+    def __init__(self, result: "ParseResult") -> None:
+        self._result = result
+
+    @property
+    def disable_onebot_forward(self) -> bool:
+        return self._result.disable_onebot_forward
+
+    @disable_onebot_forward.setter
+    def disable_onebot_forward(self, value: bool) -> None:
+        self._result.disable_onebot_forward = value
+
+    @property
+    def split_media_for_onebot(self) -> bool:
+        return self._result.split_media_for_onebot
+
+    @split_media_for_onebot.setter
+    def split_media_for_onebot(self, value: bool) -> None:
+        self._result.split_media_for_onebot = value
+
+    @property
+    def keep_video_in_forward(self) -> bool:
+        return self._result.keep_video_in_forward
+
+    @keep_video_in_forward.setter
+    def keep_video_in_forward(self, value: bool) -> None:
+        self._result.keep_video_in_forward = value
+
+
 @dataclass(frozen=True)
 class MediaMetadata:
     """解析结果携带的媒体请求与临时文件元数据视图。"""
@@ -207,6 +242,11 @@ class ParseResult:
     def diagnostics(self) -> ParseDiagnostics:
         """返回解析诊断视图。"""
         return ParseDiagnostics(self)
+
+    @property
+    def delivery(self) -> DeliveryHints:
+        """返回协议投递提示视图。"""
+        return DeliveryHints(self)
 
     @property
     def image_count(self) -> int:

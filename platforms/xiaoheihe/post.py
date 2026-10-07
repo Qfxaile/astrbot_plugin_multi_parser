@@ -181,7 +181,7 @@ class XiaoheihePostContent:
     ) -> None:
         """将正文缩略图换成原图，接口失败时保留可用的缩略图。"""
         cache: dict[str, str] = {}
-        for item in result.ordered_contents:
+        for item in result.content.ordered_contents:
             if item.kind != "image" or not item.value:
                 continue
             thumbnail_url = item.value

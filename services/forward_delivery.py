@@ -37,7 +37,7 @@ class ForwardDeliveryService:
     ) -> tuple[list, bool]:
         if not self._supports(event) or (
             EventIdentity.platform_name(event) == self.ONEBOT_PLATFORM
-            and result.disable_onebot_forward
+            and result.delivery.disable_onebot_forward
         ):
             return [event.chain_result(self._merged(event, info_chain))], False
         text_length = sum(
@@ -51,7 +51,10 @@ class ForwardDeliveryService:
         embedded = (
             include_video
             and bool(result.media.video_url)
-            and (self.policy.forward_mode() == "always" or result.keep_video_in_forward)
+            and (
+                self.policy.forward_mode() == "always"
+                or result.delivery.keep_video_in_forward
+            )
         )
         if embedded:
             components.extend(result.video_chain())

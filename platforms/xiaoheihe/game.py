@@ -49,7 +49,7 @@ def build_game_result(
     result.content.description = build_game_desc(html_text, game, intro)
     result.content.image_urls.extend(image_urls)
     result.media.video_url = video_url
-    result.keep_video_in_forward = True
+    result.delivery.keep_video_in_forward = True
     result.content.extra_lines.extend(extra_lines)
     return result
 

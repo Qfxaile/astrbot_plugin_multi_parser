@@ -173,16 +173,16 @@ class DouyinParser(
 
             play_token = ""
             retained_lines = []
-            for line in result.extra_lines:
+            for line in result.content.extra_lines:
                 if line.startswith("play_token="):
                     play_token = line.removeprefix("play_token=")
                 else:
                     retained_lines.append(line)
-            result.extra_lines = retained_lines
+            result.content.extra_lines = retained_lines
             if play_token:
                 probed_url = await self._probe_video_url(client, play_token, share_url)
                 if probed_url:
-                    result.video_url = probed_url
+                    result.media.video_url = probed_url
 
             mark_invalid_legacy_images(result, self.INVALID_IMAGE_URL)
             return await self.materialize_images(result, client, share_url)
