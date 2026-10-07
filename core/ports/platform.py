@@ -59,6 +59,3 @@ class PlatformSpec:
         """返回平台注册项是否声明指定能力。"""
         return feature in self.features
 
-
-# 旧名称只作为类型别名保留，注册表的语义由 PlatformSpec 定义。
-PlatformRegistration = PlatformSpec

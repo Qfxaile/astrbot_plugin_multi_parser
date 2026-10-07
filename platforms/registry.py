@@ -19,32 +19,30 @@ from .weibo import WeiboLoginProvider, WeiboParser
 from .xiaoheihe import XiaoheiheLoginProvider, XiaoheiheParser
 from .zhihu import ZhihuLoginProvider, ZhihuParser
 
-PlatformRegistration = PlatformSpec
-
 _LOGIN_FEATURES = frozenset({PlatformFeature.PARSE, PlatformFeature.LOGIN})
 
 
 PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
-    PlatformRegistration(
+    PlatformSpec(
         BilibiliParser,
         BilibiliLoginProvider,
         parser_priority=1,
         features=_LOGIN_FEATURES,
     ),
-    PlatformRegistration(DouyinParser, DouyinLoginProvider, features=_LOGIN_FEATURES),
-    PlatformRegistration(FanqieParser, None),
-    PlatformRegistration(RedBookParser, RedBookLoginProvider, features=_LOGIN_FEATURES),
-    PlatformRegistration(TiebaParser, TiebaLoginProvider, features=_LOGIN_FEATURES),
-    PlatformRegistration(WeiboParser, WeiboLoginProvider, features=_LOGIN_FEATURES),
-    PlatformRegistration(WeChatParser, WeChatLoginProvider, features=_LOGIN_FEATURES),
-    PlatformRegistration(
+    PlatformSpec(DouyinParser, DouyinLoginProvider, features=_LOGIN_FEATURES),
+    PlatformSpec(FanqieParser, None),
+    PlatformSpec(RedBookParser, RedBookLoginProvider, features=_LOGIN_FEATURES),
+    PlatformSpec(TiebaParser, TiebaLoginProvider, features=_LOGIN_FEATURES),
+    PlatformSpec(WeiboParser, WeiboLoginProvider, features=_LOGIN_FEATURES),
+    PlatformSpec(WeChatParser, WeChatLoginProvider, features=_LOGIN_FEATURES),
+    PlatformSpec(
         XiaoheiheParser, XiaoheiheLoginProvider, features=_LOGIN_FEATURES
     ),
-    PlatformRegistration(ZhihuParser, ZhihuLoginProvider, features=_LOGIN_FEATURES),
-    PlatformRegistration(GitHubParser, None),
-    PlatformRegistration(QQChannelParser, None),
-    PlatformRegistration(QzoneParser, None),
-    PlatformRegistration(PixivParser, None, enabled_by_default=False),
+    PlatformSpec(ZhihuParser, ZhihuLoginProvider, features=_LOGIN_FEATURES),
+    PlatformSpec(GitHubParser, None),
+    PlatformSpec(QQChannelParser, None),
+    PlatformSpec(QzoneParser, None),
+    PlatformSpec(PixivParser, None, enabled_by_default=False),
 )
 
 
@@ -66,6 +64,8 @@ def validate_platform_registry() -> None:
 
     for item in PLATFORM_REGISTRY:
         parser_type = item.parser_type
+        if not inspect.isclass(parser_type) or not issubclass(parser_type, BaseParser):
+            raise ValueError(f"{item.key} 必须继承 BaseParser")
         if not inspect.isclass(parser_type) or not issubclass(parser_type, BaseParser):
             raise ValueError(f"{item.key} 必须继承 BaseParser")
         if not callable(getattr(parser_type, "match", None)) or not callable(

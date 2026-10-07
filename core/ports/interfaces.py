@@ -25,10 +25,23 @@ class PlatformClient(Protocol):
 
 
 @runtime_checkable
+class PlatformAdapter(Protocol):
+    """平台注册项必须提供的解析器适配器端口。"""
+
+    name: str
+
+    def __init__(self, config: Mapping[str, object]): ...
+
+    async def match(self, context: ParseContext) -> bool: ...
+
+    async def parse(self, context: ParseContext) -> ParseResult: ...
+
+
+@runtime_checkable
 class ResultRenderer(Protocol):
     """解析结果渲染器端口。"""
 
     def render(self, result: ParseResult) -> list: ...
 
 
-__all__ = ["ParserPort", "PlatformClient", "ResultRenderer"]
+__all__ = ["ParserPort", "PlatformAdapter", "PlatformClient", "ResultRenderer"]
