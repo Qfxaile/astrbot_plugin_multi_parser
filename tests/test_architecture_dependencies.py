@@ -57,3 +57,15 @@ def test_simple_platforms_use_base_parser_http_client():
             ):
                 violations.append(str(path.relative_to(root)))
     assert violations == []
+
+
+def test_registered_platforms_have_single_parser_entrypoint():
+    from astrbot_multi_parser.platforms.registry import parser_platforms
+
+    root = Path(__file__).parents[1]
+    missing = [
+        item.key
+        for item in parser_platforms()
+        if not (root / "platforms" / item.key / "parser.py").is_file()
+    ]
+    assert missing == []
