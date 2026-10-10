@@ -145,7 +145,6 @@ def test_schema_uses_native_provider_selectors_for_ai_summary_models():
     for key in (
         "ai_summary_text_provider_id",
         "ai_summary_vision_provider_id",
-        "ai_summary_subtitle_provider_id",
     ):
         assert schema[key]["type"] == "string"
         assert schema[key]["_special"] == "select_provider"

@@ -16,7 +16,6 @@ class SummaryProviderResolver:
         key = {
             "text": "ai_summary_text_provider_id",
             "vision": "ai_summary_vision_provider_id",
-            "subtitle": "ai_summary_subtitle_provider_id",
         }[modality]
         provider_id = self.settings.text(key)
         if not provider_id and modality != "text":

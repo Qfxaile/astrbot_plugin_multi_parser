@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
-from astrbot_multi_parser.core.contracts import MediaBundle, OrderedContent
+from astrbot_multi_parser.core.contracts import OrderedContent
 from astrbot_multi_parser.services.summary.service import (
     DEFAULT_PROMPT,
     AISummaryService,
@@ -65,31 +65,6 @@ async def test_text_summary_uses_current_provider_and_default_prompt():
     assert "标题" in provider.calls[0]["prompt"]
     assert DEFAULT_PROMPT.splitlines()[0] in provider.calls[0]["prompt"]
     assert "不要使用 Markdown" in provider.calls[0]["prompt"]
-
-
-@pytest.mark.asyncio
-async def test_all_mode_skips_empty_subtitles_and_uses_configured_provider():
-    current = FakeProvider("正文总结")
-    subtitle = FakeProvider("字幕总结")
-    context = FakeContext(current)
-    context.by_id["subtitle-provider"] = subtitle
-    service = AISummaryService(
-        context,
-        {
-            "enable_ai_summary": True,
-            "ai_summary_mode": "all",
-            "ai_summary_subtitle_provider_id": "subtitle-provider",
-        },
-    )
-
-    result = build_result(
-        platform="测试",
-        media=MediaBundle(subtitle_text="  字幕文本  "),
-    )
-    assert await service.summarize(FakeEvent(), result) == ["正文总结", "字幕总结"]
-    assert len(current.calls) == 1
-    assert len(subtitle.calls) == 1
-    assert "字幕文本" in subtitle.calls[0]["prompt"]
 
 
 @pytest.mark.asyncio

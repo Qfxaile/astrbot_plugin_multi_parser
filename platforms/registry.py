@@ -24,22 +24,26 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
         BilibiliParser,
         BilibiliLoginProvider,
         parser_priority=1,
-        features=frozenset({
-            PlatformFeature.PARSE,
-            PlatformFeature.LOGIN,
-            PlatformFeature.VIDEO,
-            PlatformFeature.IMAGES,
-        }),
+        features=frozenset(
+            {
+                PlatformFeature.PARSE,
+                PlatformFeature.LOGIN,
+                PlatformFeature.VIDEO,
+                PlatformFeature.IMAGES,
+            }
+        ),
     ),
     PlatformSpec(
         DouyinParser,
         DouyinLoginProvider,
-        features=frozenset({
-            PlatformFeature.PARSE,
-            PlatformFeature.LOGIN,
-            PlatformFeature.VIDEO,
-            PlatformFeature.IMAGES,
-        }),
+        features=frozenset(
+            {
+                PlatformFeature.PARSE,
+                PlatformFeature.LOGIN,
+                PlatformFeature.VIDEO,
+                PlatformFeature.IMAGES,
+            }
+        ),
     ),
     PlatformSpec(
         FanqieParser,
@@ -49,57 +53,69 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
     PlatformSpec(
         RedBookParser,
         RedBookLoginProvider,
-        features=frozenset({
-            PlatformFeature.PARSE,
-            PlatformFeature.LOGIN,
-            PlatformFeature.IMAGES,
-        }),
+        features=frozenset(
+            {
+                PlatformFeature.PARSE,
+                PlatformFeature.LOGIN,
+                PlatformFeature.IMAGES,
+            }
+        ),
     ),
     PlatformSpec(
         TiebaParser,
         TiebaLoginProvider,
-        features=frozenset({
-            PlatformFeature.PARSE,
-            PlatformFeature.LOGIN,
-            PlatformFeature.IMAGES,
-        }),
+        features=frozenset(
+            {
+                PlatformFeature.PARSE,
+                PlatformFeature.LOGIN,
+                PlatformFeature.IMAGES,
+            }
+        ),
     ),
     PlatformSpec(
         WeiboParser,
         WeiboLoginProvider,
-        features=frozenset({
-            PlatformFeature.PARSE,
-            PlatformFeature.LOGIN,
-            PlatformFeature.VIDEO,
-            PlatformFeature.IMAGES,
-        }),
+        features=frozenset(
+            {
+                PlatformFeature.PARSE,
+                PlatformFeature.LOGIN,
+                PlatformFeature.VIDEO,
+                PlatformFeature.IMAGES,
+            }
+        ),
     ),
     PlatformSpec(
         WeChatParser,
         WeChatLoginProvider,
-        features=frozenset({
-            PlatformFeature.PARSE,
-            PlatformFeature.LOGIN,
-            PlatformFeature.IMAGES,
-        }),
+        features=frozenset(
+            {
+                PlatformFeature.PARSE,
+                PlatformFeature.LOGIN,
+                PlatformFeature.IMAGES,
+            }
+        ),
     ),
     PlatformSpec(
         XiaoheiheParser,
         XiaoheiheLoginProvider,
-        features=frozenset({
-            PlatformFeature.PARSE,
-            PlatformFeature.LOGIN,
-            PlatformFeature.IMAGES,
-        }),
+        features=frozenset(
+            {
+                PlatformFeature.PARSE,
+                PlatformFeature.LOGIN,
+                PlatformFeature.IMAGES,
+            }
+        ),
     ),
     PlatformSpec(
         ZhihuParser,
         ZhihuLoginProvider,
-        features=frozenset({
-            PlatformFeature.PARSE,
-            PlatformFeature.LOGIN,
-            PlatformFeature.IMAGES,
-        }),
+        features=frozenset(
+            {
+                PlatformFeature.PARSE,
+                PlatformFeature.LOGIN,
+                PlatformFeature.IMAGES,
+            }
+        ),
     ),
     PlatformSpec(
         GitHubParser,
@@ -109,20 +125,24 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
     PlatformSpec(
         QQChannelParser,
         None,
-        features=frozenset({
-            PlatformFeature.PARSE,
-            PlatformFeature.VIDEO,
-            PlatformFeature.IMAGES,
-        }),
+        features=frozenset(
+            {
+                PlatformFeature.PARSE,
+                PlatformFeature.VIDEO,
+                PlatformFeature.IMAGES,
+            }
+        ),
     ),
     PlatformSpec(
         QzoneParser,
         None,
-        features=frozenset({
-            PlatformFeature.PARSE,
-            PlatformFeature.VIDEO,
-            PlatformFeature.IMAGES,
-        }),
+        features=frozenset(
+            {
+                PlatformFeature.PARSE,
+                PlatformFeature.VIDEO,
+                PlatformFeature.IMAGES,
+            }
+        ),
     ),
     PlatformSpec(
         PixivParser,

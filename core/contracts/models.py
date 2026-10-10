@@ -44,8 +44,6 @@ class MediaBundle:
     image_download_headers: dict[str, str] = field(default_factory=dict, repr=False)
     video_download_headers: dict[str, str] = field(default_factory=dict, repr=False)
     video_download_host_suffixes: tuple[str, ...] = field(default_factory=tuple)
-    subtitle_text: str = ""
-    subtitle_language: str = ""
 
 
 @dataclass
