@@ -93,10 +93,14 @@ class BilibiliParser(
             final_url = str(response.url)
             if final_url == short_match.group(0):
                 self.raise_for_response_status(response)
-                return ParseResult(platform=self.name, error="B站短链未发生跳转。")
+                result = ParseResult(platform=self.name)
+                result.diagnostics.error = "B站短链未发生跳转。"
+                return result
             return await self.parse(ParseContext(text=final_url))
 
         video_id = match.group(0) if match else ""
         if not video_id:
-            return ParseResult(platform=self.name, error="未找到 B站 视频 ID。")
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "未找到 B站 视频 ID。"
+            return result
         return await self._parse_video(video_id)

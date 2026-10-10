@@ -319,24 +319,22 @@ class QzonePageContent:
         page.feed(html_text)
         page.close()
         if not page.found_feed:
-            return ParseResult(
-                platform=self.name,
-                error="未找到QQ空间说说内容，页面可能需要登录或结构已变化。",
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = (
+                "未找到QQ空间说说内容，页面可能需要登录或结构已变化。"
             )
+            return result
         _expand_page_images(page.contents, _front_page_image_urls(html_text))
         author = page.author
         if not author or author.lower() == "unknown":
             author = f"QQ {res_uin}"
-        return ParseResult(
-            platform=self.name,
-            title=title,
-            author=author,
-            video_url=page.video_url,
-            ordered_contents=page.contents,
-            extra_lines=[]
-            if page.contents or page.video_url
-            else ["QQ空间说说正文为空。"],
-        )
+        result = ParseResult(platform=self.name)
+        result.content.title, result.content.author = title, author
+        result.content.ordered_contents.extend(page.contents)
+        result.media.video_url = page.video_url
+        if not (page.contents or page.video_url):
+            result.content.extra_lines.append("QQ空间说说正文为空。")
+        return result
 
     def _parse_universal_page(self, html_text: str) -> ParseResult:
         script = _NuxtDataParser()
@@ -344,10 +342,11 @@ class QzonePageContent:
         script.close()
         template = _find_universal_template(script.payload)
         if template is None:
-            return ParseResult(
-                platform=self.name,
-                error="未找到QQ空间动态内容，页面可能已失效或结构已变化。",
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = (
+                "未找到QQ空间动态内容，页面可能已失效或结构已变化。"
             )
+            return result
 
         contents: list[OrderedContent] = []
         for item in _mapping_list(template.get("content")):
@@ -375,14 +374,13 @@ class QzonePageContent:
             uin = _uin_from_avatar(str(template.get("avatar", "")))
             author = f"QQ {uin}" if uin else "QQ用户"
         title = str(template.get("album_name") or template.get("title") or "").strip()
-        return ParseResult(
-            platform=self.name,
-            title=title or "QQ空间动态",
-            author=author,
-            video_url=video_url,
-            ordered_contents=contents,
-            extra_lines=[] if contents or video_url else ["QQ空间动态正文为空。"],
-        )
+        result = ParseResult(platform=self.name)
+        result.content.title, result.content.author = title or "QQ空间动态", author
+        result.content.ordered_contents.extend(contents)
+        result.media.video_url = video_url
+        if not (contents or video_url):
+            result.content.extra_lines.append("QQ空间动态正文为空。")
+        return result
 
 
 class _NuxtDataParser(HTMLParser):

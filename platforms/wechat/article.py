@@ -204,12 +204,11 @@ def parse_article_html(html: str) -> ParseResult:
     parser.close()
     if not parser.contents:
         raise ValueError("微信公众号正文不可访问，页面可能已失效或要求安全验证。")
-    return ParseResult(
-        platform="wechat",
-        title=parser.title or "微信公众号文章",
-        author=parser.author or "未知公众号",
-        ordered_contents=parser.contents,
-    )
+    result = ParseResult(platform="wechat")
+    result.content.title = parser.title or "微信公众号文章"
+    result.content.author = parser.author or "未知公众号"
+    result.content.ordered_contents.extend(parser.contents)
+    return result
 
 
 class WeChatArticleContent:

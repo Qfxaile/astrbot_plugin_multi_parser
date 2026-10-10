@@ -100,13 +100,12 @@ class BilibiliArticleContent:
         ordered_contents = [
             OrderedContent(kind="image", value=cover_url) for cover_url in cover_urls
         ]
-        ordered_contents.extend(parsed.ordered_contents)
-        return ParseResult(
-            platform=self.name,
-            title=str(data.get("title") or parsed.title),
-            author=str(author.get("name") or parsed.author),
-            ordered_contents=ordered_contents,
-        )
+        ordered_contents.extend(parsed.content.ordered_contents)
+        result = ParseResult(platform=self.name)
+        result.content.title = str(data.get("title") or parsed.content.title)
+        result.content.author = str(author.get("name") or parsed.content.author)
+        result.content.ordered_contents.extend(ordered_contents)
+        return result
 
     async def _parse_article(self, article_id: str) -> ParseResult:
         url = f"https://www.bilibili.com/read/cv{article_id}"
@@ -128,9 +127,8 @@ class BilibiliArticleContent:
         parser.close()
         if not parser.contents:
             raise ValueError("B站专栏正文不可访问")
-        return ParseResult(
-            platform=self.name,
-            title=parser.title or "B站专栏",
-            author=parser.author or "未知作者",
-            ordered_contents=parser.contents,
-        )
+        result = ParseResult(platform=self.name)
+        result.content.title = parser.title or "B站专栏"
+        result.content.author = parser.author or "未知作者"
+        result.content.ordered_contents.extend(parser.contents)
+        return result

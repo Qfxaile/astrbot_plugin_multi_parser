@@ -70,12 +70,10 @@ class BilibiliDynamicContent:
         ordered_contents.extend(
             OrderedContent(kind="image", value=url) for url in image_urls
         )
-        return ParseResult(
-            platform=self.name,
-            title=title,
-            author=author,
-            ordered_contents=ordered_contents,
-        )
+        result = ParseResult(platform=self.name)
+        result.content.title, result.content.author = title, author
+        result.content.ordered_contents.extend(ordered_contents)
+        return result
 
     async def _parse_opus(self, opus_id: str) -> ParseResult:
         referer = f"https://www.bilibili.com/opus/{opus_id}"
@@ -173,9 +171,7 @@ class BilibiliDynamicContent:
                                 value=original_image_url(str(image_url)),
                             )
                         )
-        return ParseResult(
-            platform=self.name,
-            title=title,
-            author=author,
-            ordered_contents=ordered_contents,
-        )
+        result = ParseResult(platform=self.name)
+        result.content.title, result.content.author = title, author
+        result.content.ordered_contents.extend(ordered_contents)
+        return result

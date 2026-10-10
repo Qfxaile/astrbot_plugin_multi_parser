@@ -318,14 +318,13 @@ def mall_detail_result(detail: MallDetail) -> ParseResult:
             images.append(image_url)
         if len(images) >= MAX_IMAGES:
             break
-    return ParseResult(
-        platform="bilibili",
-        title=detail.title,
-        description=detail.description,
-        cover_urls=images[:1],
-        image_urls=images[1:],
-        extra_lines=list(detail.extra_lines),
-    )
+    result = ParseResult(platform="bilibili")
+    result.content.title = detail.title
+    result.content.description = detail.description
+    result.content.cover_urls.extend(images[:1])
+    result.content.image_urls.extend(images[1:])
+    result.content.extra_lines.extend(detail.extra_lines)
+    return result
 
 
 class BilibiliMallContent:
@@ -355,31 +354,26 @@ class BilibiliMallContent:
                 return await self.materialize_images(result, client, target.url)
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code in {404, 410}:
-                return ParseResult(
-                    platform="bilibili",
-                    error="B站会员购内容已下架或不存在。",
-                )
-            return ParseResult(
-                platform="bilibili",
-                error="B站会员购请求失败，请稍后重试。",
-            )
+                result = ParseResult(platform="bilibili")
+                result.diagnostics.error = "B站会员购内容已下架或不存在。"
+                return result
+            result = ParseResult(platform="bilibili")
+            result.diagnostics.error = "B站会员购请求失败，请稍后重试。"
+            return result
         except httpx.HTTPError:
-            return ParseResult(
-                platform="bilibili",
-                error="B站会员购请求失败，请稍后重试。",
-            )
+            result = ParseResult(platform="bilibili")
+            result.diagnostics.error = "B站会员购请求失败，请稍后重试。"
+            return result
         except MallResponseTooLargeError:
-            return ParseResult(
-                platform="bilibili",
-                error="B站会员购响应过大，无法解析。",
-            )
+            result = ParseResult(platform="bilibili")
+            result.diagnostics.error = "B站会员购响应过大，无法解析。"
+            return result
         except CookieAccessError:
             raise
         except ValueError:
-            return ParseResult(
-                platform="bilibili",
-                error="B站会员购响应异常，无法解析。",
-            )
+            result = ParseResult(platform="bilibili")
+            result.diagnostics.error = "B站会员购响应异常，无法解析。"
+            return result
 
     async def _request_mall_payload(
         self,

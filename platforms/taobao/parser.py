@@ -85,7 +85,7 @@ class TaobaoParser(BaseParser):
     async def parse(self, context: ParseContext) -> ParseResult:
         url = self._find_product_url(context.combined_text)
         if url is None:
-            return ParseResult(platform=self.name, error="未找到淘宝/天猫商品链接。")
+            return self._error_result("未找到淘宝/天猫商品链接。")
 
         try:
             async with httpx.AsyncClient(
@@ -116,15 +116,9 @@ class TaobaoParser(BaseParser):
                         )
                         canonical_url = self._canonical_product_url(page.final_url)
                 if not canonical_url:
-                    return ParseResult(
-                        platform=self.name,
-                        error="淘宝/天猫分享链接未指向受支持的商品。",
-                    )
+                    return self._error_result("淘宝/天猫分享链接未指向受支持的商品。")
                 if any(marker in page.html for marker in self.VERIFY_MARKERS):
-                    return ParseResult(
-                        platform=self.name,
-                        error=str(self.cookie_access_error()),
-                    )
+                    return self._error_result(str(self.cookie_access_error()))
 
                 metadata = extract_json_ld_product(
                     page.html,
@@ -141,13 +135,10 @@ class TaobaoParser(BaseParser):
                     if item_id:
                         metadata = await self._fetch_api_metadata(client, item_id)
                 if not metadata.title:
-                    return ParseResult(
-                        platform=self.name,
-                        error=str(self.cookie_access_error()),
-                    )
+                    return self._error_result(str(self.cookie_access_error()))
 
                 result = self._build_result(metadata, canonical_url)
-                if not result.cover_urls:
+                if not result.content.cover_urls:
                     return result
                 return await self.materialize_public_images(
                     result,
@@ -155,24 +146,15 @@ class TaobaoParser(BaseParser):
                     headers=self.HEADERS,
                 )
         except TrustedWebPageError as exc:
-            return ParseResult(platform=self.name, error=str(exc))
+            return self._error_result(str(exc))
         except (CookieAccessError, TaobaoCookieFormatError) as exc:
-            return ParseResult(platform=self.name, error=str(exc))
+            return self._error_result(str(exc))
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code in self.cookie_failure_status_codes:
-                return ParseResult(
-                    platform=self.name,
-                    error=str(self.cookie_access_error()),
-                )
-            return ParseResult(
-                platform=self.name,
-                error="淘宝/天猫商品请求失败，请稍后重试。",
-            )
+                return self._error_result(str(self.cookie_access_error()))
+            return self._error_result("淘宝/天猫商品请求失败，请稍后重试。")
         except httpx.HTTPError:
-            return ParseResult(
-                platform=self.name,
-                error="淘宝/天猫商品请求失败，请稍后重试。",
-            )
+            return self._error_result("淘宝/天猫商品请求失败，请稍后重试。")
 
     @classmethod
     def _find_product_url(cls, text: str) -> str | None:
@@ -408,9 +390,13 @@ class TaobaoParser(BaseParser):
             self.image_host_suffixes,
         ):
             image_url = ""
-        return ParseResult(
-            platform=self.name,
-            title=metadata.title,
-            cover_urls=[image_url] if image_url else [],
-            extra_lines=[],
-        )
+        result = ParseResult(platform=self.name)
+        result.content.title = metadata.title
+        if image_url:
+            result.content.cover_urls.append(image_url)
+        return result
+
+    def _error_result(self, message: str) -> ParseResult:
+        result = ParseResult(platform=self.name)
+        result.diagnostics.error = message
+        return result

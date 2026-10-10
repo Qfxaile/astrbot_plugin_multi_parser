@@ -25,12 +25,10 @@ class DouyinGalleryContent:
                 image_urls.append(image_url)
         if not image_urls:
             return None
-        return ParseResult(
-            platform=self.name,
-            title=title,
-            author=author,
-            image_urls=image_urls,
-        )
+        result = ParseResult(platform=self.name)
+        result.content.title, result.content.author = title, author
+        result.content.image_urls.extend(image_urls)
+        return result
 
     def _parse_slides_data(self, data: dict) -> ParseResult:
         details = data.get("aweme_details") if isinstance(data, dict) else []
@@ -57,12 +55,10 @@ class DouyinGalleryContent:
                 image_urls.append(image_url)
         if not image_urls:
             raise ValueError("抖音 Slides 中未找到图片")
-        return ParseResult(
-            platform=self.name,
-            title=title,
-            author=author,
-            image_urls=image_urls,
-        )
+        result = ParseResult(platform=self.name)
+        result.content.title, result.content.author = title, author
+        result.content.image_urls.extend(image_urls)
+        return result
 
     def _parse_single_animated_image(
         self,
@@ -78,11 +74,11 @@ class DouyinGalleryContent:
         if not video_url and not play_token:
             return None
         cover_url = self._select_image_url(image)
-        return ParseResult(
-            platform=self.name,
-            title=title,
-            author=author,
-            cover_urls=[cover_url] if cover_url else [],
-            video_url=video_url,
-            extra_lines=[f"play_token={play_token}"] if play_token else [],
-        )
+        result = ParseResult(platform=self.name)
+        result.content.title, result.content.author = title, author
+        if cover_url:
+            result.content.cover_urls.append(cover_url)
+        result.media.video_url = video_url
+        if play_token:
+            result.content.extra_lines.append(f"play_token={play_token}")
+        return result

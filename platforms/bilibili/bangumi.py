@@ -35,10 +35,9 @@ class BilibiliBangumiContent:
             self._raise_for_api_cookie_error(payload)
             if payload.get("code") != 0:
                 message = payload.get("message") or "未知错误"
-                return ParseResult(
-                    platform=self.name,
-                    error=f"获取影视信息失败: {message}",
-                )
+                result = ParseResult(platform=self.name)
+                result.diagnostics.error = f"获取影视信息失败: {message}"
+                return result
             result = self._parse_bangumi_payload(
                 payload,
                 episode_id=content_id if kind == "ep" else "",
@@ -94,13 +93,15 @@ class BilibiliBangumiContent:
             if current_title:
                 extra_lines.append(f"当前分集: {current_title}")
 
-        return ParseResult(
-            platform=self.name,
-            title=str(data.get("season_title") or data.get("title") or "未知标题"),
-            description=str(data.get("evaluate") or ""),
-            cover_urls=[cover_url] if cover_url else [],
-            extra_lines=extra_lines,
+        result = ParseResult(platform=self.name)
+        result.content.title = str(
+            data.get("season_title") or data.get("title") or "未知标题"
         )
+        result.content.description = str(data.get("evaluate") or "")
+        if cover_url:
+            result.content.cover_urls.append(cover_url)
+        result.content.extra_lines.extend(extra_lines)
+        return result
 
     @staticmethod
     def _bangumi_names(items: object) -> list[str]:

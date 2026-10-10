@@ -10,21 +10,22 @@ class BilibiliVideoContent:
     async def _parse_video(self, video_id: str) -> ParseResult:
         info = await self._get_video_info(video_id)
         if info.get("error"):
-            return ParseResult(platform=self.name, error=info["error"])
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = info["error"]
+            return result
 
         play_url = await self._get_play_url(str(info["cid"]), video_id)
         referer = "https://www.bilibili.com"
-        result = ParseResult(
-            platform=self.name,
-            title=info.get("title", "未知标题"),
-            author=info.get("author", "未知作者"),
-            description=info.get("desc", ""),
-            cover_urls=[original_image_url(str(info.get("pic", "")))],
-            video_url=play_url,
-            extra_lines=[] if play_url else ["无法获取视频直链。"],
-            video_download_headers=self._headers(referer),
-            video_download_host_suffixes=("bilivideo.com",),
-        )
+        result = ParseResult(platform=self.name)
+        result.content.title = info.get("title", "未知标题")
+        result.content.author = info.get("author", "未知作者")
+        result.content.description = info.get("desc", "")
+        result.content.cover_urls.append(original_image_url(str(info.get("pic", ""))))
+        result.media.video_url = play_url
+        if not play_url:
+            result.content.extra_lines.append("无法获取视频直链。")
+        result.media.video_download_headers.update(self._headers(referer))
+        result.media.video_download_host_suffixes = ("bilivideo.com",)
         async with httpx.AsyncClient(
             timeout=self.request_timeout,
             headers=self._headers(referer),

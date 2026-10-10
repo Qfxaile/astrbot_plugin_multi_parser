@@ -7,6 +7,7 @@ import httpx
 from ...core.contracts import ParseContext, ParseResult
 from ...core.parser import BaseParser
 from .article import WeiboArticleContent
+from .client import resolve_share_url
 from .common import WeiboContentSupport
 from .post import WeiboPostContent
 from .video import WeiboVideoContent
@@ -83,7 +84,9 @@ class WeiboParser(
                     "desktop_id"
                 ) or match.groupdict().get("mobile_id")
                 return await self._parse_status_id(str(status_id))
-        return ParseResult(platform=self.name, error="未找到微博链接。")
+        result = ParseResult(platform=self.name)
+        result.diagnostics.error = "未找到微博链接。"
+        return result
 
     async def _parse_share(self, url: str) -> ParseResult:
         async with httpx.AsyncClient(
@@ -93,15 +96,12 @@ class WeiboParser(
             cookies=self._cookies(),
             **self.http_client_options,
         ) as client:
-            response = await client.get(url)
-            self.raise_for_response_status(response)
-        final_url = str(response.url)
-        if final_url == url:
-            raise ValueError("微博分享链接未发生跳转")
-        if self._is_auth_url(final_url):
-            raise self.cookie_access_error()
-        if not self._is_trusted_weibo_url(final_url) or not any(
-            re.search(pattern, final_url) for pattern in self.PATTERNS
-        ):
-            raise ValueError("微博分享链接跳转到不可信域名")
+            final_url = await resolve_share_url(
+                client,
+                url,
+                patterns=self.PATTERNS,
+                trusted_url=self._is_trusted_weibo_url,
+                auth_url=self._is_auth_url,
+                raise_for_response=self.raise_for_response_status,
+            )
         return await self.parse(ParseContext(text=final_url))

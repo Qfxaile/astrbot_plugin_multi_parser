@@ -1,0 +1,160 @@
+# AstrBot 多平台内容解析插件开发指南
+
+> **本文档面向：** Claude Code  
+> **镜像文档：** [AGENTS.md](AGENTS.md) (面向 Codex，内容相同)  
+> **维护规则：** 修改本文档时必须同步修改 AGENTS.md，反之亦然
+
+## 适用范围
+
+本文件适用于本仓库的代码、测试、配置和文档。先遵循用户要求和上级指令；冲突时以优先级更高的指令为准。
+
+## 项目开发 Skill
+
+- 在本仓库进行开发、修复、重构、代码审查、配置调整、测试维护、依赖变更、版本处理或项目文档维护时，Codex 必须主动调用 `$astrbot-multi-parser-development-guide`，无需等待用户显式点名。
+- 项目 Skill 位于 `.agents/skills/astrbot-multi-parser-development-guide/SKILL.md`；开始工作前完整读取，并按其流程检查当前代码事实、复用入口、验证范围和文档同步要求。
+- Skill 只补充执行流程，不得覆盖用户要求、上级指令或本文件中的项目事实；发生冲突时遵循优先级更高的规则。
+
+## 项目概览
+
+- 这是 AstrBot 插件，支持 B站、抖音、番茄小说、小红书、贴吧、微博、微信、小黑盒、知乎、GitHub、腾讯频道、QQ空间和 Pixiv。
+- `main.py` 负责插件注册、命令入口和服务装配，不承载平台解析细节。
+- `core/` 保存跨平台契约和基础能力；`services/` 保存编排与策略；`platforms/` 保存平台特有实现；`tests/` 保存 pytest 测试。
+- `metadata.yaml` 是插件版本的唯一来源。除非用户明确要求发布或升版，不修改版本号。
+- 当前代码和文档冲突时，以经过测试验证的代码行为为准，并在同次变更中修正文档。
+
+## 开发环境
+
+项目使用 `uv` 管理 Python、虚拟环境和开发依赖。仓库可以位于任意目录，不要求 AstrBot 源码、虚拟环境或本仓库具有固定的盘符、父目录或相对位置。
+
+先确定仓库路径；以下命令中的 `<repo>` 是 `git rev-parse --show-toplevel` 返回的路径：
+
+```bash
+uv sync --project <repo>
+uv run --project <repo> pytest <repo>/tests
+uv run --project <repo> ruff check <repo>
+```
+
+在仓库根目录工作时可省略 `--project <repo>` 和测试路径前缀：
+
+```bash
+uv sync
+uv run pytest
+uv run ruff check .
+```
+
+- 不使用裸 `python`、`pip` 或已激活环境来代替 `uv run` 和 `uv sync`。
+- 不硬编码 `.venv` 的绝对路径，也不假定虚拟环境已激活；环境位置由 `uv` 配置决定。
+- 依赖声明变更后，使用 `uv sync` 同步开发环境。
+- `requirements.txt` 仍是 AstrBot 安装插件运行依赖的入口；改变运行依赖时同步维护它和 `pyproject.toml` 的开发依赖。
+- 进入仓库后若发现 `mise.toml`、`.mise.toml` 或 `.tool-versions`，先遵循其中的运行时版本；当前仓库没有这些文件。
+
+## 模块边界
+
+| 需求 | 首选位置 |
+| --- | --- |
+| 插件注册、事件入口 | `main.py`；插件级服务装配由 `services/composition/container.py` 的 `ServiceContainer` 负责 |
+| 解析结果和上下文契约 | `core/contracts/`；`ContentDocument`、`MediaBundle`、`ParseDiagnostics` 分别提供内容、媒体和诊断领域视图；所有平台源码已迁移生产读取/写入到领域视图；京东、淘宝、拼多多仍保留源码且不注册；`ParseResult.visible_text_lines`、`ParseResult.ordered_image_references` 提供后处理视图 |
+| 登录契约、登录 HTTP 基类和二维码渲染 | `core/platform_login.py` |
+| 安全 HTTP、可信 URL、Cookie、平台代理、商品网页元数据、媒体和渲染 | `core/http.py`、`core/webpage.py`、`core/product_metadata.py`、`core/media/operations.py`、`core/rendering/result_renderer.py`；`ParseResultRenderer` 负责结果到消息组件的转换 |
+| 配置类型读取与平台开关 | `core/settings/values.py`；基础设施和服务不得重复实现配置类型转换 |
+| 解析器窄扩展契约、公共 HTTP 客户端和基础能力 | `core/parser.py` 的 `Parser` Protocol 与可实例化 `BaseParser`；平台适配器优先复用 `BaseParser.http_client()` |
+| 平台扩展接口与能力描述 | `core/ports/platform.py` |
+| 平台清单及解析器、登录适配器对应关系 | `platforms/registry.py` |
+| 配置读取和解析器创建 | `services/composition/configuration.py` |
+| 登录编排、二维码轮询、登录状态、会话互斥与取消、凭据持久化和文案 | `services/authentication/service.py`、`services/authentication/polling.py`、`services/authentication/status.py`、`services/authentication/sessions.py`、`services/authentication/cookie_store.py`、`services/authentication/messages.py` |
+| 消息上下文、分享卡片、自动解析编排、文本处理和投递 | `services/message_context.py`、`services/share_card.py`、`services/parsing/coordinator.py`、`services/text_processing.py`、`services/delivery/service.py` |
+| 投递策略、内容组装、链接过滤、直链投递、事件身份和 OneBot 适配 | `services/delivery/policy.py`、`services/content_assembly.py`、`services/link_filter.py`、`services/delivery/forward_links.py`、`services/event_identity.py`、`services/onebot_*.py` |
+| 合并转发编排与 OneBot 昵称缓存 | `services/delivery/forward.py`、`services/delivery/onebot_identity.py` |
+| LLM 会话历史写入与媒体序列化 | `services/conversation/history.py` |
+| AI 总结、Provider 选择和多模态输入 | `services/summary/service.py`、`services/summary/provider.py` |
+| 视频大小探测、发送和回退策略 | `services/delivery/video.py`、`services/delivery/video_delivery.py`、`services/delivery/video_fallback.py` |
+| 平台请求、签名、登录和载荷转换 | `platforms/<platform>/` |
+
+跨平台规则放入 `core/` 或 `services/`；平台协议细节留在对应平台目录。Controller/命令入口只做权限与参数检查、调用服务并返回结果。自动解析由 `services/parsing/coordinator.py` 的 `ParseCoordinator` 编排；解析器通过 `core/parser.py` 的 `Parser` Protocol 提供异步 `match` 和 `parse`，并通过 `PlatformSpec` 注册，校验要求声明 `PARSE` 能力。平台适配器不得反向依赖服务层，核心模块不得依赖平台实现；依赖方向由 `tests/test_architecture_dependencies.py` 校验。`BaseParser` 本身保留可实例化的公共 HTTP、Cookie 和媒体能力，供基础能力复用。京东、淘宝、拼多多源码和测试保留，但不注册、不出现在配置开关和自动解析主流程中。
+
+服务层和媒体渲染适配器读取解析结果媒体请求元数据时必须使用 `ParseResult.media`；临时文件登记和清理由 `core/media/operations.py` 的 `TemporaryFileRegistry` 负责。合并转发决策、节点构建和 OneBot 图片序列化由 `ForwardDeliveryService` 负责，`DeliveryService` 只做服务编排。边界由 `tests/test_media_metadata_boundaries.py` 校验。
+
+每个平台只保留一个顶层解析入口，当前平台清单以 `platforms/registry.py` 中的 `PLATFORM_REGISTRY` 为准。平台实现使用 `platforms/<platform>/` 目录，`parser.py` 负责顶层入口和路由，内容逻辑按职责拆入同目录模块；复杂平台按职责拆分为 `client.py`、`models.py` 和 `content.py`，番茄小说、抖音、微博、小红书、Pixiv、腾讯频道已按实际职责拆出客户端或内容模块；支持登录的平台另有 `login.py`。各平台从自己的 `__init__.py` 导出解析器或登录提供者。新增平台或调整导出时，同步检查：
+
+- `platforms/registry.py`
+- `platforms/__init__.py`
+- `_conf_schema.json`
+- README 和对应测试
+
+平台注册表提供 `validate_platform_registry()` 和
+`validate_platform_configuration()` 校验入口；调整平台时必须确保注册表、配置 Schema
+和对应测试同时通过。核心与服务公共类型优先从包入口惰性导出，新增公共扩展点时同步
+检查 `core/__init__.py`、`services/__init__.py` 和包边界测试。
+
+`services/composition/configuration.py` 和 `services/authentication/service.py` 从注册表装配解析器与登录适配器，只有装配语义变化时才修改。
+
+## 登录与安全边界
+
+- 管理命令必须保留 AstrBot 管理员权限过滤；私聊限制以 `main.py` 中各命令的当前实现和测试为准。
+- 登录结果、状态、异常和日志不得输出 Cookie、令牌、二维码会话密钥或带敏感查询参数的完整 URL。
+- Cookie 只保存解析所需的最小字段，并限制到对应平台；不要把凭据发送到无关域名。
+- 二维码和重定向 URL 必须校验 HTTPS 与受信任域，并限制超时、重定向和响应大小。
+- 遇到滑块、人机验证或设备验证时明确终止，不实现绕过、伪造设备或打码流程。
+- 修改登录流程时覆盖成功、过期、取消、并发、持久化失败和敏感信息不泄漏测试。
+
+## 实现约束
+
+- 优先复用现有契约、服务和平台模式，只修改完成任务必需的文件。
+- 解析器统一返回 `core/contracts/` 中的契约，保持图文顺序和可读的失败信息。
+- 自动链接解析必须透明传播原消息：`handle_parse`、平台解析器和投递服务只能附加解析结果，不得调用 `event.stop_event()`、不得通过 LLM 禁用状态或主动 LLM 请求接管后续流程、不得修改或消费原消息，也不得因表情回应、解析结果或错误提示的发送副作用阻止后续插件与 AstrBot 默认 LLM 按原规则处理。本规则仅适用于自动链接解析事件；平台登录等显式管理命令按其现有命令语义处理。
+- 若 AstrBot 以事件“是否已发送消息”的状态决定默认 LLM，自动解析完成后必须恢复进入解析处理器前的原状态：既不能把本插件的发送标记遗留给后续流程，也不能固定清空并覆盖更早处理器已有的发送状态。相关变更至少覆盖成功解析、匹配异常、解析异常、未匹配和入口已有发送状态测试。
+- 外部请求复用 `core/http.py` 的安全能力和平台代理参数；新增网络路径时检查 URL、重定向、超时、响应大小边界，并确保对应平台的代理开关能够覆盖该请求。
+- 登录适配器复用 `HTTPPlatformLoginProvider`、`read_login_response_body` 和公共二维码渲染；可信域、Cookie 值及 CookieJar 白名单序列化复用 `core/http.py`。
+- 平台解析器或登录适配器的增删与顺序只在 `platforms/registry.py` 声明，配置和认证服务从注册表装配，不维护平行清单。
+- 公开 API 和关键异步入口使用准确的中文文档字符串。注释解释边界、顺序、并发和降级原因，不逐行复述代码。
+- 配置变化同步 `_conf_schema.json`、README 和测试，并检查 `services/composition/configuration.py` 是否需要调整；注册表已经提供所需装配语义时不要制造无意义改动。
+- `_conf_schema.json` 的用户可见文案保持简洁：平台开关用一句话概括支持的内容类型；Cookies 配置只说明是否选填及用途；登录状态、填写格式、兼容限制和故障处理等详细说明放入 README，不堆叠在配置提示中。Cookies 分组仍需保留简短的敏感信息警告。
+- 不为单次需求增加兼容层、重复入口或无调用方的扩展点。
+
+## 文档同步规则
+
+| 文档 | 内容 | 同步时机 |
+|------|------|---------|
+| **AGENTS.md / CLAUDE.md** | 项目事实、模块边界、实现约束（两者必须完全相同） | 模块职责变化、边界调整、约束变更 |
+| **项目 Skill** | AI 执行步骤、验证流程、代码复用指南 | 开发流程变化、验证步骤调整 |
+| **README.md** | 功能介绍、安装配置、用户指南 | 用户可见功能、配置项变化 |
+| **CHANGELOG.md** | 版本历史、变更记录 | 用户可见变化 |
+| **_conf_schema.json** | 配置 Schema | 配置项新增/删除/修改 |
+
+**镜像文档维护：**
+- `AGENTS.md` (面向 Codex) 和 `CLAUDE.md` (面向 Claude Code) 必须保持内容完全相同
+- 修改任一文档时，必须在同次变更中同步修改另一个
+- 两者都记录稳定的项目事实、模块边界和实现约束
+
+**具体规则：**
+- 新增、删除或调整平台时，同步检查 `AGENTS.md`、`CLAUDE.md`、项目 Skill、README、`_conf_schema.json`、`metadata.yaml` 的描述字段、CHANGELOG 和平台清单测试。
+- 模块职责、公共 API、目录结构、配置项、依赖、命令权限或验证流程变化时，在同次变更中更新 `AGENTS.md` 和 `CLAUDE.md` 的对应项目事实，以及项目 Skill 的 AI 执行指南。
+- `AGENTS.md`/`CLAUDE.md` 记录稳定的项目事实、边界和索引；项目 Skill 记录 AI 的查找、实现、验证和交付流程，避免大段重复。
+- 普通功能开发可以更新 `metadata.yaml` 的描述和仓库地址，但只有明确发布或升版时才修改版本号、README 版本徽章和 Git 标签。
+
+## 验证流程
+
+1. 修改前查看 `git status`，搜索相似实现和所有调用方。
+2. 修复缺陷时先增加可复现的回归测试；新增行为覆盖正常、无效输入和外部失败路径。
+3. 先运行受影响测试，再运行全量测试、Ruff 检查，并检查本次修改的 Python 文件格式。
+4. 涉及插件加载、协议端媒体发送或表情回应时，说明还需要 AstrBot 实例集成验证；不要把单元测试当成完整集成验证。
+5. 提交前检查 `git diff --check`、差异范围和敏感信息。
+
+常用验证命令：
+
+```bash
+uv run pytest tests/test_<area>.py -q
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+uv run python -m compileall main.py core services platforms
+git diff --check
+```
+
+## 提交与文档
+
+- 提交信息使用 Conventional Commits：`<type>(<scope>): <中文主题>`，主题简洁、使用祈使表达、末尾不加句号。
+- PR 使用中文说明行为变化、验证结果和兼容性影响。
+- 用户功能、配置或安装方式变化时更新 README；用户可见变化按需更新 CHANGELOG。
+- 仅在明确的发布任务中同步 `metadata.yaml`、README 版本徽章、CHANGELOG 和 Git 标签。
+- 不提交凭据、调试日志、缓存、临时文件或无关格式化改动。

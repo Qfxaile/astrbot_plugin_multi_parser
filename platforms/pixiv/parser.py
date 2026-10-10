@@ -10,6 +10,7 @@ import httpx
 from ...core.contracts import ParseContext, ParseResult
 from ...core.http import is_trusted_https_url
 from ...core.parser import BaseParser
+from .client import request_body
 
 
 class PixivParser(BaseParser):
@@ -48,45 +49,33 @@ class PixivParser(BaseParser):
     async def parse(self, context: ParseContext) -> ParseResult:
         artwork_id = self._find_artwork_id(context.combined_text)
         if artwork_id is None:
-            return ParseResult(platform=self.name, error="未找到 Pixiv 作品链接。")
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "未找到 Pixiv 作品链接。"
+            return result
 
         artwork_url = f"https://www.pixiv.net/artworks/{artwork_id}"
         try:
-            async with httpx.AsyncClient(
-                timeout=self.request_timeout,
-                follow_redirects=False,
-                headers=self.HEADERS,
-                **self.http_client_options,
-            ) as client:
-                metadata = await self._request_body(
-                    client, f"{self.AJAX_BASE_URL}/{artwork_id}"
+            async with self.http_client(headers=self.HEADERS) as client:
+                metadata = await request_body(
+                    client,
+                    f"{self.AJAX_BASE_URL}/{artwork_id}",
+                    raise_for_response=self.raise_for_response_status,
                 )
-                pages = await self._request_body(
-                    client, f"{self.AJAX_BASE_URL}/{artwork_id}/pages"
+                pages = await request_body(
+                    client,
+                    f"{self.AJAX_BASE_URL}/{artwork_id}/pages",
+                    raise_for_response=self.raise_for_response_status,
                 )
                 result = self._parse_illust_payload(metadata, pages)
                 return await self.materialize_images(result, client, artwork_url)
         except ValueError as exc:
-            return ParseResult(platform=self.name, error=str(exc))
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = str(exc)
+            return result
         except (httpx.HTTPError, TypeError, KeyError):
-            return ParseResult(
-                platform=self.name,
-                error="Pixiv作品请求失败，请稍后重试。",
-            )
-
-    async def _request_body(self, client: httpx.AsyncClient, url: str) -> object:
-        response = await client.get(url)
-        self.raise_for_response_status(response)
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            raise ValueError("Pixiv返回了无法读取的作品数据。") from exc
-        if not isinstance(payload, Mapping) or payload.get("error"):
-            raise ValueError("Pixiv作品不可访问，可能已删除或受到访问限制。")
-        body = payload.get("body")
-        if body is None:
-            raise ValueError("Pixiv作品不可访问，可能已删除或受到访问限制。")
-        return body
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "Pixiv作品请求失败，请稍后重试。"
+            return result
 
     def _parse_illust_payload(
         self,
@@ -107,18 +96,20 @@ class PixivParser(BaseParser):
             raise ValueError("Pixiv作品中未找到可发送的公开图片。")
 
         tags = self._tags(metadata.get("tags"))
-        return ParseResult(
-            platform=self.name,
-            title=self._clean_text(metadata.get("title")) or "Pixiv作品",
-            author=self._clean_text(metadata.get("userName")) or "未知作者",
-            description=self._clean_text(metadata.get("description")),
-            image_urls=image_urls,
-            extra_lines=[f"标签：{'、'.join(tags)}"] if tags else [],
-            image_download_headers={
+        result = ParseResult(platform=self.name)
+        result.content.title = self._clean_text(metadata.get("title")) or "Pixiv作品"
+        result.content.author = self._clean_text(metadata.get("userName")) or "未知作者"
+        result.content.description = self._clean_text(metadata.get("description"))
+        result.content.image_urls.extend(image_urls)
+        if tags:
+            result.content.extra_lines.append(f"标签：{'、'.join(tags)}")
+        result.media.image_download_headers.update(
+            {
                 "Referer": "https://www.pixiv.net/",
                 "User-Agent": self.HEADERS["User-Agent"],
-            },
+            }
         )
+        return result
 
     def _page_image_urls(self, metadata: Mapping, pages: object) -> list[str]:
         candidates: list[object] = []

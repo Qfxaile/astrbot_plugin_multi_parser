@@ -53,7 +53,9 @@ class TiebaParser(TiebaThreadContent, BaseParser):
     async def parse(self, context: ParseContext) -> ParseResult:
         matched = self.THREAD_PATTERN.search(context.combined_text)
         if not matched:
-            return ParseResult(platform=self.name, error="未找到贴吧帖子链接。")
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "未找到贴吧帖子链接。"
+            return result
 
         thread_id = matched.group("thread_id")
         page_url = f"https://tieba.baidu.com/p/{thread_id}"
@@ -75,7 +77,7 @@ class TiebaParser(TiebaThreadContent, BaseParser):
                 return self._cookie_failure_result()
             response.raise_for_status()
             result = self._parse_page(response.text, thread_id)
-            if result.error:
+            if result.diagnostics.error:
                 return result
             return await self.materialize_images(result, client, page_url)
 
@@ -97,4 +99,6 @@ class TiebaParser(TiebaThreadContent, BaseParser):
 
     def _cookie_failure_result(self) -> ParseResult:
         """生成不包含 Cookie 内容的贴吧访问失败结果。"""
-        return ParseResult(platform=self.name, error=str(self.cookie_access_error()))
+        result = ParseResult(platform=self.name)
+        result.diagnostics.error = str(self.cookie_access_error())
+        return result

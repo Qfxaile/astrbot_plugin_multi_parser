@@ -77,7 +77,9 @@ class XiaoheiheParser(XiaoheihePostContent, XiaoheiheGameContent, BaseParser):
             return await self._parse_game_by_appid(
                 match.group("share_appid"), match.group("share_game_type")
             )
-        return ParseResult(platform=self.name, error="未找到小黑盒链接。")
+        result = ParseResult(platform=self.name)
+        result.diagnostics.error = "未找到小黑盒链接。"
+        return result
 
     def _timeout(self) -> float:
         return self.request_timeout

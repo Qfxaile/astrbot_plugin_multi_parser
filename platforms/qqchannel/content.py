@@ -67,18 +67,16 @@ def build_result(feed: Mapping[str, object], *, fallback_title: str) -> ParseRes
         if audio_url:
             break
 
-    return ParseResult(
-        platform="qqchannel",
-        title=title or _clean_inline_text(fallback_title) or "腾讯频道帖子",
-        author=author,
-        ordered_contents=contents,
-        video_url=video_urls[0] if video_urls else "",
-        video_download_host_suffixes=VIDEO_HOST_SUFFIXES,
-        audio_url=audio_url,
-        extra_lines=[]
-        if contents or video_urls or audio_url
-        else ["腾讯频道帖子正文为空。"],
-    )
+    result = ParseResult(platform="qqchannel")
+    result.content.title = title or _clean_inline_text(fallback_title) or "腾讯频道帖子"
+    result.content.author = author
+    result.content.ordered_contents.extend(contents)
+    if not (contents or video_urls or audio_url):
+        result.content.extra_lines.append("腾讯频道帖子正文为空。")
+    result.media.video_url = video_urls[0] if video_urls else ""
+    result.media.video_download_host_suffixes = VIDEO_HOST_SUFFIXES
+    result.media.audio_url = audio_url
+    return result
 
 
 def _rich_contents(

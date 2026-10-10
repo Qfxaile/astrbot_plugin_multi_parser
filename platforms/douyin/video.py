@@ -26,14 +26,13 @@ class DouyinVideoContent:
         extra_lines = [f"play_token={play_token}"] if play_token else []
         if not fallback_url and not play_token:
             extra_lines.append("无法获取视频直链。")
-        return ParseResult(
-            platform=self.name,
-            title=title,
-            author=author,
-            cover_urls=[cover_url] if cover_url else [],
-            video_url=fallback_url,
-            extra_lines=extra_lines,
-        )
+        result = ParseResult(platform=self.name)
+        result.content.title, result.content.author = title, author
+        if cover_url:
+            result.content.cover_urls.append(cover_url)
+        result.media.video_url = fallback_url
+        result.content.extra_lines.extend(extra_lines)
+        return result
 
     @staticmethod
     def _extract_video_source(video: object) -> tuple[str, str]:
