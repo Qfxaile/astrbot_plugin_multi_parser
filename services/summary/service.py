@@ -41,21 +41,19 @@ class AISummaryService:
 
     def mode(self) -> str:
         return self.settings.choice(
-            "ai_summary_mode", {"text_only", "text_and_images", "all"}, "text_only"
+            "ai_summary_mode", {"text_only", "text_and_images"}, "text_only"
         )
 
     async def summarize(
         self, event: AstrMessageEvent, result: ParseResult
     ) -> list[str]:
-        """按配置生成正文/图片和字幕总结，单项失败不影响其他项。"""
+        """按配置生成正文/图片总结，单项失败不影响其他项。"""
         if not self.enabled():
             return []
         mode = self.mode()
         summaries: list[str] = []
         image_urls = (
-            await self._image_inputs(result)
-            if mode in {"text_and_images", "all"}
-            else []
+            await self._image_inputs(result) if mode == "text_and_images" else []
         )
         text_summary = await self._call(
             event,
@@ -66,16 +64,6 @@ class AISummaryService:
         )
         if text_summary:
             summaries.append(text_summary)
-        if mode == "all" and result.media.subtitle_text.strip():
-            subtitle = await self._call(
-                event,
-                result,
-                modality="subtitle",
-                content=self._content(result),
-                subtitle=result.media.subtitle_text,
-            )
-            if subtitle:
-                summaries.append(subtitle)
         return summaries
 
     def _content(self, result: ParseResult) -> str:
@@ -104,9 +92,7 @@ class AISummaryService:
         self.provider_resolver.context = self.context
         return await self.provider_resolver.resolve(event, modality)
 
-    async def _call(
-        self, event, result, *, modality, content, image_urls=None, subtitle=""
-    ) -> str:
+    async def _call(self, event, result, *, modality, content, image_urls=None) -> str:
         try:
             provider = await self._provider(event, modality)
             if provider is None or not hasattr(provider, "text_chat"):
@@ -117,7 +103,6 @@ class AISummaryService:
                 "title": result.content.title,
                 "author": result.content.author,
                 "content": content,
-                "subtitle": subtitle[: self._max_chars()],
             }
             try:
                 prompt = prompt.format(**values)
@@ -126,11 +111,6 @@ class AISummaryService:
                 return ""
             if modality == "vision":
                 prompt += "\n请结合文字和图片内容总结；无法识别的图片不要猜测。"
-            if modality == "subtitle":
-                prompt += (
-                    "\n以下是视频字幕，请仅依据字幕总结视频内容；字幕为空时不要生成总结。\n字幕：\n"
-                    + values["subtitle"]
-                )
             timeout = self.settings.decimal(
                 "ai_summary_timeout_seconds", 60.0, minimum=1.0
             )
