@@ -29,7 +29,7 @@ COOKIE_KEYS = (
 
 
 def test_schema_uses_platform_switches_without_legacy_settings():
-    schema_path = Path(__file__).parents[1] / "_conf_schema.json"
+    schema_path = Path(__file__).parents[3] / "_conf_schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
 
     assert "douyin_api_url" not in schema
@@ -100,7 +100,7 @@ def test_video_send_decision_defaults_limit_to_50_mb():
 
 
 def test_schema_exposes_image_download_concurrency():
-    schema_path = Path(__file__).parents[1] / "_conf_schema.json"
+    schema_path = Path(__file__).parents[3] / "_conf_schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
 
     concurrency = schema["image_download_concurrency"]
@@ -109,7 +109,7 @@ def test_schema_exposes_image_download_concurrency():
 
 
 def test_schema_exposes_forward_delivery_modes_and_thresholds():
-    schema_path = Path(__file__).parents[1] / "_conf_schema.json"
+    schema_path = Path(__file__).parents[3] / "_conf_schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
 
     mode = schema["forward_mode"]
@@ -126,7 +126,7 @@ def test_schema_exposes_forward_delivery_modes_and_thresholds():
 
 
 def test_schema_exposes_optional_conversation_history_modes():
-    schema_path = Path(__file__).parents[1] / "_conf_schema.json"
+    schema_path = Path(__file__).parents[3] / "_conf_schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
 
     assert schema["enable_conversation_history"]["type"] == "bool"
@@ -139,7 +139,7 @@ def test_schema_exposes_optional_conversation_history_modes():
 
 
 def test_schema_uses_native_provider_selectors_for_ai_summary_models():
-    schema_path = Path(__file__).parents[1] / "_conf_schema.json"
+    schema_path = Path(__file__).parents[3] / "_conf_schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
 
     for key in (

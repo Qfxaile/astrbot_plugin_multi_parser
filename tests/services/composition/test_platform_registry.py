@@ -101,7 +101,7 @@ def test_platform_registry_is_self_consistent():
 
 def test_platform_registry_matches_configuration_schema():
     schema = json.loads(
-        (Path(__file__).parents[1] / "_conf_schema.json").read_text(encoding="utf-8")
+        (Path(__file__).parents[3] / "_conf_schema.json").read_text(encoding="utf-8")
     )
     validate_platform_configuration(schema)
 

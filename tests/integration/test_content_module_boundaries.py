@@ -130,17 +130,22 @@ def test_all_production_http_clients_include_proxy_options():
             )
         )
 
-    project_root = Path(__file__).parents[1]
+    def is_test_file(path: Path) -> bool:
+        """检查是否是测试文件"""
+        return path.name.startswith("test_") or "tests" in path.parts
+
+    project_root = Path(__file__).parents[2]
     missing_proxy_options = []
     source_paths = [
-        *(project_root / "core").rglob("*.py"),
-        *(project_root / "services").rglob("*.py"),
+        *(p for p in (project_root / "core").rglob("*.py") if not is_test_file(p)),
+        *(p for p in (project_root / "services").rglob("*.py") if not is_test_file(p)),
         *(
             source_path
             for registration in PLATFORM_REGISTRY
             for source_path in (
                 project_root / "platforms" / registration.parser_type.name
             ).rglob("*.py")
+            if not is_test_file(source_path)
         ),
     ]
     for source_path in source_paths:
