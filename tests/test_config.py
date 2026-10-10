@@ -91,7 +91,7 @@ def test_video_send_decision_defaults_limit_to_50_mb():
     plugin = MultiParserPlugin.__new__(MultiParserPlugin)
     plugin.config = {}
 
-    should_send, reason = plugin._video_send_decision(
+    should_send, reason = plugin.video_send_decision(
         VideoSizeInfo(size_bytes=51 * 1024 * 1024)
     )
 

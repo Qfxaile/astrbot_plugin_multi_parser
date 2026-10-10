@@ -182,9 +182,12 @@ def make_plugin(result: ParseResult, *, conversation_manager=None, **config):
         **config,
     }
     plugin.parsers = {"fake": FakeParser(result)}
-    plugin.context = SimpleNamespace(
-        conversation_manager=conversation_manager or FakeConversationManager()
-    )
+    conv_mgr = conversation_manager or FakeConversationManager()
+    plugin.context = SimpleNamespace(conversation_manager=conv_mgr)
+    # 初始化完整的 ServiceContainer
+    from astrbot_multi_parser.services.composition.container import ServiceContainer
+
+    plugin._services = ServiceContainer(plugin.context, plugin.config)
     return plugin
 
 
@@ -229,7 +232,7 @@ def test_plugin_respects_platform_switches():
 
     plugin = MultiParserPlugin(None, config)
 
-    assert plugin._enabled_parsers() == [
+    assert plugin.enabled_parsers() == [
         plugin.parsers["douyin"],
         plugin.parsers["xiaoheihe"],
     ]
@@ -574,7 +577,7 @@ async def test_conversation_write_failure_does_not_break_parse_delivery(monkeypa
 async def test_platform_login_rejects_group_chat_before_starting_login(platform_name):
     plugin = make_plugin(build_result(platform="fake"))
     authentication = SimpleNamespace(login=None)
-    plugin._authentication = authentication
+    plugin._services.authentication = authentication
     event = FakeEvent()
     event.private = False
 
@@ -596,7 +599,7 @@ async def test_platform_login_status_allows_admin_group_query():
 
     plugin = make_plugin(build_result(platform="fake"))
     authentication = FakeAuthentication()
-    plugin._authentication = authentication
+    plugin._services.authentication = authentication
     event = FakeEvent()
     event.private = False
 
@@ -621,7 +624,7 @@ async def test_platform_login_delegates_chinese_platform_name_in_private_chat(
 
     plugin = make_plugin(build_result(platform="fake"))
     authentication = FakeAuthentication()
-    plugin._authentication = authentication
+    plugin._services.authentication = authentication
     event = FakeEvent()
 
     messages = [item async for item in plugin.platform_login(event, platform_name)]
@@ -642,7 +645,7 @@ async def test_platform_login_delegates_tieba_name_in_private_chat():
 
     plugin = make_plugin(build_result(platform="fake"))
     authentication = FakeAuthentication()
-    plugin._authentication = authentication
+    plugin._services.authentication = authentication
     event = FakeEvent()
 
     messages = [item async for item in plugin.platform_login(event, "贴吧")]
@@ -663,7 +666,7 @@ async def test_platform_login_delegates_weibo_chinese_platform_name():
 
     plugin = make_plugin(build_result(platform="fake"))
     authentication = FakeAuthentication()
-    plugin._authentication = authentication
+    plugin._services.authentication = authentication
     event = FakeEvent()
 
     messages = [item async for item in plugin.platform_login(event, "微博")]
@@ -684,7 +687,7 @@ async def test_platform_login_delegates_xiaoheihe_chinese_platform_name():
 
     plugin = make_plugin(build_result(platform="fake"))
     authentication = FakeAuthentication()
-    plugin._authentication = authentication
+    plugin._services.authentication = authentication
     event = FakeEvent()
 
     messages = [item async for item in plugin.platform_login(event, "小黑盒")]
@@ -1565,7 +1568,7 @@ async def test_main_uses_notice_action_for_over_limit_video(monkeypatch):
     async def fake_probe(url, headers=None, platform_name=""):
         return VideoSizeInfo(size_bytes=51 * 1024 * 1024)
 
-    monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
+    monkeypatch.setattr(plugin, "probe_video_size", fake_probe)
 
     messages = await collect_plugin_results(
         plugin,
@@ -1618,7 +1621,7 @@ async def test_main_uses_group_file_action_when_video_send_fails(
     async def fake_probe(url, headers=None, platform_name=""):
         return VideoSizeInfo(size_bytes=100 * 1024 * 1024)
 
-    monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
+    monkeypatch.setattr(plugin, "probe_video_size", fake_probe)
     bot = FakeBot()
     event = VideoSendFailEvent(
         bot=bot,
@@ -1667,7 +1670,7 @@ async def test_notice_delivery_failure_still_hides_video_url():
 
     messages = [
         item
-        async for item in plugin._forward_with_fallback(
+        async for item in plugin.forward_with_fallback(
             SendFailEvent(platform_name="telegram"),
             result,
             "视频超过大小限制",
@@ -1689,7 +1692,7 @@ async def test_fallback_error_message_uses_media_video_url():
             raise RuntimeError("delivery failed")
 
     plugin = make_plugin(build_result(platform="test"))
-    plugin._delivery = FailingDelivery()
+    plugin._services.delivery = FailingDelivery()
     result = build_result(
         platform="test",
         media=MediaBundle(video_url="https://example.com/video.mp4"),
@@ -1697,7 +1700,7 @@ async def test_fallback_error_message_uses_media_video_url():
 
     messages = [
         item
-        async for item in plugin._forward_with_fallback(
+        async for item in plugin.forward_with_fallback(
             FakeEvent(), result, "视频超过限制"
         )
     ]
@@ -1874,7 +1877,7 @@ async def test_threshold_forward_keeps_regular_video_as_separate_message(monkeyp
     async def fake_probe(url, headers=None, platform_name=""):
         return VideoSizeInfo(size_bytes=1024)
 
-    monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
+    monkeypatch.setattr(plugin, "probe_video_size", fake_probe)
 
     messages = await collect_plugin_results(plugin, FakeEvent())
 
@@ -1903,7 +1906,7 @@ async def test_threshold_forward_keeps_xiaoheihe_game_video_inside(monkeypatch):
     async def fake_probe(url, headers=None, platform_name=""):
         return VideoSizeInfo(size_bytes=1024)
 
-    monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
+    monkeypatch.setattr(plugin, "probe_video_size", fake_probe)
 
     messages = await collect_plugin_results(plugin, FakeEvent())
 
@@ -1928,7 +1931,7 @@ async def test_always_forward_keeps_regular_video_inside(monkeypatch):
     async def fake_probe(url, headers=None, platform_name=""):
         return VideoSizeInfo(size_bytes=1024)
 
-    monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
+    monkeypatch.setattr(plugin, "probe_video_size", fake_probe)
 
     messages = await collect_plugin_results(plugin, FakeEvent())
 
@@ -1980,7 +1983,7 @@ async def test_non_forward_content_keeps_video_as_separate_message(monkeypatch):
     async def fake_probe(url, headers=None, platform_name=""):
         return VideoSizeInfo(size_bytes=1024)
 
-    monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
+    monkeypatch.setattr(plugin, "probe_video_size", fake_probe)
 
     messages = await collect_plugin_results(plugin, FakeEvent())
 
@@ -2011,7 +2014,7 @@ async def test_kook_materializes_remote_video_before_send(monkeypatch, tmp_path)
         converted_urls.append(video.file)
         return str(video_path)
 
-    monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
+    monkeypatch.setattr(plugin, "probe_video_size", fake_probe)
     monkeypatch.setattr(Video, "convert_to_file_path", fake_convert_to_file_path)
 
     messages = await collect_plugin_results(
@@ -2081,7 +2084,7 @@ async def test_kook_materializes_video_with_platform_headers(monkeypatch):
         probed_platforms.append(platform_name)
         return VideoSizeInfo(size_bytes=5)
 
-    monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
+    monkeypatch.setattr(plugin, "probe_video_size", fake_probe)
 
     messages = await collect_plugin_results(
         plugin,
@@ -2136,7 +2139,7 @@ async def test_kook_video_rejects_untrusted_download_redirect(monkeypatch):
     async def fake_probe(url, headers=None, platform_name=""):
         return VideoSizeInfo(size_bytes=5)
 
-    monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
+    monkeypatch.setattr(plugin, "probe_video_size", fake_probe)
 
     messages = await collect_plugin_results(
         plugin,
@@ -2175,7 +2178,7 @@ async def test_kook_video_materialization_failure_falls_back_to_direct_link(
     async def fail_convert_to_file_path(video):
         raise httpx.ConnectError("download failed")
 
-    monkeypatch.setattr(plugin, "_probe_video_size", fake_probe)
+    monkeypatch.setattr(plugin, "probe_video_size", fake_probe)
     monkeypatch.setattr(Video, "convert_to_file_path", fail_convert_to_file_path)
 
     messages = await collect_plugin_results(
@@ -2228,7 +2231,7 @@ async def test_video_url_is_only_in_summary_when_direct_send_is_disabled(
     async def fake_forward(event, parsed_result, reason):
         forwarded.append((parsed_result, reason))
 
-    monkeypatch.setattr(plugin, "_send_forward_links", fake_forward)
+    monkeypatch.setattr(plugin._delivery_service(), "send_forward_links", fake_forward)
 
     messages = await collect_plugin_results(plugin, FakeEvent())
 
@@ -2276,7 +2279,7 @@ async def test_probe_range_reads_headers_without_buffering_response_body(monkeyp
     plugin = MultiParserPlugin.__new__(MultiParserPlugin)
     plugin.config = {"size_check_timeout_seconds": 5}
 
-    size_info = await plugin._probe_video_size("https://example.com/video.mp4")
+    size_info = await plugin.probe_video_size("https://example.com/video.mp4")
 
     assert size_info.size_bytes == 999999999
 
@@ -2304,7 +2307,7 @@ async def test_probe_does_not_treat_http_error_length_as_video_size(monkeypatch)
     plugin = MultiParserPlugin.__new__(MultiParserPlugin)
     plugin.config = {"size_check_timeout_seconds": 5}
 
-    size_info = await plugin._probe_video_size("https://example.com/video.mp4")
+    size_info = await plugin.probe_video_size("https://example.com/video.mp4")
 
     assert requested_methods == ["HEAD", "GET"]
     assert size_info.size_bytes is None
@@ -2335,7 +2338,7 @@ async def test_probe_uses_platform_headers_without_credentials(monkeypatch):
     plugin = MultiParserPlugin.__new__(MultiParserPlugin)
     plugin.config = {"size_check_timeout_seconds": 5}
 
-    size_info = await plugin._probe_video_size(
+    size_info = await plugin.probe_video_size(
         "https://example.com/video.mp4",
         {
             "User-Agent": "PlatformAgent/1.0",
@@ -2384,6 +2387,6 @@ async def test_probe_preserves_head_and_content_range_header_parsing(
     plugin = MultiParserPlugin.__new__(MultiParserPlugin)
     plugin.config = {"size_check_timeout_seconds": 5}
 
-    size_info = await plugin._probe_video_size("https://example.com/video.mp4")
+    size_info = await plugin.probe_video_size("https://example.com/video.mp4")
 
     assert size_info.size_bytes == expected_size
