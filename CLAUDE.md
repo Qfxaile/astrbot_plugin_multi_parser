@@ -1,8 +1,8 @@
 # AstrBot 多平台内容解析插件开发指南
 
-> **本文档面向：** Codex  
-> **镜像文档：** [CLAUDE.md](CLAUDE.md) (面向 Claude Code，内容相同)  
-> **维护规则：** 修改本文档时必须同步修改 CLAUDE.md，反之亦然
+> **本文档面向：** Claude Code  
+> **镜像文档：** [AGENTS.md](AGENTS.md) (面向 Codex，内容相同)  
+> **维护规则：** 修改本文档时必须同步修改 AGENTS.md，反之亦然
 
 ## 适用范围
 
