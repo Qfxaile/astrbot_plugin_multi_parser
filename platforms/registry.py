@@ -19,28 +19,117 @@ from .weibo import WeiboLoginProvider, WeiboParser
 from .xiaoheihe import XiaoheiheLoginProvider, XiaoheiheParser
 from .zhihu import ZhihuLoginProvider, ZhihuParser
 
-_LOGIN_FEATURES = frozenset({PlatformFeature.PARSE, PlatformFeature.LOGIN})
-
-
 PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
     PlatformSpec(
         BilibiliParser,
         BilibiliLoginProvider,
         parser_priority=1,
-        features=_LOGIN_FEATURES,
+        features=frozenset({
+            PlatformFeature.PARSE,
+            PlatformFeature.LOGIN,
+            PlatformFeature.VIDEO,
+            PlatformFeature.IMAGES,
+        }),
     ),
-    PlatformSpec(DouyinParser, DouyinLoginProvider, features=_LOGIN_FEATURES),
-    PlatformSpec(FanqieParser, None),
-    PlatformSpec(RedBookParser, RedBookLoginProvider, features=_LOGIN_FEATURES),
-    PlatformSpec(TiebaParser, TiebaLoginProvider, features=_LOGIN_FEATURES),
-    PlatformSpec(WeiboParser, WeiboLoginProvider, features=_LOGIN_FEATURES),
-    PlatformSpec(WeChatParser, WeChatLoginProvider, features=_LOGIN_FEATURES),
-    PlatformSpec(XiaoheiheParser, XiaoheiheLoginProvider, features=_LOGIN_FEATURES),
-    PlatformSpec(ZhihuParser, ZhihuLoginProvider, features=_LOGIN_FEATURES),
-    PlatformSpec(GitHubParser, None),
-    PlatformSpec(QQChannelParser, None),
-    PlatformSpec(QzoneParser, None),
-    PlatformSpec(PixivParser, None, enabled_by_default=False),
+    PlatformSpec(
+        DouyinParser,
+        DouyinLoginProvider,
+        features=frozenset({
+            PlatformFeature.PARSE,
+            PlatformFeature.LOGIN,
+            PlatformFeature.VIDEO,
+            PlatformFeature.IMAGES,
+        }),
+    ),
+    PlatformSpec(
+        FanqieParser,
+        None,
+        features=frozenset({PlatformFeature.PARSE, PlatformFeature.IMAGES}),
+    ),
+    PlatformSpec(
+        RedBookParser,
+        RedBookLoginProvider,
+        features=frozenset({
+            PlatformFeature.PARSE,
+            PlatformFeature.LOGIN,
+            PlatformFeature.IMAGES,
+        }),
+    ),
+    PlatformSpec(
+        TiebaParser,
+        TiebaLoginProvider,
+        features=frozenset({
+            PlatformFeature.PARSE,
+            PlatformFeature.LOGIN,
+            PlatformFeature.IMAGES,
+        }),
+    ),
+    PlatformSpec(
+        WeiboParser,
+        WeiboLoginProvider,
+        features=frozenset({
+            PlatformFeature.PARSE,
+            PlatformFeature.LOGIN,
+            PlatformFeature.VIDEO,
+            PlatformFeature.IMAGES,
+        }),
+    ),
+    PlatformSpec(
+        WeChatParser,
+        WeChatLoginProvider,
+        features=frozenset({
+            PlatformFeature.PARSE,
+            PlatformFeature.LOGIN,
+            PlatformFeature.IMAGES,
+        }),
+    ),
+    PlatformSpec(
+        XiaoheiheParser,
+        XiaoheiheLoginProvider,
+        features=frozenset({
+            PlatformFeature.PARSE,
+            PlatformFeature.LOGIN,
+            PlatformFeature.IMAGES,
+        }),
+    ),
+    PlatformSpec(
+        ZhihuParser,
+        ZhihuLoginProvider,
+        features=frozenset({
+            PlatformFeature.PARSE,
+            PlatformFeature.LOGIN,
+            PlatformFeature.IMAGES,
+        }),
+    ),
+    PlatformSpec(
+        GitHubParser,
+        None,
+        features=frozenset({PlatformFeature.PARSE, PlatformFeature.IMAGES}),
+    ),
+    PlatformSpec(
+        QQChannelParser,
+        None,
+        features=frozenset({
+            PlatformFeature.PARSE,
+            PlatformFeature.VIDEO,
+            PlatformFeature.IMAGES,
+        }),
+    ),
+    PlatformSpec(
+        QzoneParser,
+        None,
+        features=frozenset({
+            PlatformFeature.PARSE,
+            PlatformFeature.VIDEO,
+            PlatformFeature.IMAGES,
+        }),
+    ),
+    PlatformSpec(
+        PixivParser,
+        None,
+        enabled_by_default=False,
+        features=frozenset({PlatformFeature.PARSE, PlatformFeature.IMAGES}),
+    ),
 )
 
 

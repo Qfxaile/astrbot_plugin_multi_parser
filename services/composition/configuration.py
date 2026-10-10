@@ -1,3 +1,5 @@
+"""解析器工厂，从平台注册表和配置构建启用的解析器实例。"""
+
 from collections.abc import Mapping
 
 from ...core.parser import Parser

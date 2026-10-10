@@ -1,3 +1,5 @@
+"""消息投递服务的编排与协调，整合转发策略、视频处理、内容组装等子服务。"""
+
 from collections.abc import Mapping
 
 from astrbot.api import logger

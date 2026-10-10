@@ -1,3 +1,5 @@
+"""视频大小探测服务，通过 HTTP HEAD 请求获取 Content-Length 判断视频文件大小。"""
+
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
