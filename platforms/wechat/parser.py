@@ -50,7 +50,9 @@ class WeChatParser(WeChatArticleContent, WeChatChannelsContent, BaseParser):
         for pattern in (self.CHANNELS_SHORT_PATTERN, self.CHANNELS_PREVIEW_PATTERN):
             if match := re.search(pattern, text):
                 return await self._parse_channels(self._clean_url(match.group(0)))
-        return ParseResult(platform=self.name, error="未找到受支持的微信链接。")
+        result = ParseResult(platform=self.name)
+        result.diagnostics.error = "未找到受支持的微信链接。"
+        return result
 
     @staticmethod
     def _clean_url(url: str) -> str:

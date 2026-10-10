@@ -50,14 +50,14 @@ def parse_pin_payload(payload: object) -> ParseResult:
             ("评论", ("commentCount", "comment_count")),
         ),
     )
-    return ParseResult(
-        platform="zhihu",
-        title=normalize_text(str(payload.get("title") or "")) or "知乎想法",
-        author=author_name(payload.get("author")),
-        ordered_contents=contents,
-        video_url=append_extra_videos(contents, videos),
-        extra_lines=[summary] if summary else [],
-    )
+    result = ParseResult(platform="zhihu")
+    result.content.title = normalize_text(str(payload.get("title") or "")) or "知乎想法"
+    result.content.author = author_name(payload.get("author"))
+    result.media.video_url = append_extra_videos(contents, videos)
+    result.content.ordered_contents.extend(contents)
+    if summary:
+        result.content.extra_lines.append(summary)
+    return result
 
 
 def _find_video_urls(value: object) -> list[str]:

@@ -1,14 +1,15 @@
 """识别抖音链接并分派到对应内容解析器。"""
 
 import re
-from urllib.parse import parse_qs, urljoin, urlparse
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 
 from ...core.contracts import ParseContext, ParseResult
-from ...core.http import build_cookies, cookie_config_value, is_trusted_https_url
-from ...core.media import mark_invalid_legacy_images
+from ...core.http import build_cookies, cookie_config_value
+from ...core.media import mark_invalid_image_slots
 from ...core.parser import BaseParser
+from .client import DouyinRedirectError, resolve_short_link, trusted_redirect_url
 from .common import DouyinContentSupport
 from .gallery import DouyinGalleryContent
 from .live import DouyinLiveContent
@@ -16,10 +17,6 @@ from .music import is_qishui_track_url, parse_qishui_track_html
 from .shop import DouyinShopContent
 from .video import DouyinVideoContent
 from .work import DouyinWorkContent
-
-
-class DouyinRedirectError(ValueError):
-    """表示抖音分享短链未通过受信任跳转校验。"""
 
 
 class DouyinParser(
@@ -75,7 +72,9 @@ class DouyinParser(
     async def parse(self, context: ParseContext) -> ParseResult:
         match = re.search(self.PATTERN, context.combined_text)
         if not match:
-            return ParseResult(platform=self.name, error="未找到大陆抖音链接。")
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "未找到大陆抖音链接。"
+            return result
 
         cookies = build_cookies(
             cookie_config_value(self.config, "douyin_cookies"),
@@ -93,14 +92,23 @@ class DouyinParser(
             response = None
             if hostname in self.REDIRECT_HOSTS:
                 try:
-                    response = await self._resolve_short_link(client, url)
+                    response = await resolve_short_link(
+                        client,
+                        url,
+                        max_redirects=self.MAX_REDIRECTS,
+                        trusted_url=self._is_trusted_redirect_url,
+                        raise_for_response=self.raise_for_response_status,
+                        raise_for_auth=self._raise_for_auth_page,
+                    )
                 except DouyinRedirectError as exc:
-                    return ParseResult(platform=self.name, error=str(exc))
+                    result = ParseResult(platform=self.name)
+                    result.diagnostics.error = str(exc)
+                    return result
                 url = str(response.url)
 
             if self._is_shop_url(url):
                 result = self._parse_shop_url(url)
-                if result.error or not result.cover_urls:
+                if result.diagnostics.error or not result.content.cover_urls:
                     return result
                 return await self.materialize_public_images(
                     result,
@@ -114,7 +122,7 @@ class DouyinParser(
                     self.raise_for_response_status(response)
                     self._raise_for_auth_page(response)
                 result = parse_qishui_track_html(response.text, platform=self.name)
-                mark_invalid_legacy_images(result, self.INVALID_IMAGE_URL)
+                mark_invalid_image_slots(result, self.INVALID_IMAGE_URL)
                 return await self.materialize_images(result, client, url)
 
             if reflow_match := re.search(self.LIVE_REFLOW_PATTERN, url):
@@ -123,7 +131,7 @@ class DouyinParser(
                     self.raise_for_response_status(response)
                     self._raise_for_auth_page(response)
                 result = self._parse_live_reflow_html(response.text)
-                mark_invalid_legacy_images(result, self.INVALID_IMAGE_URL)
+                mark_invalid_image_slots(result, self.INVALID_IMAGE_URL)
                 return await self.materialize_images(
                     result, client, reflow_match.group(0)
                 )
@@ -165,50 +173,24 @@ class DouyinParser(
 
             play_token = ""
             retained_lines = []
-            for line in result.extra_lines:
+            for line in result.content.extra_lines:
                 if line.startswith("play_token="):
                     play_token = line.removeprefix("play_token=")
                 else:
                     retained_lines.append(line)
-            result.extra_lines = retained_lines
+            result.content.extra_lines = retained_lines
             if play_token:
                 probed_url = await self._probe_video_url(client, play_token, share_url)
                 if probed_url:
-                    result.video_url = probed_url
+                    result.media.video_url = probed_url
 
-            mark_invalid_legacy_images(result, self.INVALID_IMAGE_URL)
+            mark_invalid_image_slots(result, self.INVALID_IMAGE_URL)
             return await self.materialize_images(result, client, share_url)
-
-    async def _resolve_short_link(
-        self,
-        client: httpx.AsyncClient,
-        url: str,
-    ) -> httpx.Response:
-        """在抖音可信域内逐跳解析分享短链。"""
-        current_url = url
-        redirect_count = 0
-        while True:
-            response = await client.get(current_url, follow_redirects=False)
-            if not response.is_redirect:
-                self.raise_for_response_status(response)
-                self._raise_for_auth_page(response)
-                return response
-
-            redirect_count += 1
-            if redirect_count > self.MAX_REDIRECTS:
-                raise DouyinRedirectError("抖音分享链接重定向次数超过安全限制。")
-
-            location = response.headers.get("Location")
-            if not location:
-                raise DouyinRedirectError("抖音分享链接缺少跳转地址。")
-            target_url = urljoin(current_url, location)
-            if not self._is_trusted_redirect_url(target_url):
-                raise DouyinRedirectError("抖音分享链接跳转到不可信域名。")
-            current_url = target_url
 
     @classmethod
     def _is_trusted_redirect_url(cls, url: str) -> bool:
-        return is_trusted_https_url(
+        return trusted_redirect_url(
             url,
-            cls.REDIRECT_HOST_SUFFIXES,
-        ) or cls._is_shop_url(url)
+            redirect_suffixes=cls.REDIRECT_HOST_SUFFIXES,
+            is_shop_url=cls._is_shop_url,
+        )

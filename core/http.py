@@ -13,6 +13,8 @@ from urllib.parse import urlsplit
 
 from httpx import Cookies, Response
 
+from .settings import PluginSettings
+
 AUTH_FAILURE_STATUS_CODES = frozenset({401, 403})
 COOKIE_GROUP_KEY = "cookies"
 
@@ -44,11 +46,11 @@ def http_client_proxy_options(
     platform_name: str,
 ) -> dict[str, object]:
     """按平台开关返回 httpx 代理参数，且不读取进程环境代理。"""
-    switches = config.get("proxy_switches")
-    if not isinstance(switches, Mapping) or switches.get(platform_name) is not True:
+    settings = PluginSettings(config)
+    if not settings.platform_proxy_enabled(platform_name, False):
         return {"trust_env": False}
 
-    proxy_url = str(config.get("proxy_url") or "").strip()
+    proxy_url = settings.text("proxy_url")
     try:
         parsed = urlsplit(proxy_url)
         port = parsed.port
@@ -212,4 +214,4 @@ def request_timeout(
     default: float = 30.0,
 ) -> float:
     """从配置读取 httpx 超时秒数。"""
-    return float(config.get(key, default))
+    return PluginSettings(config).decimal(key, default, minimum=0.1)

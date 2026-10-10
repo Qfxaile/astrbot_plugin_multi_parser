@@ -53,15 +53,12 @@ class QzoneParser(QzonePageContent, BaseParser):
     async def parse(self, context: ParseContext) -> ParseResult:
         url = self._find_share_url(context.combined_text)
         if url is None:
-            return ParseResult(platform=self.name, error="未找到QQ空间说说链接。")
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "未找到QQ空间说说链接。"
+            return result
         res_uin = self._uin_from_share_url(url)
         try:
-            async with httpx.AsyncClient(
-                timeout=self.request_timeout,
-                follow_redirects=False,
-                headers=self.HEADERS,
-                **self.http_client_options,
-            ) as client:
+            async with self.http_client(headers=self.HEADERS) as client:
                 html_text = await self._request_page(client, url)
                 if self._is_universal_url(url):
                     result = self._parse_universal_page(html_text)
@@ -71,22 +68,23 @@ class QzoneParser(QzonePageContent, BaseParser):
                         res_uin,
                         title=self._legacy_page_title(url),
                     )
-                if result.error:
+                if result.diagnostics.error:
                     return result
-                if result.video_url:
-                    result.video_download_headers = {
+                if result.media.video_url:
+                    result.media.video_download_headers = {
                         "Referer": url,
                         "User-Agent": self.HEADERS["User-Agent"],
                     }
-                    result.video_download_host_suffixes = VIDEO_HOST_SUFFIXES
+                    result.media.video_download_host_suffixes = VIDEO_HOST_SUFFIXES
                 return await self.materialize_images(result, client, url)
         except ValueError as exc:
-            return ParseResult(platform=self.name, error=str(exc))
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = str(exc)
+            return result
         except httpx.HTTPError:
-            return ParseResult(
-                platform=self.name,
-                error="QQ空间说说请求失败，请稍后重试。",
-            )
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "QQ空间说说请求失败，请稍后重试。"
+            return result
 
     async def _request_page(self, client: httpx.AsyncClient, url: str) -> str:
         current_url = url

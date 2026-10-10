@@ -2,7 +2,6 @@
 
 import json
 import re
-import secrets
 from collections.abc import Mapping
 from urllib.parse import parse_qs, urlsplit
 
@@ -11,6 +10,7 @@ import httpx
 from ...core.contracts import ParseContext, ParseResult
 from ...core.http import is_trusted_https_url
 from ...core.parser import BaseParser
+from .client import request_feed
 from .content import IMAGE_HOST_SUFFIXES, VIDEO_HOST_SUFFIXES, build_result
 
 
@@ -52,10 +52,9 @@ class QQChannelParser(BaseParser):
     async def parse(self, context: ParseContext) -> ParseResult:
         card = self._find_card(context)
         if card is None:
-            return ParseResult(
-                platform=self.name,
-                error="未找到可解析的腾讯频道分享卡片。",
-            )
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "未找到可解析的腾讯频道分享卡片。"
+            return result
 
         index, share_url = card
         title = self._clean_title(self._value_at(context.json_titles, index))
@@ -67,11 +66,10 @@ class QQChannelParser(BaseParser):
         ):
             cover_url = ""
 
-        fallback = ParseResult(
-            platform=self.name,
-            title=title or "腾讯频道帖子",
-            cover_urls=[cover_url] if cover_url else [],
-        )
+        fallback = ParseResult(platform=self.name)
+        fallback.content.title = title or "腾讯频道帖子"
+        if cover_url:
+            fallback.content.cover_urls.append(cover_url)
         feed_id = self._feed_id_at(context, index)
         if not self.FEED_ID_PATTERN.fullmatch(feed_id):
             if not cover_url:
@@ -82,16 +80,21 @@ class QQChannelParser(BaseParser):
                 headers=self.HEADERS,
             )
 
-        async with httpx.AsyncClient(
-            timeout=self.request_timeout,
-            follow_redirects=False,
-            headers=self.HEADERS,
-            **self.http_client_options,
-        ) as client:
+        async with self.http_client(headers=self.HEADERS) as client:
             try:
-                feed = await self._request_feed(client, share_url, feed_id)
+                feed = await request_feed(
+                    client,
+                    self.DETAIL_URL,
+                    share_url,
+                    feed_id,
+                    guest_uin_min=self.GUEST_UIN_MIN,
+                    guest_uin_max=self.GUEST_UIN_MAX,
+                    max_response_bytes=self.MAX_RESPONSE_BYTES,
+                    raise_for_response=self.raise_for_response_status,
+                    mapping=self._mapping,
+                )
                 result = build_result(feed, fallback_title=title)
-                result.video_download_headers = {
+                result.media.video_download_headers = {
                     "Referer": share_url,
                     "User-Agent": self.HEADERS["User-Agent"],
                 }
@@ -100,75 +103,17 @@ class QQChannelParser(BaseParser):
                 json.JSONDecodeError,
                 UnicodeDecodeError,
                 QQChannelDetailError,
+                ValueError,
             ):
-                fallback.extra_lines.append("帖子详情获取失败，已返回分享卡片摘要。")
+                fallback.content.extra_lines.append(
+                    "帖子详情获取失败，已返回分享卡片摘要。"
+                )
                 result = fallback
         return await self.materialize_public_images(
             result,
             share_url,
             headers=self.HEADERS,
         )
-
-    async def _request_feed(
-        self,
-        client: httpx.AsyncClient,
-        share_url: str,
-        feed_id: str,
-    ) -> Mapping[str, object]:
-        """通过腾讯频道公开访客接口读取限长帖子详情。"""
-        guest_uin = str(
-            self.GUEST_UIN_MIN
-            + secrets.randbelow(self.GUEST_UIN_MAX - self.GUEST_UIN_MIN + 1)
-        )
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "Cookie": f"uuid={guest_uin}; p_uin={guest_uin}",
-            "Referer": share_url,
-            "X-Oidb": '{"uint32_command":"0x10f4","uint32_service_type":14}',
-            "X-QQ-Client-AppId": "537246381",
-        }
-        body = {
-            "feedId": feed_id,
-            "from": 2,
-            "detail_type": 1,
-            "content_type": 2,
-            "channelSign": {},
-            "extInfo": {
-                "mapInfo": [
-                    {"key": "qc-tabid", "value": "ark"},
-                    {"key": "qc-pageid", "value": "pc"},
-                ]
-            },
-        }
-        async with client.stream(
-            "POST",
-            self.DETAIL_URL,
-            headers=headers,
-            json=body,
-        ) as response:
-            self.raise_for_response_status(response)
-            content_length = response.headers.get("Content-Length", "")
-            if (
-                content_length.isdigit()
-                and int(content_length) > self.MAX_RESPONSE_BYTES
-            ):
-                raise QQChannelDetailError("帖子详情响应超过安全限制")
-            chunks: list[bytes] = []
-            received = 0
-            async for chunk in response.aiter_bytes(chunk_size=64 * 1024):
-                received += len(chunk)
-                if received > self.MAX_RESPONSE_BYTES:
-                    raise QQChannelDetailError("帖子详情响应超过安全限制")
-                chunks.append(chunk)
-
-        payload = json.loads(b"".join(chunks))
-        if not isinstance(payload, Mapping) or payload.get("retcode") != 0:
-            raise QQChannelDetailError("帖子详情接口返回失败")
-        feed = self._mapping(self._mapping(payload.get("data")).get("feed"))
-        if not feed:
-            raise QQChannelDetailError("帖子详情为空")
-        return feed
 
     @classmethod
     def _find_card(cls, context: ParseContext) -> tuple[int, str] | None:

@@ -121,12 +121,13 @@ class WeiboPostContent:
                 video_url = cls._select_video_url(repost.get("page_info"))
                 cover_url = cls._status_cover(repost)
 
-        return ParseResult(
-            platform=cls.name,
-            title=title,
-            author=str(user["screen_name"]),
-            cover_urls=[cover_url] if cover_url and video_url else [],
-            video_url=video_url,
-            ordered_contents=contents,
-            extra_lines=[] if video_url or contents else ["未找到可发送的媒体。"],
-        )
+        result = ParseResult(platform=cls.name)
+        result.content.title = title
+        result.content.author = str(user["screen_name"])
+        result.content.ordered_contents.extend(contents)
+        if cover_url and video_url:
+            result.content.cover_urls.append(cover_url)
+        result.media.video_url = video_url
+        if not (video_url or contents):
+            result.content.extra_lines.append("未找到可发送的媒体。")
+        return result

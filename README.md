@@ -83,6 +83,17 @@ git clone https://github.com/Qfxaile/astrbot_plugin_multi_parser.git astrbot_plu
 
 随后参考 [AstrBot 插件指南](https://docs.astrbot.app/dev/star/plugin-new.html) 完成依赖安装，并在 WebUI 中重载插件。
 
+### 平台扩展约束
+
+平台解析器的普通 HTTP 请求统一通过 `BaseParser.http_client()` 创建客户端，
+以复用统一的超时、平台代理和重定向安全策略。GitHub、Pixiv、番茄小说、QQ
+空间和腾讯频道属于简单平台，必须使用该入口，不要在解析器中直接创建
+`httpx.AsyncClient`。微博、抖音、小红书和 B 站因 Cookie、签名或多客户端生命周期
+可以保留专用客户端，但仍须复用 `core/http.py` 的 URL、Cookie、代理和响应边界。
+
+修改平台 HTTP 装配后，请运行 `tests/test_architecture_dependencies.py` 中的架构
+测试，确认简单平台没有回退到独立客户端，并保持平台适配器不依赖服务层。
+
 ## 配置
 
 所有配置均可在 AstrBot 插件配置页面修改。
@@ -277,13 +288,15 @@ Pixiv 仅解析匿名可访问的公开插画作品，不需要 Cookie；动图�
 astrbot_plugin_multi_parser/
 ├── main.py          # 插件装配与事件调度
 ├── core/            # 领域契约、HTTP、媒体与渲染
-├── services/        # 配置、登录、消息适配与投递策略
+├── services/        # 配置、登录、解析编排、消息适配与投递策略
 ├── platforms/       # 平台适配器
 ├── tests/           # pytest 单元测试
 └── _conf_schema.json
 ```
 
-解析器统一继承 `core/parser.py` 中的 `BaseParser`，返回 `core/contracts.py` 中的 `ParseResult`。新增平台时应复用 `core/` 和 `services/` 的公共能力，并同步注册、配置和测试。
+解析器统一继承 `core/parser.py` 中的 `BaseParser`，平台注册实现必须覆写 `match` 和 `parse` 两个方法，返回 `core/contracts/` 中的 `ParseResult`。后处理服务应使用 `ParseResult.visible_text_lines` 和 `ParseResult.ordered_image_references` 获取有序文本与图片引用，媒体投递和视频处理使用 `ParseResult.media` 获取媒体请求元数据，临时文件由 `core/media/operations.py` 的 `TemporaryFileRegistry` 管理，合并转发由 `services/delivery/forward.py` 统一编排，消息组件生成统一通过 `core/rendering/result_renderer.py` 的 `ParseResultRenderer` 完成。配置类型转换和平台开关读取统一使用 `core/settings/values.py` 的 `PluginSettings`。`BaseParser` 本身保留公共 HTTP、Cookie 和媒体能力，供基础能力复用。平台能力元数据使用 `core/ports/platform.py` 的 `PlatformSpec`，自动解析编排位于 `services/parsing/coordinator.py`。新增平台时应复用 `core/` 和 `services/` 的公共能力，并同步注册、配置和测试。京东、淘宝、拼多多源码仍保留用于后续维护，但当前不注册、不接入自动解析。
+
+平台注册表提供注册项和配置 Schema 一致性校验；新增或调整平台时，注册表、配置项和对应测试必须一起更新。核心契约与公共服务优先从 `core`、`services` 包入口导入，具体实现模块通过惰性导出保持包加载轻量。
 
 - 普通缺陷、功能建议和新平台适配请使用 [GitHub Issues](https://github.com/Qfxaile/astrbot_plugin_multi_parser/issues)。
 - 安全漏洞或凭据泄漏风险请通过 [GitHub Security Advisories](https://github.com/Qfxaile/astrbot_plugin_multi_parser/security/advisories/new) 私下报告。

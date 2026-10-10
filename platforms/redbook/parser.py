@@ -8,8 +8,9 @@ import httpx
 
 from ...core.contracts import ParseContext, ParseResult
 from ...core.http import build_cookies, cookie_config_value
-from ...core.media import mark_invalid_legacy_images
+from ...core.media import mark_invalid_image_slots
 from ...core.parser import BaseParser
+from .client import resolve_short_link
 from .gallery import RedBookGalleryContent
 from .note import RedBookNoteContent
 from .video import RedBookVideoContent
@@ -65,7 +66,9 @@ class RedBookParser(
     async def parse(self, context: ParseContext) -> ParseResult:
         match = re.search(self.PATTERN, context.combined_text)
         if not match:
-            return ParseResult(platform=self.name, error="未找到小红书链接。")
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "未找到小红书链接。"
+            return result
 
         cookies = build_cookies(
             cookie_config_value(self.config, "redbook_cookies"),
@@ -80,15 +83,13 @@ class RedBookParser(
         ) as client:
             url = match.group(0)
             if (urlparse(url).hostname or "").lower() in self.SHORT_LINK_HOSTS:
-                response = await client.get(url, follow_redirects=False)
-                if not response.has_redirect_location:
-                    self.raise_for_response_status(response)
-                    raise ValueError("小红书短链未返回重定向地址")
-                url = str(response.url.join(response.headers["Location"]))
-                if self._is_auth_url(url):
-                    raise self.cookie_access_error()
-                if (urlparse(url).hostname or "").lower() not in self.OFFICIAL_HOSTS:
-                    raise ValueError("小红书短链重定向到不受支持的地址")
+                url = await resolve_short_link(
+                    client,
+                    url,
+                    supported_hosts=self.OFFICIAL_HOSTS,
+                    raise_for_response=self.raise_for_response_status,
+                    auth_url=self._is_auth_url,
+                )
 
             parsed_url = urlparse(url)
             site_host = (parsed_url.hostname or "").lower()
@@ -131,7 +132,7 @@ class RedBookParser(
             image_referer = urlunsplit(
                 parsed_content_url._replace(query="", fragment="")
             )
-            mark_invalid_legacy_images(result, self.INVALID_IMAGE_URL)
+            mark_invalid_image_slots(result, self.INVALID_IMAGE_URL)
             client.cookies.clear()
             return await self.materialize_images(result, client, image_referer)
 

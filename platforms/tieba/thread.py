@@ -178,25 +178,27 @@ class TiebaThreadContent:
         if any(marker in lowered_html for marker in self.SECURITY_MARKERS):
             return self._cookie_failure_result()
         if any(marker in html_text for marker in self.DELETED_MARKERS):
-            return ParseResult(platform=self.name, error="该贴吧帖子已被删除。")
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "该贴吧帖子已被删除。"
+            return result
         if any(marker in html_text for marker in self.UNAVAILABLE_MARKERS):
-            return ParseResult(platform=self.name, error="该贴吧帖子当前无法访问。")
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "该贴吧帖子当前无法访问。"
+            return result
 
         parser = _TiebaPageParser()
         parser.feed(html_text)
         parser.close()
         if not parser.found_post:
-            return ParseResult(
-                platform=self.name,
-                error="未找到贴吧首帖，页面可能需要登录或结构已变化。",
-            )
-        return ParseResult(
-            platform=self.name,
-            title=parser.title or f"贴吧帖子 {thread_id}",
-            author=parser.author or "未知作者",
-            video_url=parser.video_url,
-            ordered_contents=parser.contents,
-            extra_lines=[]
-            if parser.contents or parser.video_url
-            else ["贴吧首帖正文为空。"],
+            result = ParseResult(platform=self.name)
+            result.diagnostics.error = "未找到贴吧首帖，页面可能需要登录或结构已变化。"
+            return result
+        result = ParseResult(platform=self.name)
+        result.content.title = parser.title or f"贴吧帖子 {thread_id}"
+        result.content.author = parser.author or "未知作者"
+        result.content.ordered_contents.extend(parser.contents)
+        result.content.extra_lines.extend(
+            [] if parser.contents or parser.video_url else ["贴吧首帖正文为空。"]
         )
+        result.media.video_url = parser.video_url
+        return result

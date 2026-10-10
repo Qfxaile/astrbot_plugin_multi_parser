@@ -30,20 +30,20 @@ class RedBookNoteContent:
             if note.get("type") == "video"
             else ""
         )
-        return ParseResult(
-            platform=self.name,
-            title=str(note.get("title") or "无标题"),
-            author=str(
-                note["user"].get("nickname") or "未知作者"
-                if isinstance(note.get("user"), dict)
-                else "未知作者"
-            ),
-            description=str(note.get("desc") or ""),
-            cover_urls=image_urls[:1] if video_url else [],
-            image_urls=[] if video_url else image_urls,
-            video_url=video_url,
-            extra_lines=[] if video_url or image_urls else ["未找到可发送的媒体。"],
+        result = ParseResult(platform=self.name)
+        result.content.title = str(note.get("title") or "无标题")
+        result.content.author = str(
+            note["user"].get("nickname") or "未知作者"
+            if isinstance(note.get("user"), dict)
+            else "未知作者"
         )
+        result.content.description = str(note.get("desc") or "")
+        result.content.cover_urls.extend(image_urls[:1] if video_url else [])
+        result.content.image_urls.extend([] if video_url else image_urls)
+        result.media.video_url = video_url
+        if not (video_url or image_urls):
+            result.content.extra_lines.append("未找到可发送的媒体。")
+        return result
 
     def _parse_discovery_state(self, state: dict) -> ParseResult:
         note_data = state.get("noteData") if isinstance(state, dict) else None
@@ -88,17 +88,17 @@ class RedBookNoteContent:
                 )
             ]
             cover_urls = cover_urls[:1] or image_urls[:1]
-        return ParseResult(
-            platform=self.name,
-            title=str(note.get("title") or "无标题"),
-            author=str(
-                note["user"].get("nickName") or "未知作者"
-                if isinstance(note.get("user"), dict)
-                else "未知作者"
-            ),
-            description=str(note.get("desc") or ""),
-            cover_urls=cover_urls,
-            image_urls=[] if video_url else image_urls,
-            video_url=video_url,
-            extra_lines=[] if video_url or image_urls else ["未找到可发送的媒体。"],
+        result = ParseResult(platform=self.name)
+        result.content.title = str(note.get("title") or "无标题")
+        result.content.author = str(
+            note["user"].get("nickName") or "未知作者"
+            if isinstance(note.get("user"), dict)
+            else "未知作者"
         )
+        result.content.description = str(note.get("desc") or "")
+        result.content.cover_urls.extend(cover_urls)
+        result.content.image_urls.extend([] if video_url else image_urls)
+        result.media.video_url = video_url
+        if not (video_url or image_urls):
+            result.content.extra_lines.append("未找到可发送的媒体。")
+        return result
