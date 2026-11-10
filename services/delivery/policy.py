@@ -15,6 +15,7 @@ class DeliveryPolicy:
     default_image_threshold: int = 2
     default_text_threshold: int = 200
     default_video_action: str = "direct_link"
+    default_non_forward_message_limit: int = 3
 
     @property
     def settings(self) -> PluginSettings:
@@ -51,6 +52,17 @@ class DeliveryPolicy:
             {"notice", "direct_link", "group_file"},
             self.default_video_action,
         )
+
+    def non_forward_message_limit(self) -> int:
+        """返回非合并转发内容条数上限；-1 表示不限，0 表示不发送。"""
+        value = self.settings.integer(
+            "non_forward_message_limit", self.default_non_forward_message_limit
+        )
+        return value if value >= -1 else self.default_non_forward_message_limit
+
+    def limit_private_chat_messages(self) -> bool:
+        """返回是否将不支持合并转发的私聊也纳入条数限制。"""
+        return self.settings.boolean("limit_private_chat_messages", False)
 
     def filter_links_enabled(self) -> bool:
         return self.settings.boolean("filter_output_links")

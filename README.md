@@ -7,7 +7,7 @@
 <p align="center">自动识别聊天消息中的内容链接，并发送作品信息、图文、视频或音频。</p>
 
 <p align="center">
-  <a href="https://github.com/Qfxaile/astrbot_plugin_multi_parser/releases"><img src="https://img.shields.io/badge/version-v1.3.0-2f6f5e" alt="Version v1.3.0"></a>
+  <a href="https://github.com/Qfxaile/astrbot_plugin_multi_parser/releases"><img src="https://img.shields.io/badge/version-v1.3.1-2f6f5e" alt="Version v1.3.1"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-%3E%3D3.10-3776ab" alt="Python 3.10+"></a>
   <a href="https://astrbot.app/"><img src="https://img.shields.io/badge/AstrBot-plugin-4c78a8" alt="AstrBot Plugin"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2f6f5e" alt="MIT License"></a>
@@ -114,6 +114,8 @@ git clone https://github.com/Qfxaile/astrbot_plugin_multi_parser.git astrbot_plu
 | `forward_mode` | `threshold` | `always`、`threshold` 或 `never` |
 | `forward_image_threshold` | `2` | 图片数严格超过该值时合并发送 |
 | `forward_text_threshold` | `260` | 可见文字严格超过该字符数时合并发送 |
+| `non_forward_message_limit` | `3` | 不支持合并转发的平台消息上限；`-1` 不限制，`0` 禁止发送，正数为最多条数 |
+| `limit_private_chat_messages` | `false` | 是否将私聊也纳入非合并转发消息上限 |
 | `request_timeout_seconds` | `30` | 平台页面和接口请求超时，单位为秒 |
 | `image_download_concurrency` | `4` | 并发图片下载数，范围为 `1`～`16` |
 | `enable_parse_reaction` | `true` | OneBot v11 识别链接后添加表情回应 |

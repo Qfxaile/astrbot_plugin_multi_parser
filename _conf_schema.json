@@ -182,6 +182,18 @@
     "default": 260,
     "hint": "阈值模式下，最终可见文字字符数严格超过该值时合并发送。"
   },
+  "non_forward_message_limit": {
+    "description": "非合并转发消息上限",
+    "type": "int",
+    "default": 3,
+    "hint": "-1 不限制，0 禁止发送，正数表示最多发送的条数。"
+  },
+  "limit_private_chat_messages": {
+    "description": "限制私聊消息条数",
+    "type": "bool",
+    "default": false,
+    "hint": "是否将私聊也纳入非合并转发消息上限。"
+  },
   "request_timeout_seconds": {
     "description": "请求超时",
     "type": "int",

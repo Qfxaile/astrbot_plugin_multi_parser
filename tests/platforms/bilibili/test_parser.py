@@ -160,6 +160,29 @@ async def test_matches_bilibili_graphic_urls(url):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
+    "text",
+    [
+        "小黑盒附件标识: fileid=prefixBV1VpK56jERgSuffix",
+        "转发记录中的 opaque token: av123456tail",
+        "https://api.xiaoheihe.cn/v3/bbs/app/api/web/share?link_id=464472c05ac3",
+    ],
+)
+async def test_does_not_match_bilibili_ids_embedded_in_unrelated_text(text):
+    parser = bilibili.BilibiliParser({})
+
+    assert await parser.match(ParseContext(text=text)) is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("video_id", ["BV1VpK56jERg", "av123456"])
+async def test_matches_standalone_bilibili_video_ids(video_id):
+    parser = bilibili.BilibiliParser({})
+
+    assert await parser.match(ParseContext(text=f"分享: ({video_id})")) is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
     "url",
     [
         "https://www.bilibili.com/bangumi/play/ep199612",

@@ -35,7 +35,7 @@ class BilibiliParser(
     cookie_failure_status_codes = frozenset({401, 403, 412})
     image_host_suffixes = ("hdslb.com",)
     SHORT_PATTERN = r"https?://(?:bili2233\.cn|b23\.tv)/[a-zA-Z0-9]+"
-    ID_PATTERN = r"(BV[0-9A-Za-z]{10}|av\d+)"
+    ID_PATTERN = r"(?<![A-Za-z0-9])(BV[0-9A-Za-z]{10}|av\d+)(?![A-Za-z0-9])"
     DYNAMIC_PATTERN = (
         r"https?://(?:t\.bilibili\.com/|www\.bilibili\.com/dynamic/)"
         r"(?P<dynamic_id>\d+)"
