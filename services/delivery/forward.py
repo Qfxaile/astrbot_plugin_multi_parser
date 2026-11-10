@@ -77,9 +77,18 @@ class ForwardDeliveryService:
         limit = self.policy.non_forward_message_limit()
         if limit == -1:
             return [event.chain_result(info_chain)]
-        if limit == 0:
-            return []
-        return [event.chain_result([component]) for component in info_chain[:limit]]
+        messages = ContentAssembler.merge_adjacent_plain(info_chain)
+        if len(messages) <= limit:
+            return [event.chain_result(info_chain)]
+        notice = Plain(
+            f"内容共 {len(messages)} 条，超过单次发送上限 {limit} 条；"
+            f"以下按原始顺序发送前 {limit} 条。"
+        )
+        limited_results = [event.chain_result([notice])]
+        limited_results.extend(
+            event.chain_result([component]) for component in messages[:limit]
+        )
+        return limited_results
 
     def _should_limit_non_forward(self, event: AstrMessageEvent) -> bool:
         try:
