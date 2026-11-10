@@ -36,7 +36,9 @@ class ForwardDeliveryService:
         *,
         include_video: bool,
     ) -> tuple[list, bool]:
-        if not self._supports(event) or (
+        if not self._supports(event):
+            return self._build_non_forward(event, info_chain), False
+        if (
             EventIdentity.platform_name(event) == self.ONEBOT_PLATFORM
             and result.delivery.disable_onebot_forward
         ):
@@ -68,6 +70,26 @@ class ForwardDeliveryService:
             event.chain_result([Nodes(batch)])
             for batch in ContentAssembler.balanced_forward_batches(nodes)
         ], embedded
+
+    def _build_non_forward(self, event: AstrMessageEvent, info_chain: list) -> list:
+        if not self._should_limit_non_forward(event):
+            return [event.chain_result(info_chain)]
+        limit = self.policy.non_forward_message_limit()
+        if limit == -1:
+            return [event.chain_result(info_chain)]
+        if limit == 0:
+            return []
+        return [event.chain_result([component]) for component in info_chain[:limit]]
+
+    def _should_limit_non_forward(self, event: AstrMessageEvent) -> bool:
+        try:
+            is_private = bool(event.is_private_chat())
+        except Exception:
+            raw = EventIdentity.raw_message(event)
+            is_private = (
+                not bool(raw.get("group_id")) if isinstance(raw, Mapping) else False
+            )
+        return not is_private or self.policy.limit_private_chat_messages()
 
     async def send(
         self,

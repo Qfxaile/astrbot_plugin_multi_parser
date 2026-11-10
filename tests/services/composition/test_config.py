@@ -123,6 +123,10 @@ def test_schema_exposes_forward_delivery_modes_and_thresholds():
     ]
     assert schema["forward_image_threshold"]["default"] == 2
     assert schema["forward_text_threshold"]["default"] == 260
+    assert schema["non_forward_message_limit"]["type"] == "int"
+    assert schema["non_forward_message_limit"]["default"] == 3
+    assert schema["limit_private_chat_messages"]["type"] == "bool"
+    assert schema["limit_private_chat_messages"]["default"] is False
 
 
 def test_schema_exposes_optional_conversation_history_modes():

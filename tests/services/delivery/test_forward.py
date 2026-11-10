@@ -1,7 +1,23 @@
 from astrbot.api.message_components import Node, Plain
+from astrbot_multi_parser.services.delivery.forward import ForwardDeliveryService
 from astrbot_multi_parser.services.delivery.onebot_forward import (
     OneBotForwardSerializer,
 )
+from result_factory import build_result
+
+
+class Event:
+    def __init__(self, private: bool):
+        self.private = private
+
+    def is_private_chat(self):
+        return self.private
+
+    def chain_result(self, chain):
+        return chain
+
+    def get_platform_name(self):
+        return "unsupported-platform"
 
 
 def test_onebot_forward_serializer_builds_native_text_node():
@@ -12,3 +28,63 @@ def test_onebot_forward_serializer_builds_native_text_node():
 
     assert messages[0]["data"]["nickname"] == "机器人"
     assert messages[0]["data"]["content"][0]["type"] == "text"
+
+
+def test_non_forward_platform_limits_group_messages_but_not_private_messages():
+    components = [Plain(str(index)) for index in range(4)]
+    service = ForwardDeliveryService({"non_forward_message_limit": 2})
+
+    group_results = service._build_non_forward(Event(private=False), components)
+    private_results = service._build_non_forward(Event(private=True), components)
+
+    assert len(group_results) == 2
+    assert group_results == [[components[0]], [components[1]]]
+    assert private_results == [components]
+
+
+def test_non_forward_private_limit_can_be_enabled():
+    components = [Plain(str(index)) for index in range(3)]
+    service = ForwardDeliveryService(
+        {"non_forward_message_limit": 2, "limit_private_chat_messages": True}
+    )
+
+    assert service._build_non_forward(Event(private=True), components) == [
+        [components[0]],
+        [components[1]],
+    ]
+
+
+def test_non_forward_limit_supports_unlimited_and_blocked_modes():
+    components = [Plain(str(index)) for index in range(3)]
+    unlimited = ForwardDeliveryService({"non_forward_message_limit": -1})
+    blocked = ForwardDeliveryService({"non_forward_message_limit": 0})
+
+    assert unlimited._build_non_forward(Event(private=False), components) == [
+        components
+    ]
+    assert blocked._build_non_forward(Event(private=False), components) == []
+
+
+def test_build_limits_rendered_non_forward_content_for_group_chat():
+    service = ForwardDeliveryService({"non_forward_message_limit": 2})
+    result = build_result(
+        "unsupported-platform",
+        title="标题",
+        image_urls=["image-1", "image-2", "image-3"],
+    )
+
+    group_results, _ = service.build(
+        Event(private=False),
+        result,
+        [Plain("标题"), Plain("摘要"), Plain("正文")],
+        include_video=False,
+    )
+    private_results, _ = service.build(
+        Event(private=True),
+        result,
+        [Plain("标题"), Plain("摘要"), Plain("正文")],
+        include_video=False,
+    )
+
+    assert group_results == [[Plain("标题")], [Plain("摘要")]]
+    assert len(private_results) == 1

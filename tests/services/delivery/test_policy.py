@@ -32,3 +32,28 @@ def test_video_action_and_link_filter_are_normalized():
         DeliveryPolicy({"video_over_limit_action": "invalid"}).video_over_limit_action()
         == "direct_link"
     )
+
+
+def test_non_forward_message_limit_defaults_and_private_chat_switch():
+    policy = DeliveryPolicy({})
+
+    assert policy.non_forward_message_limit() == 3
+    assert policy.limit_private_chat_messages() is False
+    assert (
+        DeliveryPolicy({"non_forward_message_limit": -1}).non_forward_message_limit()
+        == -1
+    )
+    assert (
+        DeliveryPolicy({"non_forward_message_limit": 0}).non_forward_message_limit()
+        == 0
+    )
+    assert (
+        DeliveryPolicy({"non_forward_message_limit": -2}).non_forward_message_limit()
+        == 3
+    )
+    assert (
+        DeliveryPolicy(
+            {"limit_private_chat_messages": "true"}
+        ).limit_private_chat_messages()
+        is True
+    )
