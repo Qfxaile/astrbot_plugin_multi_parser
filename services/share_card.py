@@ -7,9 +7,9 @@ class ShareCardExtractor:
     """只提取公开链接、标题、预览图和腾讯频道公开帖子标识。"""
 
     @staticmethod
-    def extract(data: str) -> tuple[str, str, str, dict[str, str]]:
+    def extract(data: str | dict) -> tuple[str, str, str, dict[str, str]]:
         try:
-            payload = json.loads(data)
+            payload = json.loads(data) if isinstance(data, str) else data
         except json.JSONDecodeError:
             return "", "", "", {}
         if not isinstance(payload, dict):

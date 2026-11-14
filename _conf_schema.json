@@ -96,6 +96,14 @@
     "default": "[详细内容请打开原链接查看]",
     "hint": "开启过滤解析结果链接后，用该文案替换标题、简介、正文和附加说明中的网页链接。"
   },
+  "parse_mode": {
+    "description": "分享链接读取方式",
+    "type": "string",
+    "default": "auto",
+    "options": ["auto", "tool"],
+    "labels": ["自动展开", "AI 按需读取"],
+    "hint": "按需模式仅在 AI 调用工具时读取当前或引用的分享。"
+  },
   "enable_conversation_history": {
     "description": "写入 LLM 会话",
     "type": "bool",

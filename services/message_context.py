@@ -1,6 +1,7 @@
 """将 AstrBot 消息事件转换为平台无关的解析上下文。"""
 
 from astrbot.api.event import AstrMessageEvent
+from astrbot.api.message_components import Json, Plain, Reply
 
 from ..core.contracts import ParseContext
 from .share_card import ShareCardExtractor
@@ -15,14 +16,24 @@ def extract_context(event: AstrMessageEvent) -> ParseContext:
     else:
         raw_message = getattr(raw, "message", []) if raw else []
 
-    text_parts = [event.message_str]
+    return context_from_segments(raw_message, event.message_str)
+
+
+def context_from_segments(raw_message, message_str: str = "") -> ParseContext:
+    """读取 OneBot 原始消息段或 AstrBot 已展开的引用链。"""
+    text_parts = [message_str]
     json_urls: list[str] = []
     json_previews: list[str] = []
     json_titles: list[str] = []
     json_metadata: list[dict[str, str]] = []
 
     for segment in raw_message:
-        if isinstance(segment, dict):
+        if isinstance(segment, Plain):
+            text_parts.append(segment.text)
+            continue
+        if isinstance(segment, Json):
+            segment_type, data = "json", {"data": segment.data}
+        elif isinstance(segment, dict):
             segment_type = segment.get("type")
             data = segment.get("data", {})
         else:
@@ -42,7 +53,7 @@ def extract_context(event: AstrMessageEvent) -> ParseContext:
                 if isinstance(data, dict)
                 else getattr(data, "data", "")
             )
-            url, title, preview, metadata = ShareCardExtractor.extract(str(json_data))
+            url, title, preview, metadata = ShareCardExtractor.extract(json_data)
             if url:
                 json_urls.append(url)
                 json_previews.append(preview)
@@ -55,6 +66,13 @@ def extract_context(event: AstrMessageEvent) -> ParseContext:
         json_previews=json_previews,
         json_titles=json_titles,
         json_metadata=json_metadata,
+    )
+
+
+def quoted_message(event: AstrMessageEvent) -> Reply | None:
+    """只使用当前事件携带的一级引用。"""
+    return next(
+        (part for part in event.get_messages() if isinstance(part, Reply)), None
     )
 
 

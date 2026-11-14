@@ -32,6 +32,8 @@ def test_schema_uses_platform_switches_without_legacy_settings():
     schema_path = Path(__file__).parents[3] / "_conf_schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
 
+    assert schema["parse_mode"]["default"] == "auto"
+    assert schema["parse_mode"]["options"] == ["auto", "tool"]
     assert "douyin_api_url" not in schema
     assert "redbook_api_url" not in schema
     platform_switches = schema["platform_switches"]
