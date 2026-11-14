@@ -7,6 +7,7 @@ from urllib.parse import urlsplit, urlunsplit
 import httpx
 
 from ...core.contracts import OrderedContent, ParseResult
+from ...core.media.operations import requested_image_number
 
 _BLOCK_TAGS = {
     "article",
@@ -175,7 +176,10 @@ class _ArticleHTMLParser(HTMLParser):
             or ""
         )
         image_url = _normalize_image_url(candidate)
-        if not image_url or image_url in self._seen_images:
+        if not image_url:
+            return
+        # 自动展开仍按 URL 去重；工具按原文中的每一次出现计数。
+        if requested_image_number.get() is None and image_url in self._seen_images:
             return
         self._seen_images.add(image_url)
         self.contents.append(OrderedContent(kind="image", value=image_url))
