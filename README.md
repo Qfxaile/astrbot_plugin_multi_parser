@@ -120,6 +120,8 @@ git clone https://github.com/Qfxaile/astrbot_plugin_multi_parser.git astrbot_plu
 | `image_download_concurrency` | `4` | 并发图片下载数，范围为 `1`～`16` |
 | `enable_parse_reaction` | `true` | OneBot v11 识别链接后添加表情回应 |
 
+开启图文会话记录后，新写入的用户消息包含原分享和按顺序排列的图片，助手消息保存解析文字。升级不会改写旧会话。若历史中的助手图片仍触发模型错误，可新建会话后重新分享。
+
 ### 网络与代理
 
 | 配置项 | 默认值 | 作用 |

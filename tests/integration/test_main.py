@@ -405,6 +405,10 @@ async def test_conversation_history_defaults_to_text_only(monkeypatch, tmp_path)
 
     await collect_plugin_results(plugin, FakeEvent())
 
+    assert conversation_manager.message_pairs[0][1] == {
+        "role": "user",
+        "content": "https://example.com/post",
+    }
     content = conversation_manager.message_pairs[0][2]["content"]
     assert isinstance(content, str)
     assert "正文内容" in content
@@ -451,34 +455,30 @@ async def test_successful_parse_is_added_to_current_conversation(monkeypatch, tm
         conversation_manager.message_pairs[0]
     )
     assert conversation_id == "conversation-id"
-    assert user_message == {
-        "role": "user",
-        "content": parse_context.combined_text,
-    }
-    assistant_content = assistant_message["content"]
-    assert assistant_message["role"] == "assistant"
-    assert [part["type"] for part in assistant_content] == [
-        "text",
-        "text",
-        "image_url",
-        "text",
-    ]
-    summary = assistant_content[0]["text"]
-    assert "[由多平台内容解析插件发送]" in summary
-    assert "平台: 测试平台" in summary
-    assert "标题: 测试标题" in summary
-    assert "作者: 测试作者" in summary
-    assert "测试简介" in summary
-    assert "附加信息" in summary
-    assert assistant_content[1] == {"type": "text", "text": "正文内容"}
-    assert assistant_content[2]["image_url"]["url"].startswith("data:image/png;base64,")
-    assert (
-        base64.b64decode(assistant_content[2]["image_url"]["url"].split(",", 1)[1])
-        == TEST_PNG
+    assert user_message["role"] == "user"
+    source, image = user_message["content"]
+    assert source == {"type": "text", "text": parse_context.combined_text}
+    assert image["type"] == "image_url"
+    assert image["image_url"]["url"] == (
+        "data:image/png;base64," + base64.b64encode(TEST_PNG).decode()
     )
-    assert "视频: 已发送" in assistant_content[3]["text"]
-    assert "音频: 已发送" in assistant_content[3]["text"]
-    assert "token=secret" not in str(assistant_content)
+    summary = assistant_message["content"]
+    assert assistant_message["role"] == "assistant"
+    assert isinstance(summary, str)
+    for expected in (
+        "[由多平台内容解析插件发送]",
+        "平台: 测试平台",
+        "标题: 测试标题",
+        "作者: 测试作者",
+        "测试简介",
+        "附加信息",
+        "正文内容",
+        "视频: 已发送",
+        "音频: 已发送",
+    ):
+        assert expected in summary
+    assert "data:image" not in summary
+    assert "token=secret" not in summary
     assert not image_path.exists()
 
 
@@ -494,7 +494,7 @@ async def test_conversation_history_preserves_ordered_text_and_images(
     first_image = tmp_path / "first.png"
     second_image = tmp_path / "second.png"
     first_image.write_bytes(TEST_PNG)
-    second_image.write_bytes(TEST_PNG)
+    second_image.write_bytes(b"second")
     conversation_manager = FakeConversationManager()
     plugin = make_plugin(
         build_result(
@@ -505,6 +505,7 @@ async def test_conversation_history_preserves_ordered_text_and_images(
                 OrderedContent("text", "第二段"),
                 OrderedContent("image", str(second_image)),
             ],
+            image_urls=[str(first_image), str(second_image)],
             temporary_files=[first_image, second_image],
         ),
         conversation_manager=conversation_manager,
@@ -514,16 +515,18 @@ async def test_conversation_history_preserves_ordered_text_and_images(
 
     await collect_plugin_results(plugin, FakeEvent())
 
-    content = conversation_manager.message_pairs[0][2]["content"]
-    assert [part["type"] for part in content] == [
-        "text",
-        "text",
-        "image_url",
-        "text",
-        "image_url",
+    [(conv_id, user, assistant)] = conversation_manager.message_pairs
+    link, *images = user["content"]
+    assert link == {"type": "text", "text": "https://example.com/post"}
+    assert [
+        base64.b64decode(part["image_url"]["url"].split(",")[1]) for part in images
+    ] == [
+        TEST_PNG,
+        b"second",
     ]
-    assert content[1] == {"type": "text", "text": "第一段"}
-    assert content[3] == {"type": "text", "text": "第二段"}
+    assert isinstance(assistant["content"], str)
+    assert "第一段\n第二段" in assistant["content"]
+    assert "data:image" not in assistant["content"]
 
 
 @pytest.mark.asyncio

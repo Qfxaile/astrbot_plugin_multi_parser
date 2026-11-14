@@ -37,83 +37,38 @@ class ConversationHistoryService:
                     event.unified_msg_origin,
                     platform_id=event.get_platform_id(),
                 )
+            user_content = (
+                await build_user_history_content(source_text, result)
+                if include_images
+                else source_text
+            )
             await self.conversation_manager.add_message_pair(
                 conversation_id,
-                {"role": "user", "content": source_text},
-                {
-                    "role": "assistant",
-                    "content": await build_parse_history_content(
-                        result,
-                        include_images=include_images,
-                    ),
-                },
+                {"role": "user", "content": user_content},
+                {"role": "assistant", "content": _build_text_only_content(result)},
             )
         except Exception as exc:
             logger.warning(f"解析结果写入 LLM 会话失败: {type(exc).__name__}")
 
 
-async def build_parse_history_content(
-    result: ParseResult,
-    *,
-    include_images: bool = False,
+async def build_user_history_content(
+    source_text: str, result: ParseResult
 ) -> str | list[dict]:
-    """生成不泄漏媒体地址或本地路径的文本、多模态解析历史。"""
-    if not include_images:
-        return _build_text_only_content(result)
-
-    parts: list[dict] = [{"type": "text", "text": _build_summary(result)}]
-    contains_image = False
-
-    if result.content.ordered_contents:
-        image_number = 0
-        for item in result.content.ordered_contents:
-            if not item.value:
-                continue
-            if item.kind != "image":
-                parts.append({"type": "text", "text": item.value})
-                continue
-
-            image_number += 1
-            image_part = await _build_image_part(item.value, image_number)
-            if image_part is None:
-                parts.append(
-                    {
-                        "type": "text",
-                        "text": f"[第 {image_number} 张图片未能写入会话]",
-                    }
-                )
-                continue
-            parts.append(image_part)
-            contains_image = True
-    else:
-        image_number = 0
-        for index, image_ref in enumerate(
-            [*result.content.cover_urls, *result.content.image_urls]
-        ):
-            image_number += 1
-            if image_ref:
-                image_part = await _build_image_part(image_ref, image_number)
-                if image_part is not None:
-                    parts.append(image_part)
-                    contains_image = True
-                    continue
-            error = result.diagnostics.image_errors.get(index)
-            if not image_ref and not error:
-                continue
+    """把原链接与图片归入同一条用户消息，保留图序及缺失位置。"""
+    parts = [{"type": "text", "text": source_text}]
+    seen: dict[str, int] = {}
+    for number, ref in enumerate(result.image_slots, 1):
+        origin = result.media.image_source_urls.get(ref, ref)
+        if origin in seen:
             parts.append(
-                {
-                    "type": "text",
-                    "text": error or f"[第 {image_number} 张图片未能写入会话]",
-                }
+                {"type": "text", "text": f"[第 {number} 张图同第 {seen[origin]} 张]"}
             )
-
-    media_status = _build_media_status(result)
-    if media_status:
-        parts.append({"type": "text", "text": media_status})
-
-    if contains_image:
-        return parts
-    return "\n".join(part["text"] for part in parts)
+            continue
+        part = await _build_image_part(ref, number) if ref else None
+        if part:
+            seen[origin] = number
+        parts.append(part or {"type": "text", "text": f"[第 {number} 张图片不可用]"})
+    return parts if len(parts) > 1 else source_text
 
 
 def _build_text_only_content(result: ParseResult) -> str:
