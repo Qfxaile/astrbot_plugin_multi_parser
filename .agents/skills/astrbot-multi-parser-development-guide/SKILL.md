@@ -84,6 +84,14 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 以 `metadata.yaml` 为唯一版本源。只有用户明确要求发布或升版时才修改版本，并同步 README 徽章、CHANGELOG 和 Git 标签；普通功能、修复和重构不升版。
 
+### 分支与发布流程
+
+- `main` 是稳定主分支，只接受从 `develop` 发起的发布 PR；不得直接向 `main` 推送，也不得从其他分支合并到 `main`。
+- `develop` 是集成开发分支。新工作从最新 `develop` 创建独立分支，完成实现和验证后通过 PR 合并回 `develop`。
+- 开发 PR 和发布 PR 合并时统一使用 GitHub 的 `Squash and merge`，确保每个 PR 在目标分支形成一个整理后的提交。
+- 只有发布时才从 `develop` 向 `main` 发起 PR。发布 PR 必须包含 `metadata.yaml` 版本号变更，并同步 README 徽章和 CHANGELOG；合并后使用同一个版本号为 `main` 上的合并提交创建 Git 标签和 GitHub Release，Release 标题只能写版本号，例如 `v1.4.0`。
+- 紧急修复也必须先合入 `develop`，再通过发布 PR 合入 `main`。检查仓库分支保护是否禁止直接推送和强推，并要求必需 CI 检查与审查。
+
 ### 同步项目指导文档
 
 平台清单、模块职责、公共 API、目录结构、配置、依赖、命令权限或验证流程变化时，必须在同次变更中检查并更新根目录 `AGENTS.md` 和 `CLAUDE.md`（两者必须同步）以及本 Skill。
@@ -109,6 +117,13 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 新行为有回归测试，安全边界和敏感信息不泄漏已覆盖。
 - README、CHANGELOG、`AGENTS.md`、项目 Skill、配置 Schema 和元数据描述与当前代码一致，没有固定盘符、父目录、解释器或虚拟环境路径。
 - 提交和 PR 使用中文，提交信息符合 Conventional Commits。
+- 功能分支来自最新 `develop`，开发 PR 的目标为 `develop`；涉及发布时，发布 PR 的目标为 `main`，版本号已变更且发布资料已同步。
+- 开发 PR 和发布 PR 的合并方式为 `Squash and merge`。
+
+PR 合并后核对：
+
+- 开发 PR 已合入 `develop`；发布 PR 已合入 `main`。
+- 发布完成后，`main` 上已创建同版本 Git 标签和 GitHub Release，Release 标题仅为版本号。
 
 ## 确保 Skill 有效性
 

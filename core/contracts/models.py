@@ -73,14 +73,8 @@ class ParseResult:
 
     @property
     def image_count(self) -> int:
-        return (
-            len(self.content.cover_urls)
-            + len(self.content.image_urls)
-            + sum(
-                item.kind in {"image", "image_error"}
-                for item in self.content.ordered_contents
-            )
-        )
+        """按展示槽位统计图片，包含已记录的失败位置但跳过缺失项。"""
+        return len(self.image_slots)
 
     @property
     def visible_text_lines(self) -> list[str]:
@@ -95,16 +89,23 @@ class ParseResult:
         return [line for line in lines if line]
 
     @property
-    def ordered_image_references(self) -> list[str]:
-        """返回按展示顺序排列的图片引用。"""
+    def image_slots(self) -> list[str]:
+        """跳过缺失图片，按展示顺序保留图片与已记录失败的空占位。"""
         if self.content.ordered_contents:
             return [
-                item.value
+                item.value if item.kind == "image" else ""
                 for item in self.content.ordered_contents
-                if item.kind == "image" and item.value
+                if item.kind == "image_error" or (item.kind == "image" and item.value)
             ]
         return [
             value
-            for value in [*self.content.cover_urls, *self.content.image_urls]
-            if value
+            for index, value in enumerate(
+                [*self.content.cover_urls, *self.content.image_urls]
+            )
+            if value or index in self.diagnostics.image_errors
         ]
+
+    @property
+    def ordered_image_references(self) -> list[str]:
+        """返回按展示顺序排列的图片引用。"""
+        return [value for value in self.image_slots if value]
