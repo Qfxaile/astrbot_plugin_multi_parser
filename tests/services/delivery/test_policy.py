@@ -1,4 +1,31 @@
+import pytest
+from astrbot.api.message_components import Image
+from astrbot_multi_parser.core.contracts import OrderedContent
 from astrbot_multi_parser.services.delivery.policy import DeliveryPolicy
+from result_factory import build_result
+
+
+@pytest.mark.parametrize("image_count", [2, 3])
+def test_forward_threshold_counts_only_the_rendered_image_representation(image_count):
+    result = build_result(
+        platform="weibo",
+        cover_urls=["https://img.example/video-cover.jpg"],
+        image_urls=["https://img.example/legacy.jpg", ""],
+        ordered_contents=[
+            OrderedContent("text", "正文"),
+            OrderedContent("image", ""),
+            *[
+                OrderedContent("image", f"https://img.example/{index}.jpg")
+                for index in range(image_count)
+            ],
+        ],
+    )
+
+    chain = result.info_chain(include_summary=False)
+
+    assert sum(isinstance(item, Image) for item in chain) == image_count
+    assert result.image_count == image_count
+    assert DeliveryPolicy({}).should_forward(result.image_count, 0) == (image_count > 2)
 
 
 def test_forward_policy_uses_strict_thresholds_and_fallbacks():

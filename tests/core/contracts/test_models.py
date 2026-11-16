@@ -132,14 +132,25 @@ async def test_materialize_images_respects_download_concurrency(monkeypatch, tmp
     result.cleanup_temporary_files()
 
 
-async def test_cancelled_batch_cleans_completed_and_partial_images(tmp_path):
+@pytest.mark.parametrize("ordered", [False, True])
+@pytest.mark.parametrize("concurrency", [1, 2])
+@pytest.mark.parametrize("during_close", [False, True])
+async def test_cancelled_batch_cleans_completed_and_partial_images(
+    tmp_path, ordered, concurrency, during_close
+):
     partial = asyncio.Event()
 
     class BlockedStream(httpx.AsyncByteStream):
         async def __aiter__(self):
             yield b"x" * 65536
-            partial.set()
-            await asyncio.Event().wait()
+            if not during_close:
+                partial.set()
+                await asyncio.Event().wait()
+
+        async def aclose(self):
+            if during_close:
+                partial.set()
+                await asyncio.Event().wait()
 
     def handler(request):
         if request.url.path == "/done.jpg":
@@ -153,8 +164,12 @@ async def test_cancelled_batch_cleans_completed_and_partial_images(tmp_path):
             "https://img.example/partial.jpg",
         ],
     )
+    if ordered:
+        result.content.ordered_contents = [
+            models.OrderedContent("image", url) for url in result.content.image_urls
+        ]
     parser = models.BaseParser(
-        {"image_temp_dir": str(tmp_path), "image_download_concurrency": 1}
+        {"image_temp_dir": str(tmp_path), "image_download_concurrency": concurrency}
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         task = asyncio.create_task(
