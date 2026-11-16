@@ -129,6 +129,8 @@ git clone https://github.com/Qfxaile/astrbot_plugin_multi_parser.git astrbot_plu
 | `image_download_concurrency` | `4` | 并发图片下载数，范围为 `1`～`16` |
 | `enable_parse_reaction` | `true` | OneBot v11 识别链接后添加表情回应 |
 
+开启图文会话记录后，新写入的用户消息包含原分享和按顺序排列的图片，助手消息保存解析文字。升级不会改写旧会话。若历史中的助手图片仍触发模型错误，可新建会话后重新分享。
+
 ### 网络与代理
 
 | 配置项 | 默认值 | 作用 |
@@ -312,6 +314,14 @@ astrbot_plugin_multi_parser/
 - 普通缺陷、功能建议和新平台适配请使用 [GitHub Issues](https://github.com/Qfxaile/astrbot_plugin_multi_parser/issues)。
 - 安全漏洞或凭据泄漏风险请通过 [GitHub Security Advisories](https://github.com/Qfxaile/astrbot_plugin_multi_parser/security/advisories/new) 私下报告。
 - 涉及插件加载、协议端媒体发送或表情回应的修改，需要通过 AstrBot 本地实例进行集成验证。
+
+### 分支与发布
+
+- `main` 是稳定主分支，只接受从 `develop` 发起的发布 PR；禁止直接推送或从其他分支合并到 `main`。
+- `develop` 是日常集成分支。新功能、缺陷修复和重构均从最新 `develop` 创建开发分支，验证完成后通过 PR 合并回 `develop`。
+- 开发 PR 和发布 PR 合并时统一使用 GitHub 的 `Squash and merge`，避免长期分支积累过于零散的提交。
+- 只有发布时才从 `develop` 向 `main` 发起 PR。发布 PR 必须变更 `metadata.yaml` 版本号，并同步 README 版本徽章与 CHANGELOG；合并后使用同一个版本号为 `main` 的合并提交创建 Git 标签和 GitHub Release，Release 标题只写版本号，例如 `v1.4.0`。
+- 发布 PR 应写明版本号、用户可见变更、兼容性影响和验证结果。仓库应为 `main` 配置分支保护、必需检查和审查，`develop` 至少要求通过 PR 和必需检查。
 
 ## 参考与致谢
 
