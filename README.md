@@ -7,7 +7,7 @@
 <p align="center">自动识别聊天消息中的内容链接，并发送作品信息、图文、视频或音频。</p>
 
 <p align="center">
-  <a href="https://github.com/Qfxaile/astrbot_plugin_multi_parser/releases"><img src="https://img.shields.io/badge/version-v1.4.0-2f6f5e" alt="Version v1.4.0"></a>
+  <a href="https://github.com/Qfxaile/astrbot_plugin_multi_parser/releases"><img src="https://img.shields.io/badge/version-v1.3.1-2f6f5e" alt="Version v1.3.1"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-%3E%3D3.10-3776ab" alt="Python 3.10+"></a>
   <a href="https://astrbot.app/"><img src="https://img.shields.io/badge/AstrBot-plugin-4c78a8" alt="AstrBot Plugin"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2f6f5e" alt="MIT License"></a>
@@ -98,19 +98,10 @@ git clone https://github.com/Qfxaile/astrbot_plugin_multi_parser.git astrbot_plu
 
 所有配置均可在 AstrBot 插件配置页面修改。
 
-### AI 按需读取分享
-
-选择「AI 按需读取」并使用支持工具调用的聊天模型。群友单独发分享链接时，插件保持静默。需要机器人阅读时，可以引用那条分享并 @ 机器人，问「这篇文章讲了什么？说一个正文里的细节」。也可以把链接和问题发在同一条消息里。
-
-使用支持图片的模型时，可以追问「原文第二张图里有什么？」。公众号按原文的展示位置计数，同一张图出现两次会占两个序号。模型每次只收到指定图片。若模型需要阅读提示，可在聊天引导中写「遇到分享内容提问时，先调用 read_shared_link 读取正文或指定图片，再回答」。
-
-平台开关、登录和代理配置仍然生效。工具模式下，插件只在模型调用工具时抓取内容。成功读取后，同一会话可以继续追问最近打开的分享。新会话或插件重载后可重新引用原消息。
-
 ### 解析与发送
 
 | 配置项 | 默认值 | 作用 |
 | --- | --- | --- |
-| `parse_mode` | `auto` | `auto` 自动展开，`tool` 允许 AI 按需读取分享 |
 | `platform_switches` | 十二个平台启用，Pixiv 关闭 | 分别控制各平台的解析器；Pixiv 需显式开启 |
 | `filter_output_links` | `false` | 替换解析结果中的网页链接，不修改用户原消息 |
 | `filtered_link_text` | `[详细内容请打开原链接查看]` | 链接过滤后的替换文案 |
@@ -128,8 +119,6 @@ git clone https://github.com/Qfxaile/astrbot_plugin_multi_parser.git astrbot_plu
 | `request_timeout_seconds` | `30` | 平台页面和接口请求超时，单位为秒 |
 | `image_download_concurrency` | `4` | 并发图片下载数，范围为 `1`～`16` |
 | `enable_parse_reaction` | `true` | OneBot v11 识别链接后添加表情回应 |
-
-开启图文会话记录后，新写入的用户消息包含原分享和按顺序排列的图片，助手消息保存解析文字。升级不会改写旧会话。若历史中的助手图片仍触发模型错误，可新建会话后重新分享。
 
 ### 网络与代理
 
@@ -314,14 +303,6 @@ astrbot_plugin_multi_parser/
 - 普通缺陷、功能建议和新平台适配请使用 [GitHub Issues](https://github.com/Qfxaile/astrbot_plugin_multi_parser/issues)。
 - 安全漏洞或凭据泄漏风险请通过 [GitHub Security Advisories](https://github.com/Qfxaile/astrbot_plugin_multi_parser/security/advisories/new) 私下报告。
 - 涉及插件加载、协议端媒体发送或表情回应的修改，需要通过 AstrBot 本地实例进行集成验证。
-
-### 分支与发布
-
-- `main` 是稳定主分支，只接受从 `develop` 发起的发布 PR；禁止直接推送或从其他分支合并到 `main`。
-- `develop` 是日常集成分支。新功能、缺陷修复和重构均从最新 `develop` 创建开发分支，验证完成后通过 PR 合并回 `develop`。
-- 开发 PR 和发布 PR 合并时统一使用 GitHub 的 `Squash and merge`，避免长期分支积累过于零散的提交。
-- 只有发布时才从 `develop` 向 `main` 发起 PR。发布 PR 必须变更 `metadata.yaml` 版本号，并同步 README 版本徽章与 CHANGELOG；合并后使用同一个版本号为 `main` 的合并提交创建 Git 标签和 GitHub Release，Release 标题只写版本号，例如 `v1.4.0`。
-- 发布 PR 应写明版本号、用户可见变更、兼容性影响和验证结果。仓库应为 `main` 配置分支保护、必需检查和审查，`develop` 至少要求通过 PR 和必需检查。
 
 ## 参考与致谢
 
