@@ -1,6 +1,7 @@
 import httpx as httpx
 from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star
 
 from .core.settings import PluginSettings
@@ -18,6 +19,7 @@ from .services.delivery.video import (
 )
 from .services.message_context import extract_context
 from .services.parsing import ParseCoordinator
+from .services.parsing.share_tool import ShareReader
 from .services.summary.service import AISummaryService
 
 __all__ = ["MultiParserPlugin", "VideoSizeInfo"]
@@ -28,6 +30,7 @@ class MultiParserPlugin(Star):
         super().__init__(context)
         self.config = config
         self.parsers = build_parsers(config)
+        self._share_reader = ShareReader()
         self._services = ServiceContainer(context, config)
 
     def _delivery_service(self) -> DeliveryService:
@@ -169,8 +172,23 @@ class MultiParserPlugin(Star):
         message = await self._authentication_service().cancel(event)
         yield event.plain_result(message)
 
+    @property
+    def tool_mode(self) -> bool:
+        return (
+            PluginSettings(self.config).choice("parse_mode", {"auto", "tool"}, "auto")
+            == "tool"
+        )
+
+    @filter.on_llm_request()
+    async def offer_share_reader(self, event: AstrMessageEvent, req: ProviderRequest):
+        """有分享来源时，为本轮 LLM 提供后台阅读工具。"""
+        if self.tool_mode:
+            await self._share_reader.offer(event, req, self.enabled_parsers())
+
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def handle_parse(self, event: AstrMessageEvent):
+        if self.tool_mode:
+            return
         context = extract_context(event)
         if not context.combined_text:
             return

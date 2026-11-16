@@ -1,8 +1,6 @@
 # AstrBot 多平台内容解析插件开发指南
 
-> **本文档面向：** Claude Code  
-> **镜像文档：** [AGENTS.md](AGENTS.md) (面向 Codex，内容相同)  
-> **维护规则：** 修改本文档时必须同步修改 AGENTS.md，反之亦然
+> Codex 和 Claude Code 共用本指南。修改时请同步更新 `AGENTS.md` 和 `CLAUDE.md`。
 
 ## 适用范围
 
@@ -65,6 +63,7 @@ uv run ruff check .
 | 消息上下文、分享卡片、自动解析编排、文本处理和投递 | `services/message_context.py`、`services/share_card.py`、`services/parsing/coordinator.py`、`services/text_processing.py`、`services/delivery/service.py` |
 | 投递策略、内容组装、链接过滤、直链投递、事件身份和 OneBot 适配 | `services/delivery/policy.py`、`services/content_assembly.py`、`services/link_filter.py`、`services/delivery/forward_links.py`、`services/event_identity.py`、`services/onebot_*.py` |
 | 合并转发编排与 OneBot 昵称缓存 | `services/delivery/forward.py`、`services/delivery/onebot_identity.py` |
+| 按需阅读与请求级工具 | `services/parsing/share_tool.py`；`parse_mode=tool` 时从当前或被引用的消息取得分享，按图序读取媒体 |
 | LLM 会话历史写入与媒体序列化 | `services/conversation/history.py` |
 | AI 总结、Provider 选择和多模态输入 | `services/summary/service.py`、`services/summary/provider.py` |
 | 视频大小探测、发送和回退策略 | `services/delivery/video.py`、`services/delivery/video_delivery.py`、`services/delivery/video_fallback.py` |
@@ -131,6 +130,16 @@ uv run ruff check .
 - 模块职责、公共 API、目录结构、配置项、依赖、命令权限或验证流程变化时，在同次变更中更新 `AGENTS.md` 和 `CLAUDE.md` 的对应项目事实，以及项目 Skill 的 AI 执行指南。
 - `AGENTS.md`/`CLAUDE.md` 记录稳定的项目事实、边界和索引；项目 Skill 记录 AI 的查找、实现、验证和交付流程，避免大段重复。
 - 普通功能开发可以更新 `metadata.yaml` 的描述和仓库地址，但只有明确发布或升版时才修改版本号、README 版本徽章和 Git 标签。
+
+## 分支与发布流程
+
+- `main` 是稳定主分支，只接受从 `develop` 发起的发布 PR；禁止直接向 `main` 推送或从其他分支合并。
+- `develop` 是集成开发分支。新功能、缺陷修复和重构均从最新 `develop` 创建独立开发分支，完成实现和验证后通过 PR 合并回 `develop`。分支名由贡献者自行决定，但应能辨识工作内容。
+- 合并开发 PR 或发布 PR 时统一使用 GitHub 的 `Squash and merge`，每个 PR 在目标分支保留一个经过整理的提交，避免 `develop` 和 `main` 的提交历史过于杂乱。
+- 只有准备发布时才从 `develop` 向 `main` 发起 PR。发布 PR 必须更新 `metadata.yaml` 版本号，并同步 README 版本徽章、CHANGELOG；版本号遵循项目已有的语义化版本约定。PR 合并后必须使用同一个版本号创建 Git 标签和 GitHub Release，Release 标题只能写版本号（例如 `v1.4.0`），避免标签或 Release 指向尚未进入 `main` 的提交。
+- 发布 PR 应以 `develop` 为源、`main` 为目标，说明版本号、用户可见变更、兼容性影响和验证结果，并通过仓库配置的必需检查与审查后才能合并。普通开发 PR 不修改版本号、发布标签或 Release。
+- 紧急修复也先按常规流程合入 `develop`，再以发布 PR 合入 `main`，确保两个长期分支保持一致；不得只修 `main`。
+- 仓库托管平台应为 `main` 配置分支保护：禁止直接推送和强推，要求 PR、必需 CI 检查及审查；`develop` 至少要求通过 PR 和必需 CI 检查。文档约定不能替代仓库权限配置。
 
 ## 验证流程
 
