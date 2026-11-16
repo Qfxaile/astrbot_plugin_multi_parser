@@ -308,6 +308,7 @@ astrbot_plugin_multi_parser/
 
 - `main` 是稳定主分支，只接受从 `develop` 发起的发布 PR；禁止直接推送或从其他分支合并到 `main`。
 - `develop` 是日常集成分支。新功能、缺陷修复和重构均从最新 `develop` 创建开发分支，验证完成后通过 PR 合并回 `develop`。
+- 开发 PR 和发布 PR 合并时统一使用 GitHub 的 `Squash and merge`，避免长期分支积累过于零散的提交。
 - 只有发布时才从 `develop` 向 `main` 发起 PR。发布 PR 必须变更 `metadata.yaml` 版本号，并同步 README 版本徽章与 CHANGELOG；合并后使用同一个版本号为 `main` 的合并提交创建 Git 标签和 GitHub Release，Release 标题只写版本号，例如 `v1.4.0`。
 - 发布 PR 应写明版本号、用户可见变更、兼容性影响和验证结果。仓库应为 `main` 配置分支保护、必需检查和审查，`develop` 至少要求通过 PR 和必需检查。
 
