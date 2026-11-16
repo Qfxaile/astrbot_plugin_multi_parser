@@ -304,6 +304,13 @@ astrbot_plugin_multi_parser/
 - 安全漏洞或凭据泄漏风险请通过 [GitHub Security Advisories](https://github.com/Qfxaile/astrbot_plugin_multi_parser/security/advisories/new) 私下报告。
 - 涉及插件加载、协议端媒体发送或表情回应的修改，需要通过 AstrBot 本地实例进行集成验证。
 
+### 分支与发布
+
+- `main` 是稳定主分支，只接受从 `develop` 发起的发布 PR；禁止直接推送或从其他分支合并到 `main`。
+- `develop` 是日常集成分支。新功能、缺陷修复和重构均从最新 `develop` 创建开发分支，验证完成后通过 PR 合并回 `develop`。
+- 只有发布时才从 `develop` 向 `main` 发起 PR。发布 PR 必须变更 `metadata.yaml` 版本号，并同步 README 版本徽章与 CHANGELOG；合并后使用同一个版本号为 `main` 的合并提交创建 Git 标签和 GitHub Release，Release 标题只写版本号，例如 `v1.4.0`。
+- 发布 PR 应写明版本号、用户可见变更、兼容性影响和验证结果。仓库应为 `main` 配置分支保护、必需检查和审查，`develop` 至少要求通过 PR 和必需检查。
+
 ## 参考与致谢
 
 - [AstrBot](https://github.com/AstrBotDevs/AstrBot)：插件运行平台与开发 API。
