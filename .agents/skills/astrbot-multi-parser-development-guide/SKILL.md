@@ -116,7 +116,12 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 新行为有回归测试，安全边界和敏感信息不泄漏已覆盖。
 - README、CHANGELOG、`AGENTS.md`、项目 Skill、配置 Schema 和元数据描述与当前代码一致，没有固定盘符、父目录、解释器或虚拟环境路径。
 - 提交和 PR 使用中文，提交信息符合 Conventional Commits。
-- 功能分支来自最新 `develop` 并已合入 `develop`；涉及发布时，发布 PR 的目标为 `main`，版本号已变更且发布资料已同步，合并后已创建同版本 Git 标签和 GitHub Release。
+- 功能分支来自最新 `develop`，开发 PR 的目标为 `develop`；涉及发布时，发布 PR 的目标为 `main`，版本号已变更且发布资料已同步。
+
+PR 合并后核对：
+
+- 开发 PR 已合入 `develop`；发布 PR 已合入 `main`。
+- 发布完成后，`main` 上已创建同版本 Git 标签和 GitHub Release，Release 标题仅为版本号。
 
 ## 确保 Skill 有效性
 
