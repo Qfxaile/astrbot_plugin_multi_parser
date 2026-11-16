@@ -11,6 +11,7 @@ from astrbot_multi_parser.core.contracts import (
     DeliveryHints,
     MediaBundle,
     OrderedContent,
+    ParseDiagnostics,
     ParseResult,
 )
 from astrbot_multi_parser.core.http import CookieAccessError
@@ -1793,6 +1794,38 @@ async def test_image_threshold_is_strictly_greater(monkeypatch, count, should_fo
     )
 
     assert isinstance(messages[0][0], Nodes) is should_forward
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ordered", [False, True])
+@pytest.mark.parametrize("failed", [False, True])
+async def test_image_threshold_skips_absent_slots_but_counts_failures_and_duplicates(
+    monkeypatch, ordered, failed
+):
+    image = "base64://aW1hZ2U="
+    image_urls = [image, image]
+    ordered_contents = [
+        OrderedContent("image", ""),
+        OrderedContent("image", image),
+        OrderedContent("image", image),
+    ]
+    if failed:
+        image_urls.append("")
+        ordered_contents.append(OrderedContent("image_error", "第三张图片失败"))
+    result = build_result(
+        platform="test",
+        cover_urls=[""],
+        image_urls=image_urls,
+        diagnostics=ParseDiagnostics(
+            image_errors={3: "第三张图片失败"} if failed else {}
+        ),
+        ordered_contents=ordered_contents if ordered else [],
+    )
+
+    messages = await collect_results(monkeypatch, result)
+
+    assert len(messages) == 1
+    assert isinstance(messages[0][0], Nodes) is failed
 
 
 @pytest.mark.asyncio

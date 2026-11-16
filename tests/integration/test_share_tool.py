@@ -123,6 +123,42 @@ async def test_direct_question_keeps_full_share_parameters(reader):
     assert await offered(plugin, event) is None
 
 
+@pytest.mark.parametrize("image_number", [0, 1])
+@pytest.mark.parametrize("cover", [{}, {"pic": ""}])
+async def test_bilibili_video_without_cover_has_no_phantom_image(
+    monkeypatch, cover, image_number
+):
+    requests = []
+
+    def handler(request):
+        requests.append(request.url.path)
+        if request.url.path == "/x/web-interface/view":
+            return httpx.Response(
+                200,
+                json={
+                    "code": 0,
+                    "data": {"title": "无封面视频", "cid": 1, **cover},
+                },
+            )
+        assert request.url.path == "/x/player/playurl"
+        return httpx.Response(200, json={"code": 0, "data": {"durl": [{}]}})
+
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kw: AsyncClient(transport=httpx.MockTransport(handler), **kw),
+    )
+    plugin = MultiParserPlugin(None, {"parse_mode": "tool"})
+    event = message("https://www.bilibili.com/video/BV1xx411c7mD 讲什么？")
+    [text] = await invoke(
+        await offered(plugin, event), event, image_number=image_number
+    )
+
+    expected = "配图共 0 张。" if image_number == 0 else "原分享只有 0 张配图。"
+    assert expected in text.text
+    assert requests == ["/x/web-interface/view", "/x/player/playurl"]
+
+
 @pytest.mark.parametrize(
     ("url", "question", "expected"),
     [

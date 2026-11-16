@@ -108,6 +108,9 @@ def mark_invalid_image_slots(
     for field_name in ("cover_urls", "image_urls"):
         image_values = getattr(result.content, field_name)
         for field_index, image_url in enumerate(image_values):
+            if not image_url and image_index not in result.diagnostics.image_errors:
+                image_index += 1
+                continue
             image_number += 1
             if image_url == invalid_marker:
                 image_values[field_index] = ""
@@ -148,6 +151,8 @@ class ImageMaterializer:
                 for item in result.content.ordered_contents:
                     if item.kind not in {"image", "image_error"}:
                         continue
+                    if item.kind == "image" and not item.value:
+                        continue
                     image_number += 1
                     if selected is not None and selected != image_number:
                         continue
@@ -186,6 +191,13 @@ class ImageMaterializer:
             for field_name in ("cover_urls", "image_urls"):
                 image_values = getattr(result.content, field_name)
                 for field_index, image_url in enumerate(image_values):
+                    # 错误仍以原列表索引存储；展示图序不计没有失败记录的空值。
+                    if (
+                        not image_url
+                        and image_index not in result.diagnostics.image_errors
+                    ):
+                        image_index += 1
+                        continue
                     image_number += 1
                     if (
                         not image_url

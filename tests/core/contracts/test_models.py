@@ -35,6 +35,67 @@ def test_invalid_legacy_image_slots_are_marked_in_original_order():
     }
 
 
+def test_invalid_image_number_skips_absent_cover_without_shifting_error_index():
+    from astrbot_multi_parser.core.media import mark_invalid_image_slots
+
+    result = build_result(
+        platform="test", cover_urls=[""], image_urls=["unsafe-image-url"]
+    )
+
+    mark_invalid_image_slots(result, "unsafe-image-url")
+
+    assert result.diagnostics.image_errors == {1: "第 1 张图片获取失败：InvalidURL"}
+    assert result.image_slots == [""]
+
+
+@pytest.mark.parametrize("ordered", [False, True])
+@pytest.mark.parametrize("number", [None, 1, 2, 3])
+async def test_selected_image_skips_absent_entries_and_keeps_failed_positions(
+    tmp_path, ordered, number
+):
+    from astrbot_multi_parser.core.media.operations import requested_image_number
+
+    first = "https://img.example/first.jpg"
+    last = "https://img.example/last.jpg"
+    result = build_result(
+        platform="test",
+        cover_urls=[""],
+        image_urls=[first, "", last],
+        diagnostics=models.ParseDiagnostics(image_errors={2: "第二张图片失败"}),
+        ordered_contents=(
+            [
+                models.OrderedContent("image", ""),
+                models.OrderedContent("image", first),
+                models.OrderedContent("image_error", "第二张图片失败"),
+                models.OrderedContent("image", last),
+            ]
+            if ordered
+            else []
+        ),
+    )
+    requests = []
+
+    def handler(request):
+        requests.append(str(request.url))
+        return httpx.Response(200, content=b"image")
+
+    token = requested_image_number.set(number)
+    try:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            await models.BaseParser(
+                {"image_temp_dir": str(tmp_path)}
+            ).materialize_images(result, client, "https://share.example")
+        expected = {None: [first, last], 1: [first], 2: [], 3: [last]}
+        assert requests == expected[number]
+        assert len(result.image_slots) == 3
+        assert result.image_slots[1] == ""
+        assert result.diagnostics.image_errors == {2: "第二张图片失败"}
+    finally:
+        requested_image_number.reset(token)
+        result.cleanup_temporary_files()
+    assert not list(tmp_path.iterdir())
+
+
 @pytest.mark.asyncio
 async def test_materialize_images_respects_download_concurrency(monkeypatch, tmp_path):
     from astrbot_multi_parser.core.media import ImageMaterializer
@@ -594,20 +655,25 @@ def test_info_chain_accepts_materialized_base64_image():
     assert isinstance(chain[1], Plain)
 
 
-def test_image_count_includes_successful_and_failed_image_slots():
+@pytest.mark.parametrize("ordered", [False, True])
+def test_image_count_includes_successful_and_failed_image_slots(ordered):
     result = build_result(
         platform="bilibili",
         cover_urls=["https://img.example/cover.jpg", ""],
         image_urls=["https://img.example/1.jpg"],
         diagnostics=models.ParseDiagnostics(image_errors={1: "封面下载失败"}),
-        ordered_contents=[
-            models.OrderedContent(kind="text", value="正文"),
-            models.OrderedContent(kind="image", value="https://img.example/2.jpg"),
-            models.OrderedContent(kind="image_error", value="图片下载失败"),
-        ],
+        ordered_contents=(
+            [
+                models.OrderedContent(kind="text", value="正文"),
+                models.OrderedContent(kind="image", value="https://img.example/2.jpg"),
+                models.OrderedContent(kind="image_error", value="图片下载失败"),
+            ]
+            if ordered
+            else []
+        ),
     )
 
-    assert result.image_count == 5
+    assert result.image_count == (2 if ordered else 3)
 
 
 def test_info_chain_can_render_summary_only():
@@ -758,10 +824,10 @@ def test_info_chain_skips_empty_ordered_content_values():
     )
 
     assert result.info_chain() == []
-    assert result.image_count == 2
+    assert result.image_count == 1
 
 
-def test_info_chain_skips_legacy_empty_url_without_error_but_counts_slot():
+def test_info_chain_skips_legacy_empty_url_without_error_or_counting_slot():
     result = build_result(
         platform="douyin",
         title="标题",
@@ -772,7 +838,7 @@ def test_info_chain_skips_legacy_empty_url_without_error_but_counts_slot():
 
     assert [type(item) for item in chain] == [Plain]
     assert chain[0].text == "标题"
-    assert result.image_count == 1
+    assert result.image_count == 0
 
 
 def test_image_materializer_normalizes_download_concurrency():
