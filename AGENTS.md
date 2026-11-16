@@ -136,6 +136,7 @@ uv run ruff check .
 
 - `main` 是稳定主分支，只接受从 `develop` 发起的发布 PR；禁止直接向 `main` 推送或从其他分支合并。
 - `develop` 是集成开发分支。新功能、缺陷修复和重构均从最新 `develop` 创建独立开发分支，完成实现和验证后通过 PR 合并回 `develop`。分支名由贡献者自行决定，但应能辨识工作内容。
+- 合并开发 PR 或发布 PR 时统一使用 GitHub 的 `Squash and merge`，每个 PR 在目标分支保留一个经过整理的提交，避免 `develop` 和 `main` 的提交历史过于杂乱。
 - 只有准备发布时才从 `develop` 向 `main` 发起 PR。发布 PR 必须更新 `metadata.yaml` 版本号，并同步 README 版本徽章、CHANGELOG；版本号遵循项目已有的语义化版本约定。PR 合并后必须使用同一个版本号创建 Git 标签和 GitHub Release，Release 标题只能写版本号（例如 `v1.4.0`），避免标签或 Release 指向尚未进入 `main` 的提交。
 - 发布 PR 应以 `develop` 为源、`main` 为目标，说明版本号、用户可见变更、兼容性影响和验证结果，并通过仓库配置的必需检查与审查后才能合并。普通开发 PR 不修改版本号、发布标签或 Release。
 - 紧急修复也先按常规流程合入 `develop`，再以发布 PR 合入 `main`，确保两个长期分支保持一致；不得只修 `main`。
