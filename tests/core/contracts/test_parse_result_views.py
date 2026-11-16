@@ -40,4 +40,5 @@ def test_image_slots_skip_absent_images_but_preserve_failures_and_duplicates(ord
     )
 
     assert result.image_slots == [image, "", image]
+    assert result.image_count == 3
     assert result.ordered_image_references == [image, image]

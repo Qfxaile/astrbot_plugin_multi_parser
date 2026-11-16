@@ -655,20 +655,25 @@ def test_info_chain_accepts_materialized_base64_image():
     assert isinstance(chain[1], Plain)
 
 
-def test_image_count_includes_successful_and_failed_image_slots():
+@pytest.mark.parametrize("ordered", [False, True])
+def test_image_count_includes_successful_and_failed_image_slots(ordered):
     result = build_result(
         platform="bilibili",
         cover_urls=["https://img.example/cover.jpg", ""],
         image_urls=["https://img.example/1.jpg"],
         diagnostics=models.ParseDiagnostics(image_errors={1: "封面下载失败"}),
-        ordered_contents=[
-            models.OrderedContent(kind="text", value="正文"),
-            models.OrderedContent(kind="image", value="https://img.example/2.jpg"),
-            models.OrderedContent(kind="image_error", value="图片下载失败"),
-        ],
+        ordered_contents=(
+            [
+                models.OrderedContent(kind="text", value="正文"),
+                models.OrderedContent(kind="image", value="https://img.example/2.jpg"),
+                models.OrderedContent(kind="image_error", value="图片下载失败"),
+            ]
+            if ordered
+            else []
+        ),
     )
 
-    assert result.image_count == 5
+    assert result.image_count == (2 if ordered else 3)
 
 
 def test_info_chain_can_render_summary_only():
@@ -819,10 +824,10 @@ def test_info_chain_skips_empty_ordered_content_values():
     )
 
     assert result.info_chain() == []
-    assert result.image_count == 2
+    assert result.image_count == 1
 
 
-def test_info_chain_skips_legacy_empty_url_without_error_but_counts_slot():
+def test_info_chain_skips_legacy_empty_url_without_error_or_counting_slot():
     result = build_result(
         platform="douyin",
         title="标题",
@@ -833,7 +838,7 @@ def test_info_chain_skips_legacy_empty_url_without_error_but_counts_slot():
 
     assert [type(item) for item in chain] == [Plain]
     assert chain[0].text == "标题"
-    assert result.image_count == 1
+    assert result.image_count == 0
 
 
 def test_image_materializer_normalizes_download_concurrency():

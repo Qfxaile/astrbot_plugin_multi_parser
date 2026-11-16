@@ -73,14 +73,8 @@ class ParseResult:
 
     @property
     def image_count(self) -> int:
-        return (
-            len(self.content.cover_urls)
-            + len(self.content.image_urls)
-            + sum(
-                item.kind in {"image", "image_error"}
-                for item in self.content.ordered_contents
-            )
-        )
+        """按展示槽位统计图片，包含已记录的失败位置但跳过缺失项。"""
+        return len(self.image_slots)
 
     @property
     def visible_text_lines(self) -> list[str]:
