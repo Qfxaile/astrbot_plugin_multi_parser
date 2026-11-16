@@ -5,6 +5,8 @@ import os
 import tempfile
 import weakref
 from collections.abc import Mapping
+from contextlib import ExitStack, contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 from uuid import uuid4
@@ -19,10 +21,29 @@ from ..settings import PluginSettings
 FORBIDDEN_MEDIA_HEADERS = {"authorization", "cookie", "proxy-authorization"}
 
 
+# 自动解析读取全部配图；工具调用在自己的异步上下文中选 0（正文）或图序。
+requested_image_number: ContextVar[int | None] = ContextVar(
+    "multi_parser_requested_image_number", default=None
+)
+
+
 class TemporaryFileRegistry:
     """登记解析期间创建的临时文件，并集中执行清理。"""
 
     _files: dict[int, tuple[weakref.ReferenceType[ParseResult], list[Path]]] = {}
+
+    _capture: ContextVar[ExitStack | None] = ContextVar("media_capture", default=None)
+
+    @classmethod
+    @contextmanager
+    def capture(cls):
+        """在解析结果交给调用者前，保证中断时清理已登记的结果。"""
+        with ExitStack() as files:
+            token = cls._capture.set(files)
+            try:
+                yield files
+            finally:
+                cls._capture.reset(token)
 
     @staticmethod
     def register(result: ParseResult, path: Path) -> None:
@@ -31,6 +52,8 @@ class TemporaryFileRegistry:
         if entry is None or entry[0]() is not result:
             entry = (weakref.ref(result), [])
             TemporaryFileRegistry._files[key] = entry
+            if (capture := TemporaryFileRegistry._capture.get()) is not None:
+                capture.callback(TemporaryFileRegistry.cleanup, result)
         entry[1].append(path)
 
     @staticmethod
@@ -115,6 +138,9 @@ class ImageMaterializer:
         client: httpx.AsyncClient,
         referer: str,
     ) -> ParseResult:
+        selected = requested_image_number.get()
+        if selected == 0:
+            return result
         image_number = 0
         try:
             if result.content.ordered_contents:
@@ -123,6 +149,8 @@ class ImageMaterializer:
                     if item.kind not in {"image", "image_error"}:
                         continue
                     image_number += 1
+                    if selected is not None and selected != image_number:
+                        continue
                     if item.kind == "image_error" or not item.value:
                         continue
                     if item.value.startswith("base64://"):
@@ -130,6 +158,7 @@ class ImageMaterializer:
                     candidates.append((image_number, item, item.value))
 
                 outcomes = await self._download_images(
+                    result,
                     client,
                     [image_url for _, _, image_url in candidates],
                     referer,
@@ -139,7 +168,6 @@ class ImageMaterializer:
                 ):
                     if isinstance(outcome, Path):
                         image_path = outcome
-                        TemporaryFileRegistry.register(result, image_path)
                         result.media.image_source_urls[str(image_path.resolve())] = (
                             image_url
                         )
@@ -159,7 +187,11 @@ class ImageMaterializer:
                 image_values = getattr(result.content, field_name)
                 for field_index, image_url in enumerate(image_values):
                     image_number += 1
-                    if not image_url or image_url.startswith("base64://"):
+                    if (
+                        not image_url
+                        or image_url.startswith("base64://")
+                        or (selected is not None and selected != image_number)
+                    ):
                         image_index += 1
                         continue
                     candidates.append(
@@ -174,6 +206,7 @@ class ImageMaterializer:
                     image_index += 1
 
             outcomes = await self._download_images(
+                result,
                 client,
                 [image_url for _, _, _, _, image_url in candidates],
                 referer,
@@ -182,7 +215,6 @@ class ImageMaterializer:
                 number, index, image_values, field_index, image_url = candidate
                 if isinstance(outcome, Path):
                     image_path = outcome
-                    TemporaryFileRegistry.register(result, image_path)
                     result.media.image_source_urls[str(image_path.resolve())] = (
                         image_url
                     )
@@ -197,12 +229,13 @@ class ImageMaterializer:
                         f"图片下载失败 ({self._hostname_label(image_url)}): {detail}"
                     )
             return result
-        except Exception:
+        except (Exception, asyncio.CancelledError):
             cleanup_temporary_files(result)
             raise
 
     async def _download_images(
         self,
+        result: ParseResult,
         client: httpx.AsyncClient,
         image_urls: list[str],
         referer: str,
@@ -210,28 +243,20 @@ class ImageMaterializer:
         """并发下载图片，并按输入顺序返回路径或可恢复错误。"""
         semaphore = asyncio.Semaphore(self._download_concurrency())
 
-        async def download(image_url: str) -> Path | Exception:
+        async def download(image_url: str) -> Path:
             async with semaphore:
-                try:
-                    return await self._download_image(client, image_url, referer)
-                except Exception as exc:
-                    return exc
+                path = await self._download_image(client, image_url, referer)
+                TemporaryFileRegistry.register(result, path)
+                return path
 
-        outcomes = await asyncio.gather(*(download(url) for url in image_urls))
-        unexpected = next(
-            (
-                outcome
-                for outcome in outcomes
-                if isinstance(outcome, Exception)
-                and not isinstance(outcome, (httpx.HTTPError, httpx.InvalidURL))
-            ),
-            None,
+        outcomes = await asyncio.gather(
+            *(download(url) for url in image_urls), return_exceptions=True
         )
-        if unexpected is not None:
-            for outcome in outcomes:
-                if isinstance(outcome, Path):
-                    outcome.unlink(missing_ok=True)
-            raise unexpected
+        for outcome in outcomes:
+            if isinstance(outcome, BaseException) and not isinstance(
+                outcome, (httpx.HTTPError, httpx.InvalidURL)
+            ):
+                raise outcome
         return outcomes
 
     def _download_concurrency(self) -> int:
@@ -253,30 +278,29 @@ class ImageMaterializer:
         current_url = image_url
         for redirect_count in range(6):
             self._validate_image_url(current_url)
-            async with client.stream(
-                "GET",
-                current_url,
-                headers={"Referer": referer},
-                follow_redirects=False,
-            ) as response:
-                if 300 <= response.status_code < 400:
-                    location = response.headers.get("Location")
-                    if redirect_count >= 5 or not location:
-                        raise httpx.InvalidURL("too many image redirects")
-                    current_url = urljoin(current_url, location)
-                    continue
+            with ExitStack() as pending:
+                async with client.stream(
+                    "GET",
+                    current_url,
+                    headers={"Referer": referer},
+                    follow_redirects=False,
+                ) as response:
+                    if 300 <= response.status_code < 400:
+                        location = response.headers.get("Location")
+                        if redirect_count >= 5 or not location:
+                            raise httpx.InvalidURL("too many image redirects")
+                        current_url = urljoin(current_url, location)
+                        continue
 
-                response.raise_for_status()
-                image_path = self._new_image_path(
-                    current_url, response.headers.get("Content-Type", "")
-                )
-                try:
+                    response.raise_for_status()
+                    image_path = self._new_image_path(
+                        current_url, response.headers.get("Content-Type", "")
+                    )
+                    pending.callback(image_path.unlink, missing_ok=True)
                     with image_path.open("wb") as image_file:
                         async for chunk in response.aiter_bytes(chunk_size=64 * 1024):
                             image_file.write(chunk)
-                except Exception:
-                    image_path.unlink(missing_ok=True)
-                    raise
+                pending.pop_all()
                 return image_path
         raise httpx.InvalidURL("too many image redirects")
 
@@ -382,36 +406,37 @@ class VideoMaterializer:
             **http_client_proxy_options(self.config, result.platform),
         ) as client:
             video_path = await self._download(client, result.media.video_url)
-        TemporaryFileRegistry.register(result, video_path)
+            TemporaryFileRegistry.register(result, video_path)
         return video_path
 
     async def _download(self, client: httpx.AsyncClient, video_url: str) -> Path:
         current_url = video_url
         for redirect_count in range(self.MAX_REDIRECTS + 1):
             self._validate_url(current_url)
-            async with client.stream("GET", current_url) as response:
-                if 300 <= response.status_code < 400:
-                    location = response.headers.get("Location")
-                    if redirect_count >= self.MAX_REDIRECTS or not location:
-                        raise httpx.InvalidURL("too many video redirects")
-                    current_url = urljoin(current_url, location)
-                    continue
+            with ExitStack() as pending:
+                async with client.stream("GET", current_url) as response:
+                    if 300 <= response.status_code < 400:
+                        location = response.headers.get("Location")
+                        if redirect_count >= self.MAX_REDIRECTS or not location:
+                            raise httpx.InvalidURL("too many video redirects")
+                        current_url = urljoin(current_url, location)
+                        continue
 
-                response.raise_for_status()
-                max_size_bytes = self._max_size_bytes()
-                content_length = response.headers.get("Content-Length", "")
-                if (
-                    max_size_bytes is not None
-                    and content_length.isdigit()
-                    and int(content_length) > max_size_bytes
-                ):
-                    raise ValueError("视频下载大小超过配置限制")
+                    response.raise_for_status()
+                    max_size_bytes = self._max_size_bytes()
+                    content_length = response.headers.get("Content-Length", "")
+                    if (
+                        max_size_bytes is not None
+                        and content_length.isdigit()
+                        and int(content_length) > max_size_bytes
+                    ):
+                        raise ValueError("视频下载大小超过配置限制")
 
-                video_path = self._new_video_path(
-                    current_url, response.headers.get("Content-Type", "")
-                )
-                downloaded_bytes = 0
-                try:
+                    video_path = self._new_video_path(
+                        current_url, response.headers.get("Content-Type", "")
+                    )
+                    downloaded_bytes = 0
+                    pending.callback(video_path.unlink, missing_ok=True)
                     with video_path.open("wb") as video_file:
                         async for chunk in response.aiter_bytes(
                             chunk_size=self.CHUNK_SIZE
@@ -423,9 +448,7 @@ class VideoMaterializer:
                             ):
                                 raise ValueError("视频下载大小超过配置限制")
                             video_file.write(chunk)
-                except Exception:
-                    video_path.unlink(missing_ok=True)
-                    raise
+                pending.pop_all()
                 return video_path
         raise httpx.InvalidURL("too many video redirects")
 

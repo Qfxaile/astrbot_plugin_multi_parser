@@ -59,6 +59,7 @@ def test_article_html_preserves_text_and_image_order():
         <div id="js_content">
           <p>第一段</p>
           <img data-src="//mmbiz.qpic.cn/article/640?wx_fmt=jpeg#imgIndex=1">
+          <img data-src="//mmbiz.qpic.cn/article/640?wx_fmt=jpeg#imgIndex=2">
           <p>第二段</p>
           <script>不应出现</script>
         </div>

@@ -71,6 +71,43 @@ async def test_materialize_images_respects_download_concurrency(monkeypatch, tmp
     result.cleanup_temporary_files()
 
 
+async def test_cancelled_batch_cleans_completed_and_partial_images(tmp_path):
+    partial = asyncio.Event()
+
+    class BlockedStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b"x" * 65536
+            partial.set()
+            await asyncio.Event().wait()
+
+    def handler(request):
+        if request.url.path == "/done.jpg":
+            return httpx.Response(200, content=b"done")
+        return httpx.Response(200, stream=BlockedStream())
+
+    result = build_result(
+        platform="test",
+        image_urls=[
+            "https://img.example/done.jpg",
+            "https://img.example/partial.jpg",
+        ],
+    )
+    parser = models.BaseParser(
+        {"image_temp_dir": str(tmp_path), "image_download_concurrency": 1}
+    )
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        task = asyncio.create_task(
+            parser.materialize_images(result, client, "https://share.example")
+        )
+        await asyncio.wait_for(partial.wait(), 2)
+        assert sorted(path.stat().st_size for path in tmp_path.iterdir()) == [4, 65536]
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert not list(tmp_path.iterdir())
+    assert not TemporaryFileRegistry.paths(result)
+
+
 @pytest.mark.asyncio
 async def test_materialize_images_streams_original_bytes_to_temporary_file(tmp_path):
     class ChunkedImageStream(httpx.AsyncByteStream):

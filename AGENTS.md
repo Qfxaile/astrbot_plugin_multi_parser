@@ -1,8 +1,6 @@
 # AstrBot 多平台内容解析插件开发指南
 
-> **本文档面向：** Codex  
-> **镜像文档：** [CLAUDE.md](CLAUDE.md) (面向 Claude Code，内容相同)  
-> **维护规则：** 修改本文档时必须同步修改 CLAUDE.md，反之亦然
+> Codex 和 Claude Code 共用本指南。修改时请同步更新 `AGENTS.md` 和 `CLAUDE.md`。
 
 ## 适用范围
 
@@ -65,6 +63,7 @@ uv run ruff check .
 | 消息上下文、分享卡片、自动解析编排、文本处理和投递 | `services/message_context.py`、`services/share_card.py`、`services/parsing/coordinator.py`、`services/text_processing.py`、`services/delivery/service.py` |
 | 投递策略、内容组装、链接过滤、直链投递、事件身份和 OneBot 适配 | `services/delivery/policy.py`、`services/content_assembly.py`、`services/link_filter.py`、`services/delivery/forward_links.py`、`services/event_identity.py`、`services/onebot_*.py` |
 | 合并转发编排与 OneBot 昵称缓存 | `services/delivery/forward.py`、`services/delivery/onebot_identity.py` |
+| 按需阅读与请求级工具 | `services/parsing/share_tool.py`；`parse_mode=tool` 时从当前或被引用的消息取得分享，按图序读取媒体 |
 | LLM 会话历史写入与媒体序列化 | `services/conversation/history.py` |
 | AI 总结、Provider 选择和多模态输入 | `services/summary/service.py`、`services/summary/provider.py` |
 | 视频大小探测、发送和回退策略 | `services/delivery/video.py`、`services/delivery/video_delivery.py`、`services/delivery/video_fallback.py` |
