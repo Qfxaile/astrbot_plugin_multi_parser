@@ -95,16 +95,17 @@ class ParseResult:
         return [line for line in lines if line]
 
     @property
-    def ordered_image_references(self) -> list[str]:
-        """返回按展示顺序排列的图片引用。"""
+    def image_slots(self) -> list[str]:
+        """按展示顺序保留图片位置，获取失败的位置用空字符串表示。"""
         if self.content.ordered_contents:
             return [
-                item.value
+                item.value if item.kind == "image" else ""
                 for item in self.content.ordered_contents
-                if item.kind == "image" and item.value
+                if item.kind in {"image", "image_error"}
             ]
-        return [
-            value
-            for value in [*self.content.cover_urls, *self.content.image_urls]
-            if value
-        ]
+        return [*self.content.cover_urls, *self.content.image_urls]
+
+    @property
+    def ordered_image_references(self) -> list[str]:
+        """返回按展示顺序排列的图片引用。"""
+        return [value for value in self.image_slots if value]
