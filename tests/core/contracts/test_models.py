@@ -35,6 +35,67 @@ def test_invalid_legacy_image_slots_are_marked_in_original_order():
     }
 
 
+def test_invalid_image_number_skips_absent_cover_without_shifting_error_index():
+    from astrbot_multi_parser.core.media import mark_invalid_image_slots
+
+    result = build_result(
+        platform="test", cover_urls=[""], image_urls=["unsafe-image-url"]
+    )
+
+    mark_invalid_image_slots(result, "unsafe-image-url")
+
+    assert result.diagnostics.image_errors == {1: "第 1 张图片获取失败：InvalidURL"}
+    assert result.image_slots == [""]
+
+
+@pytest.mark.parametrize("ordered", [False, True])
+@pytest.mark.parametrize("number", [None, 1, 2, 3])
+async def test_selected_image_skips_absent_entries_and_keeps_failed_positions(
+    tmp_path, ordered, number
+):
+    from astrbot_multi_parser.core.media.operations import requested_image_number
+
+    first = "https://img.example/first.jpg"
+    last = "https://img.example/last.jpg"
+    result = build_result(
+        platform="test",
+        cover_urls=[""],
+        image_urls=[first, "", last],
+        diagnostics=models.ParseDiagnostics(image_errors={2: "第二张图片失败"}),
+        ordered_contents=(
+            [
+                models.OrderedContent("image", ""),
+                models.OrderedContent("image", first),
+                models.OrderedContent("image_error", "第二张图片失败"),
+                models.OrderedContent("image", last),
+            ]
+            if ordered
+            else []
+        ),
+    )
+    requests = []
+
+    def handler(request):
+        requests.append(str(request.url))
+        return httpx.Response(200, content=b"image")
+
+    token = requested_image_number.set(number)
+    try:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            await models.BaseParser(
+                {"image_temp_dir": str(tmp_path)}
+            ).materialize_images(result, client, "https://share.example")
+        expected = {None: [first, last], 1: [first], 2: [], 3: [last]}
+        assert requests == expected[number]
+        assert len(result.image_slots) == 3
+        assert result.image_slots[1] == ""
+        assert result.diagnostics.image_errors == {2: "第二张图片失败"}
+    finally:
+        requested_image_number.reset(token)
+        result.cleanup_temporary_files()
+    assert not list(tmp_path.iterdir())
+
+
 @pytest.mark.asyncio
 async def test_materialize_images_respects_download_concurrency(monkeypatch, tmp_path):
     from astrbot_multi_parser.core.media import ImageMaterializer
