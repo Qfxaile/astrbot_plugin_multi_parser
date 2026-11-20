@@ -81,9 +81,11 @@ uv run ruff check .
 - README 和对应测试
 
 平台注册表提供 `validate_platform_registry()` 和
-`validate_platform_configuration()` 校验入口；调整平台时必须确保注册表、配置 Schema
-和对应测试同时通过。核心与服务公共类型优先从包入口惰性导出，新增公共扩展点时同步
+`validate_platform_configuration()` 校验入口；调整平台时必须确保注册表、原生配置 Schema
+和对应测试同时通过。只由插件 WebUI 管理的细粒度解析开关不写入 `_conf_schema.json`，能力元数据及默认值由平台注册表提供；`PlatformSpec.parse_type_controls_ready` 标记细分开关是否已经接入解析路由，未就绪的平台开关必须在 WebUI 禁用并说明。核心与服务公共类型优先从包入口惰性导出，新增公共扩展点时同步
 检查 `core/__init__.py`、`services/__init__.py` 和包边界测试。
+
+细粒度开关只过滤原有解析候选，保留全开时的选链优先级。短链或内容探测确定到已关闭的类型时使用 `ParseResult.skipped()` 表达静默跳过，自动解析与按需阅读继续尝试下一个候选。实际解析错误遵循原有错误路径。
 
 `services/composition/configuration.py` 和 `services/authentication/service.py` 从注册表装配解析器与登录适配器，只有装配语义变化时才修改。
 
@@ -106,7 +108,7 @@ uv run ruff check .
 - 登录适配器复用 `HTTPPlatformLoginProvider`、`read_login_response_body` 和公共二维码渲染；可信域、Cookie 值及 CookieJar 白名单序列化复用 `core/http.py`。
 - 平台解析器或登录适配器的增删与顺序只在 `platforms/registry.py` 声明，配置和认证服务从注册表装配，不维护平行清单。
 - 公开 API 和关键异步入口使用准确的中文文档字符串。注释解释边界、顺序、并发和降级原因，不逐行复述代码。
-- 配置变化同步 `_conf_schema.json`、README 和测试，并检查 `services/composition/configuration.py` 是否需要调整；注册表已经提供所需装配语义时不要制造无意义改动。
+- 原生插件配置变化同步 `_conf_schema.json`、README 和测试；插件 WebUI 专属配置使用独立持久化，不加入原生配置 Schema。并检查 `services/composition/configuration.py` 是否需要调整；注册表已经提供所需装配语义时不要制造无意义改动。
 - `_conf_schema.json` 的用户可见文案保持简洁：平台开关用一句话概括支持的内容类型；Cookies 配置只说明是否选填及用途；登录状态、填写格式、兼容限制和故障处理等详细说明放入 README，不堆叠在配置提示中。Cookies 分组仍需保留简短的敏感信息警告。
 - 不为单次需求增加兼容层、重复入口或无调用方的扩展点。
 

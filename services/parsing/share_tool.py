@@ -2,6 +2,7 @@
 
 import re
 from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import replace
 from functools import partial
 
@@ -26,7 +27,10 @@ class ShareReader:
         self.recent: OrderedDict[tuple[str, str], ParseContext] = OrderedDict()
 
     async def offer(
-        self, event: AstrMessageEvent, req: ProviderRequest, parsers: list[Parser]
+        self,
+        event: AstrMessageEvent,
+        req: ProviderRequest,
+        enabled_parsers: Callable[[], list[Parser]],
     ):
         """提供受当前消息、引用或本会话最近阅读来源约束的工具。"""
         source = extract_context(event)
@@ -51,6 +55,7 @@ class ShareReader:
                 return
         if not reply and source.json_urls and not text:
             return
+        parsers = enabled_parsers()
         parser = await _matching_parser(parsers, source)
         pending_reply = None
         if parser is None and reply:
@@ -83,8 +88,7 @@ class ShareReader:
             handler=partial(
                 self.read,
                 source=source,
-                parser=parser,
-                parsers=parsers,
+                enabled_parsers=enabled_parsers,
                 pending_reply=pending_reply,
                 key=key,
             ),
@@ -96,7 +100,7 @@ class ShareReader:
         req.func_tool.add_tool(tool)
 
     async def read(
-        self, event, image_number=0, *, source, parser, parsers, pending_reply, key
+        self, event, image_number=0, *, source, enabled_parsers, pending_reply, key
     ):
         """后台读取正文或一张图，把媒体固化后释放解析临时文件。"""
         if type(image_number) is not int or image_number < 0:
@@ -112,12 +116,21 @@ class ShareReader:
                 if not isinstance(raw, dict) or not _same_chat(raw, event):
                     return "无法取得本会话的引用消息。"
                 source = context_from_segments(raw.get("message") or [])
-                parser = await _matching_parser(parsers, source)
-            if parser is None:
-                return "引用消息中没有已启用平台支持的分享链接。"
-            with TemporaryFileRegistry.capture() as files:
-                result = await parser.parse(source)
-                files.pop_all()
+            # 工具可能在配置保存之后才真正执行，不能沿用注册时的解析器列表。
+            if source.combined_text:
+                for parser in enabled_parsers():
+                    if not await parser.match(source):
+                        continue
+                    with TemporaryFileRegistry.capture() as files:
+                        candidate = await parser.parse(source)
+                        if candidate.diagnostics.skipped:
+                            cleanup_temporary_files(candidate)
+                            continue
+                        files.pop_all()
+                    result = candidate
+                    break
+            if result is None:
+                return "没有已启用的解析类型可以读取这条分享。"
             if result.diagnostics.error:
                 return result.diagnostics.error
             if key:

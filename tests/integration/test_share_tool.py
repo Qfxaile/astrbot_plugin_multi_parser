@@ -13,6 +13,7 @@ from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.runners.tool_loop_agent_runner import ToolLoopAgentRunner
 from astrbot.core.agent.tool_image_cache import tool_image_cache
 from astrbot.core.astr_agent_tool_exec import FunctionToolExecutor
+from astrbot_multi_parser.core.contracts import ContentDocument, ParseResult
 from astrbot_multi_parser.main import MultiParserPlugin
 from httpx import AsyncClient
 
@@ -290,6 +291,33 @@ async def test_invalid_index_and_disabled_platform(reader):
     assert "只有 3 张" in error.text and urls == [ARTICLE]
     plugin.config["platform_switches"] = {"wechat": False}
     assert await offered(plugin, event) is None
+
+
+@pytest.mark.parametrize("has_next_platform", [False, True])
+async def test_tool_continues_after_a_skipped_candidate(
+    reader, monkeypatch, has_next_platform
+):
+    plugin, urls = reader
+    wechat = plugin.parsers["wechat"]
+    monkeypatch.setattr(
+        wechat, "parse", AsyncMock(return_value=ParseResult.skipped("wechat"))
+    )
+    github = plugin.parsers["github"]
+    github_result = ParseResult(
+        platform="github", content=ContentDocument(title="已启用的仓库")
+    )
+    monkeypatch.setattr(github, "parse", AsyncMock(return_value=github_result))
+    parsers = [wechat, github] if has_next_platform else [wechat]
+    monkeypatch.setattr(plugin, "enabled_parsers", lambda: parsers)
+    event = message(f"说说这两个链接 {ARTICLE} https://github.com/owner/repo")
+
+    tool = await offered(plugin, event)
+    [text] = await invoke(tool, event)
+
+    assert not urls
+    assert (
+        "已启用的仓库" if has_next_platform else "没有已启用的解析类型"
+    ) in text.text
 
 
 async def test_runner_places_only_requested_image_in_user_role(

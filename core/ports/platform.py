@@ -24,6 +24,14 @@ LoginFactory = Callable[[Mapping[str, object]], PlatformLoginProvider]
 
 
 @dataclass(frozen=True)
+class ParseTypeSpec:
+    """平台内可由管理员独立启停的解析内容类型。"""
+
+    key: str
+    display_name: str
+
+
+@dataclass(frozen=True)
 class PlatformSpec:
     """平台解析、登录和配置装配所需的唯一元数据。"""
 
@@ -32,6 +40,8 @@ class PlatformSpec:
     enabled_by_default: bool = True
     parser_priority: int = 0
     features: frozenset[PlatformFeature] = frozenset({PlatformFeature.PARSE})
+    parse_types: tuple[ParseTypeSpec, ...] = ()
+    parse_type_controls_ready: bool = False
 
     @property
     def key(self) -> str:

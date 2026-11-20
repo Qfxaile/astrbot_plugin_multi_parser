@@ -392,6 +392,76 @@ async def test_parse_live_requests_api_and_materializes_cover(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("trusted_redirect", [True, False])
+async def test_parse_live_falls_back_to_public_page_when_api_returns_empty(
+    monkeypatch,
+    trusted_redirect,
+):
+    live_url = "https://live.douyin.com/80017709309"
+    room = {
+        "status": "2",
+        "title": "页面直播标题",
+        "anchor": {"nickname": "页面主播"},
+        "user_count_str": "2000+",
+        "cover": {"url_list": []},
+    }
+    serialized_room = json.dumps({"data": {"room": room}}, ensure_ascii=False)
+    pace_payload = json.dumps([1, f"d:{serialized_room}"], ensure_ascii=False)
+    page = f"<script>self.__pace_f.push({pace_payload})</script>"
+    requests = []
+
+    async def skip_ttwid(self, client):
+        return None
+
+    monkeypatch.setattr(douyin.DouyinParser, "_ensure_ttwid", skip_ttwid)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/webcast/room/web/enter/":
+            return httpx.Response(200, content=b"", request=request)
+        if request.url.host == "live.douyin.com":
+            return httpx.Response(
+                302,
+                headers={
+                    "Location": (
+                        "https://webcast.amemv.com/douyin/webcast/reflow/771001"
+                        if trusted_redirect
+                        else "https://example.test/untrusted"
+                    )
+                },
+                request=request,
+            )
+        return httpx.Response(200, text=page, request=request)
+
+    real_async_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        douyin_parser.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_async_client(
+            transport=httpx.MockTransport(handler), **kwargs
+        ),
+    )
+
+    parser = douyin.DouyinParser({})
+    if not trusted_redirect:
+        with pytest.raises(ValueError, match="不可信"):
+            await parser.parse(ParseContext(text=live_url))
+        assert [request.url.host for request in requests] == ["live.douyin.com"] * 2
+        return
+    result = await parser.parse(ParseContext(text=live_url))
+
+    assert result.content.title == "页面直播标题"
+    assert result.content.author == "页面主播"
+    assert result.content.extra_lines == ["直播状态: 直播中", "观看人数: 2000+"]
+    assert [request.url.path for request in requests] == [
+        "/webcast/room/web/enter/",
+        "/80017709309",
+        "/douyin/webcast/reflow/771001",
+    ]
+    assert all("Cookie" not in request.headers for request in requests)
+
+
+@pytest.mark.asyncio
 async def test_short_link_redirects_to_live_reflow_page(
     monkeypatch, assert_temporary_image
 ):

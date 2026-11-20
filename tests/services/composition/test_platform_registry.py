@@ -59,6 +59,17 @@ def test_platform_registry_declares_parse_and_login_capabilities():
         )
 
 
+def test_registered_parse_types_have_unique_stable_keys_and_labels():
+    for registration in PLATFORM_REGISTRY:
+        keys = [item.key for item in registration.parse_types]
+        labels = [item.display_name for item in registration.parse_types]
+
+        assert keys
+        assert len(keys) == len(set(keys))
+        assert all(key.isascii() and key.replace("_", "").isalnum() for key in keys)
+        assert all(label.strip() for label in labels)
+
+
 def test_platform_registry_rejects_inconsistent_login_capability(monkeypatch):
     from astrbot_multi_parser.platforms import registry
 
@@ -71,6 +82,7 @@ def test_platform_registry_rejects_inconsistent_login_capability(monkeypatch):
                 parser_type,
                 None,
                 features=frozenset({PlatformFeature.PARSE, PlatformFeature.LOGIN}),
+                parse_types=PLATFORM_REGISTRY[0].parse_types,
             ),
         ),
     )
@@ -104,6 +116,14 @@ def test_platform_registry_matches_configuration_schema():
         (Path(__file__).parents[3] / "_conf_schema.json").read_text(encoding="utf-8")
     )
     validate_platform_configuration(schema)
+
+
+def test_parse_type_metadata_is_not_part_of_native_plugin_schema():
+    schema = json.loads(
+        (Path(__file__).parents[3] / "_conf_schema.json").read_text(encoding="utf-8")
+    )
+    assert "platform_feature_switches" not in schema
+    assert all(registration.parse_types for registration in PLATFORM_REGISTRY)
 
 
 def test_registered_parsers_implement_parser_contract():

@@ -61,15 +61,31 @@ class RedBookParser(
     }
 
     async def match(self, context: ParseContext) -> bool:
-        return bool(re.search(self.PATTERN, context.combined_text))
+        return self._notes_enabled() and bool(
+            re.search(self.PATTERN, context.combined_text)
+        )
+
+    def _notes_enabled(self) -> bool:
+        return self.parse_feature_enabled("video_note") or self.parse_feature_enabled(
+            "image_note"
+        )
 
     async def parse(self, context: ParseContext) -> ParseResult:
-        match = re.search(self.PATTERN, context.combined_text)
-        if not match:
-            result = ParseResult(platform=self.name)
-            result.diagnostics.error = "未找到小红书链接。"
-            return result
+        matched = False
+        for match in re.finditer(self.PATTERN, context.combined_text):
+            matched = True
+            if not self._notes_enabled():
+                break
+            result = await self._parse_note(match.group(0))
+            if not result.diagnostics.skipped:
+                return result
+        if matched:
+            return ParseResult.skipped(self.name)
+        result = ParseResult(platform=self.name)
+        result.diagnostics.error = "未找到小红书链接。"
+        return result
 
+    async def _parse_note(self, url: str) -> ParseResult:
         cookies = build_cookies(
             cookie_config_value(self.config, "redbook_cookies"),
             self.COOKIE_DOMAINS,
@@ -81,7 +97,6 @@ class RedBookParser(
             cookies=cookies,
             **self.http_client_options,
         ) as client:
-            url = match.group(0)
             if (urlparse(url).hostname or "").lower() in self.SHORT_LINK_HOSTS:
                 url = await resolve_short_link(
                     client,
@@ -132,6 +147,9 @@ class RedBookParser(
             image_referer = urlunsplit(
                 parsed_content_url._replace(query="", fragment="")
             )
+            note_type = "video_note" if result.media.video_url else "image_note"
+            if not self.parse_feature_enabled(note_type):
+                return ParseResult.skipped(self.name)
             mark_invalid_image_slots(result, self.INVALID_IMAGE_URL)
             client.cookies.clear()
             return await self.materialize_images(result, client, image_referer)

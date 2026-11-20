@@ -52,6 +52,19 @@ class PluginSettings:
         """返回指定平台是否启用代理。"""
         return self._platform_switch("proxy_switches", name, default)
 
+    def parse_feature_enabled(
+        self, platform: str, feature: str, default: bool = True
+    ) -> bool:
+        """返回指定平台解析类型是否启用，兼容未迁移的旧配置。"""
+        platforms = self.values.get("platform_feature_switches")
+        if not isinstance(platforms, Mapping):
+            return default
+        switches = platforms.get(platform)
+        if not isinstance(switches, Mapping):
+            return default
+        value = switches.get(feature, default)
+        return value if isinstance(value, bool) else default
+
     def _platform_switch(self, key: str, name: str, default: bool) -> bool:
         switches = self.values.get(key)
         if not isinstance(switches, Mapping):

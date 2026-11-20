@@ -57,23 +57,35 @@ class XiaoheiheParser(XiaoheihePostContent, XiaoheiheGameContent, BaseParser):
         self._signer = RequestSigner()
 
     async def match(self, context: ParseContext) -> bool:
+        text = context.combined_text
         return any(
-            re.search(pattern, context.combined_text) for pattern in self.PATTERNS
+            self.parse_feature_enabled(kind)
+            for kind, pattern in (
+                ("post", (self.BBS_WEB_PATTERN, self.BBS_SHARE_PATTERN)),
+                ("game", (self.GAME_WEB_PATTERN, self.GAME_SHARE_PATTERN)),
+            )
+            if any(re.search(item, text) for item in pattern)
         )
 
     async def parse(self, context: ParseContext) -> ParseResult:
         text = context.combined_text
         for pattern in (self.BBS_WEB_PATTERN, self.BBS_SHARE_PATTERN):
-            if match := re.search(pattern, text):
+            if self.parse_feature_enabled("post") and (
+                match := re.search(pattern, text)
+            ):
                 link_id = match.groupdict().get("link_id") or match.groupdict().get(
                     "share_link_id"
                 )
                 return await self._parse_post_by_id(str(link_id))
-        if match := re.search(self.GAME_WEB_PATTERN, text):
+        if self.parse_feature_enabled("game") and (
+            match := re.search(self.GAME_WEB_PATTERN, text)
+        ):
             return await self._parse_game_by_appid(
                 match.group("appid"), match.group("game_type")
             )
-        if match := re.search(self.GAME_SHARE_PATTERN, text):
+        if self.parse_feature_enabled("game") and (
+            match := re.search(self.GAME_SHARE_PATTERN, text)
+        ):
             return await self._parse_game_by_appid(
                 match.group("share_appid"), match.group("share_game_type")
             )

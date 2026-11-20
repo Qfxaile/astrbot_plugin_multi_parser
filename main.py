@@ -1,5 +1,5 @@
 import httpx as httpx
-from astrbot.api import AstrBotConfig, logger
+from astrbot.api import AstrBotConfig, logger, web
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star
@@ -20,18 +20,36 @@ from .services.delivery.video import (
 from .services.message_context import extract_context
 from .services.parsing import ParseCoordinator
 from .services.parsing.share_tool import ShareReader
+from .services.settings.runtime_config import RuntimeSettingsConfig
+from .services.settings.service import PluginSettingsService, SettingsValidationError
 from .services.summary.service import AISummaryService
 
 __all__ = ["MultiParserPlugin", "VideoSizeInfo"]
+
+PLUGIN_NAME = "astrbot_plugin_multi_parser"
 
 
 class MultiParserPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
-        self.parsers = build_parsers(config)
+        self._runtime_config = RuntimeSettingsConfig(config)
+        self._web_settings = PluginSettingsService(
+            config,
+            self._runtime_config,
+            read_store=self.get_kv_data,
+            write_store=self.put_kv_data,
+        )
+        self.parsers = build_parsers(self._runtime_config)
         self._share_reader = ShareReader()
         self._services = ServiceContainer(context, config)
+        if context is not None:
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/settings",
+                self._web_settings_api,
+                ["GET", "POST"],
+                "读取或保存多平台解析 WebUI 设置（包含明文凭据）",
+            )
 
     def _delivery_service(self) -> DeliveryService:
         return self._services.delivery
@@ -183,7 +201,7 @@ class MultiParserPlugin(Star):
     async def offer_share_reader(self, event: AstrMessageEvent, req: ProviderRequest):
         """有分享来源时，为本轮 LLM 提供后台阅读工具。"""
         if self.tool_mode:
-            await self._share_reader.offer(event, req, self.enabled_parsers())
+            await self._share_reader.offer(event, req, self.enabled_parsers)
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def handle_parse(self, event: AstrMessageEvent):
@@ -198,3 +216,24 @@ class MultiParserPlugin(Star):
     async def terminate(self):
         """插件卸载时取消仍在进行的平台登录。"""
         await self._services.authentication.close()
+
+    async def initialize(self) -> None:
+        """加载 WebUI 专属解析设置。"""
+        await self._web_settings.load()
+
+    async def _web_settings_api(self):
+        if web.request.method == "GET":
+            return web.json_response(
+                {"status": "ok", "data": self._web_settings.snapshot()}
+            )
+        try:
+            payload = await web.request.json()
+            settings = await self._web_settings.update(payload)
+            return web.json_response({"status": "ok", "data": settings})
+        except SettingsValidationError as exc:
+            return web.error_response(
+                str(exc), status_code=409 if "重新加载" in str(exc) else 400
+            )
+        except Exception as exc:
+            logger.warning(f"WebUI 设置保存失败: {type(exc).__name__}")
+            return web.error_response("设置保存失败，请重试。", status_code=500)

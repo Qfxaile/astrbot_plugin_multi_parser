@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>多平台解析设置</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="header">
+        <h1><span class="icon-slot" data-icon="settings" aria-hidden="true"></span>多平台解析设置</h1>
+        <div class="header-meta">
+          <span id="scope">当前 AstrBot 实例</span>
+          <span id="status" class="status" role="status">正在读取…</span>
+          <button id="retry" class="button" type="button" hidden>重新读取</button>
+        </div>
+      </header>
+      <nav class="tabs" role="tablist" aria-label="设置分类">
+        <button class="tab" type="button" role="tab" disabled aria-disabled="true"><span class="icon-slot" data-icon="dashboard" aria-hidden="true"></span>工作台</button>
+        <button class="tab" type="button" role="tab" id="platform-tab" aria-selected="true" aria-controls="platform-panel"><span class="icon-slot" data-icon="layers" aria-hidden="true"></span>平台配置</button>
+        <button class="tab" type="button" role="tab" disabled aria-disabled="true"><span class="icon-slot" data-icon="send" aria-hidden="true"></span>发送方式</button>
+        <button class="tab" type="button" role="tab" disabled aria-disabled="true"><span class="icon-slot" data-icon="brain" aria-hidden="true"></span>AI 与会话</button>
+        <button class="tab" type="button" role="tab" disabled aria-disabled="true"><span class="icon-slot" data-icon="shield" aria-hidden="true"></span>黑白名单</button>
+        <button class="tab" type="button" role="tab" disabled aria-disabled="true"><span class="icon-slot" data-icon="network" aria-hidden="true"></span>网络设置</button>
+        <button class="tab" type="button" role="tab" disabled aria-disabled="true"><span class="icon-slot" data-icon="file-text" aria-hidden="true"></span>插件日志</button>
+      </nav>
+      <main class="panels" id="panels">
+        <div class="platform-panel" id="platform-panel" role="tabpanel" aria-labelledby="platform-tab">
+          <aside class="sidebar" aria-labelledby="platform-list-title">
+            <h2 id="platform-list-title"><span class="icon-slot" data-icon="layers" aria-hidden="true"></span>平台列表</h2>
+            <div class="platform-list scroll-area" id="platform-list" tabindex="0" aria-label="滚动浏览平台"></div>
+          </aside>
+          <div class="detail scroll-area" id="detail-scroll" tabindex="0" role="region" aria-label="平台详情">
+            <div class="detail-content" id="detail"><p class="description">正在读取平台配置…</p></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

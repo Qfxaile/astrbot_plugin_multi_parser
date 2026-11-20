@@ -57,6 +57,8 @@
 > [!IMPORTANT]
 > 当前不支持 TikTok，也不解析 Bilibili 音频、独立音轨或 `au` 号。直播仅展示直播间信息，不提取或转发持续直播流；番剧、电影和纪录片仅展示作品介绍，不获取或发送视频。
 
+抖音直播接口返回空内容或无法解析为 JSON 时，插件会尝试从公开直播页提取直播间信息。
+
 ## 快速开始
 
 ### 环境要求
@@ -96,7 +98,9 @@ git clone https://github.com/Qfxaile/astrbot_plugin_multi_parser.git astrbot_plu
 
 ## 配置
 
-所有配置均可在 AstrBot 插件配置页面修改。
+基础配置可在 AstrBot 插件配置页面修改。插件管理中的「平台配置」页面提供平台侧栏、平台启用开关、解析类型细分开关及 Cookies 编辑；开关变更立即生效，凭据输入框按 Enter 保存。解析类型设置只存于插件数据，不会出现在原生配置表单中。平台详情和凭据设置作用于当前 AstrBot 实例。
+
+一条消息包含多个链接时，按原有优先级选择第一个已启用的解析候选。短链在跳转后判定类型，命中已关闭的类型时会静默跳过，并继续检查其他链接。QQ 表情回应在确认有可发送的解析内容后、发送前触发。
 
 ### AI 按需读取分享
 
@@ -169,6 +173,8 @@ git clone https://github.com/Qfxaile/astrbot_plugin_multi_parser.git astrbot_plu
 | `cookies.zhihu_cookies` | 是 | 用于知乎内容解析 |
 
 GitHub 默认启用，仅解析公开仓库主页；Issue、PR、文件、提交等仓库子路径不会触发解析。可在 `github_token` 中填写 GitHub Token 以提高请求速率限制。Token 仅用于请求 `github.com` 仓库页面，不会发送到 OpenGraph 图片地址。
+
+也可以在插件 WebUI 的 GitHub 平台详情中更新或清除 Token。已保存的 Token 和 Cookies 会在输入框中直接以明文显示，修改后按 Enter 保存并立即用于后续请求。请仅在可信且已登录 AstrBot 的管理界面中操作凭据。
 
 番茄小说仅解析 `changdunovel.com/t/...` 公开分享链接，展示小说标题、作者、简介和封面，不抓取章节正文，也不需要 Cookie。
 

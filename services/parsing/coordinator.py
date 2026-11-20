@@ -87,10 +87,11 @@ class ParseCoordinator:
                 if not matched:
                     continue
                 restore_send_state = True
-                await self.runtime.react_success(event)
                 result = await parser.parse(context)
                 if not isinstance(result, ParseResult):
                     raise TypeError(f"{parser.name} parse 必须返回 ParseResult")
+                if result.diagnostics.skipped:
+                    continue
                 send_video_by_url = PluginSettings(self.runtime.config).boolean(
                     "send_video_by_url", True
                 )
@@ -113,6 +114,11 @@ class ParseCoordinator:
                     include_video_url=not send_video_by_url,
                     include_video=should_send_video,
                 )
+                if not result.diagnostics.error and (
+                    content_results or result.media.audio_url or result.media.video_url
+                ):
+                    await self.runtime.react_success(event)
+
                 if self.runtime.is_forward_delivery(content_results):
                     try:
                         await self.runtime.send_forward_results(

@@ -1,6 +1,7 @@
 """识别微博链接并分派到对应内容解析器。"""
 
 import re
+from collections.abc import Awaitable, Callable, Iterator
 
 import httpx
 
@@ -60,33 +61,49 @@ class WeiboParser(
     }
 
     async def match(self, context: ParseContext) -> bool:
+        return any(self._route_enabled(kind) for kind, _, _ in self._routes(context))
+
+    def _route_enabled(self, kind: str | None) -> bool:
+        if kind is not None:
+            return self.parse_feature_enabled(kind)
         return any(
-            re.search(pattern, context.combined_text) for pattern in self.PATTERNS
+            self.parse_feature_enabled(feature)
+            for feature in ("post", "article", "video")
         )
 
-    async def parse(self, context: ParseContext) -> ParseResult:
+    def _routes(
+        self, context: ParseContext
+    ) -> Iterator[tuple[str | None, Callable[[str], Awaitable[ParseResult]], str]]:
         text = context.combined_text
         if match := re.search(self.TV_PATTERN, text):
-            return await self._parse_status_id(self._mid_to_bid(match.group("mid")))
+            yield "post", self._parse_tv, match.group("mid")
         if match := re.search(self.VIDEO_PATTERN, text):
-            return await self._parse_video_fid(match.group("fid"))
+            yield "video", self._parse_video_fid, match.group("fid")
         for pattern in self.ARTICLE_PATTERNS:
             if match := re.search(pattern, text):
-                article_id = match.groupdict().get(
-                    "article_query_id"
-                ) or match.groupdict().get("article_path_id")
-                return await self._parse_article(str(article_id))
-        if match := re.search(self.SHARE_PATTERN, text):
-            return await self._parse_share(match.group(0))
+                yield "article", self._parse_article, match.group(1)
+        for match in re.finditer(self.SHARE_PATTERN, text):
+            yield None, self._parse_share, match.group(0)
         for pattern in self.STATUS_PATTERNS:
             if match := re.search(pattern, text):
-                status_id = match.groupdict().get(
-                    "desktop_id"
-                ) or match.groupdict().get("mobile_id")
-                return await self._parse_status_id(str(status_id))
+                yield "post", self._parse_status_id, match.group(1)
+
+    async def parse(self, context: ParseContext) -> ParseResult:
+        matched = False
+        for kind, handler, value in self._routes(context):
+            matched = True
+            if self._route_enabled(kind):
+                result = await handler(value)
+                if not result.diagnostics.skipped:
+                    return result
+        if matched:
+            return ParseResult.skipped(self.name)
         result = ParseResult(platform=self.name)
         result.diagnostics.error = "未找到微博链接。"
         return result
+
+    async def _parse_tv(self, mid: str) -> ParseResult:
+        return await self._parse_status_id(self._mid_to_bid(mid))
 
     async def _parse_share(self, url: str) -> ParseResult:
         async with httpx.AsyncClient(

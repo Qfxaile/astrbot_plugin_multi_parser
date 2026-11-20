@@ -1,5 +1,7 @@
+import asyncio
 import base64
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -11,12 +13,14 @@ from astrbot_multi_parser.core.contracts import (
     DeliveryHints,
     MediaBundle,
     OrderedContent,
+    ParseContext,
     ParseDiagnostics,
     ParseResult,
 )
 from astrbot_multi_parser.core.http import CookieAccessError
 from astrbot_multi_parser.core.media import operations as media
 from astrbot_multi_parser.main import MultiParserPlugin, VideoSizeInfo
+from astrbot_multi_parser.platforms.weibo import parser as weibo_parser
 from astrbot_multi_parser.services.delivery import DeliveryService
 from result_factory import build_result
 
@@ -212,6 +216,23 @@ def test_plugin_registers_all_supported_parsers():
     }
 
 
+def test_plugin_registers_web_settings_api_with_plugin_name_prefix():
+    context = SimpleNamespace(registered_web_apis=[])
+
+    def register_web_api(route, handler, methods, description):
+        context.registered_web_apis.append((route, handler, methods, description))
+
+    context.register_web_api = register_web_api
+    MultiParserPlugin(context, {})
+
+    route, handler, methods, description = context.registered_web_apis[0]
+    assert route == "/astrbot_plugin_multi_parser/settings"
+    assert handler.__name__ == "_web_settings_api"
+    assert methods == ["GET", "POST"]
+    assert description
+    assert len(context.registered_web_apis) == 1
+
+
 def test_plugin_respects_platform_switches():
     config = {
         "platform_switches": {
@@ -310,6 +331,138 @@ async def test_parse_delivery_preserves_existing_sent_event_state(monkeypatch):
         event._has_send_oper = True
 
     assert event._has_send_oper is True
+
+
+@pytest.mark.asyncio
+async def test_parse_reaction_waits_for_nonempty_successful_result(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda event: SimpleNamespace(combined_text="https://example.com/post"),
+    )
+    plugin = make_plugin(
+        ParseResult(platform="测试平台"),
+        enable_parse_reaction=True,
+    )
+    bot = FakeBot()
+    event = FakeEvent(bot=bot, raw_message={"message_id": 123})
+
+    assert [item async for item in plugin.handle_parse(event)] == []
+    assert bot.actions == []
+
+
+@pytest.mark.asyncio
+async def test_parse_reaction_skips_error_result(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda event: SimpleNamespace(combined_text="https://example.com/post"),
+    )
+    result = ParseResult(platform="测试平台")
+    result.diagnostics.error = "内容不可用"
+    plugin = make_plugin(result, enable_parse_reaction=True)
+    bot = FakeBot()
+    event = FakeEvent(bot=bot, raw_message={"message_id": 123})
+
+    await collect_plugin_results(plugin, event)
+
+    assert bot.actions == []
+
+
+@pytest.mark.asyncio
+async def test_parse_reaction_runs_for_successful_result(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda event: SimpleNamespace(combined_text="https://example.com/post"),
+    )
+    plugin = make_plugin(
+        build_result(platform="测试平台", title="解析结果"),
+        enable_parse_reaction=True,
+    )
+    bot = FakeBot()
+    event = FakeEvent(bot=bot, raw_message={"message_id": 123})
+
+    results = plugin.handle_parse(event)
+    await anext(results)
+
+    assert bot.actions == [
+        ("set_msg_emoji_like", {"message_id": 123, "emoji_id": "124"})
+    ]
+    await results.aclose()
+
+
+@pytest.mark.parametrize("with_next_platform", [False, True])
+async def test_disabled_weibo_short_link_is_silent_and_allows_next_platform(
+    monkeypatch, with_next_platform
+):
+    share = "https://mapp.api.weibo.cn/fx/ABC123.html"
+    context = ParseContext(text=f"{share} https://github.com/owner/repo")
+    plugin = make_plugin(
+        build_result(platform="fake", title="其他平台结果"), enable_parse_reaction=True
+    )
+    weibo = weibo_parser.WeiboParser(
+        {"platform_feature_switches": {"weibo": {"post": False}}}
+    )
+    parsers = [weibo, plugin.parsers["fake"]] if with_next_platform else [weibo]
+    monkeypatch.setattr(plugin, "enabled_parsers", lambda: parsers)
+    monkeypatch.setattr(main, "extract_context", lambda event: context)
+    monkeypatch.setattr(
+        weibo_parser,
+        "resolve_share_url",
+        AsyncMock(return_value="https://weibo.com/123/AbCd"),
+    )
+    bot = FakeBot()
+    event = FakeEvent(bot=bot, raw_message={"message_id": 123})
+
+    results = await collect_plugin_results(plugin, event)
+
+    assert [result[0].text for result in results] == (
+        ["其他平台结果"] if with_next_platform else []
+    )
+    assert len(bot.actions) == int(with_next_platform)
+
+
+@pytest.mark.parametrize("waiting_stage", ["parse", "reaction", "send"])
+async def test_another_message_can_finish_while_first_waits(monkeypatch, waiting_stage):
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def wait_if_first(stage, source):
+        if stage == waiting_stage and source == "first":
+            entered.set()
+            await release.wait()
+
+    async def parse(context):
+        await wait_if_first("parse", context.text)
+        return build_result(platform="fake", title=context.text)
+
+    async def react(event):
+        await wait_if_first("reaction", event.source)
+
+    async def dispatch(event):
+        results = []
+        async for message in plugin.handle_parse(event):
+            await wait_if_first("send", event.source)
+            results.append(message[0].text)
+        return results
+
+    monkeypatch.setattr(
+        main, "extract_context", lambda event: ParseContext(text=event.source)
+    )
+    plugin = make_plugin(ParseResult(platform="fake"))
+    monkeypatch.setattr(plugin.parsers["fake"], "parse", parse)
+    monkeypatch.setattr(plugin, "react_success", react)
+    first, second = FakeEvent(), FakeEvent()
+    first.source, second.source = "first", "second"
+    first_task = asyncio.create_task(dispatch(first))
+    try:
+        await asyncio.wait_for(entered.wait(), timeout=2)
+        assert await asyncio.wait_for(dispatch(second), timeout=2) == ["second"]
+        assert not first_task.done()
+    finally:
+        release.set()
+        assert await asyncio.wait_for(first_task, timeout=2) == ["first"]
 
 
 @pytest.mark.asyncio

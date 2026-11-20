@@ -4,7 +4,7 @@ import inspect
 from collections.abc import Mapping
 
 from ..core.parser import BaseParser
-from ..core.ports import PlatformFeature, PlatformSpec
+from ..core.ports import ParseTypeSpec, PlatformFeature, PlatformSpec
 from .bilibili import BilibiliLoginProvider, BilibiliParser
 from .douyin import DouyinLoginProvider, DouyinParser
 from .fanqie import FanqieParser
@@ -32,6 +32,15 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
                 PlatformFeature.IMAGES,
             }
         ),
+        parse_type_controls_ready=True,
+        parse_types=(
+            ParseTypeSpec("video", "视频"),
+            ParseTypeSpec("dynamic", "动态/图文"),
+            ParseTypeSpec("article", "专栏文章"),
+            ParseTypeSpec("live", "直播间"),
+            ParseTypeSpec("bangumi", "番剧/影视介绍"),
+            ParseTypeSpec("mall", "会员购/票务/商品"),
+        ),
     ),
     PlatformSpec(
         DouyinParser,
@@ -44,11 +53,21 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
                 PlatformFeature.IMAGES,
             }
         ),
+        parse_type_controls_ready=True,
+        parse_types=(
+            ParseTypeSpec("video", "视频"),
+            ParseTypeSpec("image_text", "图文"),
+            ParseTypeSpec("live", "直播"),
+            ParseTypeSpec("product", "商品"),
+            ParseTypeSpec("music", "汽水音乐"),
+        ),
     ),
     PlatformSpec(
         FanqieParser,
         None,
         features=frozenset({PlatformFeature.PARSE, PlatformFeature.IMAGES}),
+        parse_type_controls_ready=True,
+        parse_types=(ParseTypeSpec("novel", "小说分享"),),
     ),
     PlatformSpec(
         RedBookParser,
@@ -59,6 +78,11 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
                 PlatformFeature.LOGIN,
                 PlatformFeature.IMAGES,
             }
+        ),
+        parse_type_controls_ready=True,
+        parse_types=(
+            ParseTypeSpec("video_note", "视频笔记"),
+            ParseTypeSpec("image_note", "图文笔记"),
         ),
     ),
     PlatformSpec(
@@ -71,6 +95,8 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
                 PlatformFeature.IMAGES,
             }
         ),
+        parse_type_controls_ready=True,
+        parse_types=(ParseTypeSpec("post", "帖子"),),
     ),
     PlatformSpec(
         WeiboParser,
@@ -83,6 +109,12 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
                 PlatformFeature.IMAGES,
             }
         ),
+        parse_type_controls_ready=True,
+        parse_types=(
+            ParseTypeSpec("post", "微博/转发"),
+            ParseTypeSpec("article", "长文章"),
+            ParseTypeSpec("video", "独立视频"),
+        ),
     ),
     PlatformSpec(
         WeChatParser,
@@ -93,6 +125,11 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
                 PlatformFeature.LOGIN,
                 PlatformFeature.IMAGES,
             }
+        ),
+        parse_type_controls_ready=True,
+        parse_types=(
+            ParseTypeSpec("article", "公众号文章"),
+            ParseTypeSpec("channels", "视频号"),
         ),
     ),
     PlatformSpec(
@@ -105,6 +142,11 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
                 PlatformFeature.IMAGES,
             }
         ),
+        parse_type_controls_ready=True,
+        parse_types=(
+            ParseTypeSpec("post", "社区帖子"),
+            ParseTypeSpec("game", "游戏信息"),
+        ),
     ),
     PlatformSpec(
         ZhihuParser,
@@ -116,11 +158,19 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
                 PlatformFeature.IMAGES,
             }
         ),
+        parse_type_controls_ready=True,
+        parse_types=(
+            ParseTypeSpec("question_answer", "问题/回答"),
+            ParseTypeSpec("article", "文章"),
+            ParseTypeSpec("idea", "想法"),
+        ),
     ),
     PlatformSpec(
         GitHubParser,
         None,
         features=frozenset({PlatformFeature.PARSE, PlatformFeature.IMAGES}),
+        parse_type_controls_ready=True,
+        parse_types=(ParseTypeSpec("repository", "仓库主页"),),
     ),
     PlatformSpec(
         QQChannelParser,
@@ -132,6 +182,8 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
                 PlatformFeature.IMAGES,
             }
         ),
+        parse_type_controls_ready=True,
+        parse_types=(ParseTypeSpec("post", "频道帖子"),),
     ),
     PlatformSpec(
         QzoneParser,
@@ -143,12 +195,16 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
                 PlatformFeature.IMAGES,
             }
         ),
+        parse_type_controls_ready=True,
+        parse_types=(ParseTypeSpec("post", "公开说说"),),
     ),
     PlatformSpec(
         PixivParser,
         None,
         enabled_by_default=False,
         features=frozenset({PlatformFeature.PARSE, PlatformFeature.IMAGES}),
+        parse_type_controls_ready=True,
+        parse_types=(ParseTypeSpec("illustration", "插画作品"),),
     ),
 )
 
@@ -185,6 +241,16 @@ def validate_platform_registry() -> None:
             raise ValueError(f"{item.key} 的 match 和 parse 必须是异步方法")
         if PlatformFeature.PARSE not in item.features:
             raise ValueError(f"{item.key} 必须声明 parse 能力")
+        parse_type_keys = [parse_type.key for parse_type in item.parse_types]
+        if not parse_type_keys or len(parse_type_keys) != len(set(parse_type_keys)):
+            raise ValueError(f"{item.key} 的解析类型键为空或重复")
+        if any(
+            not key.isascii() or not key.replace("_", "").isalnum()
+            for key in parse_type_keys
+        ):
+            raise ValueError(f"{item.key} 的解析类型键格式无效")
+        if any(not parse_type.display_name.strip() for parse_type in item.parse_types):
+            raise ValueError(f"{item.key} 的解析类型显示名不能为空")
         if item.supports_login != item.supports(PlatformFeature.LOGIN):
             raise ValueError(f"{item.key} 的 login 能力声明与 Provider 不一致")
         if item.login_provider_type is not None and not inspect.isclass(
@@ -202,7 +268,7 @@ def validate_platform_registry() -> None:
 
 
 def validate_platform_configuration(schema: Mapping[str, object]) -> None:
-    """校验配置 Schema 的平台开关和登录 Cookie 键与注册表一致。"""
+    """校验原生插件配置中的平台开关和登录 Cookie 配置。"""
     switches = schema.get("platform_switches")
     switch_items = switches.get("items") if isinstance(switches, Mapping) else None
     registered_keys = {item.key for item in parser_platforms()}
