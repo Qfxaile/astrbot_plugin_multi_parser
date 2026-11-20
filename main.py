@@ -222,14 +222,19 @@ class MultiParserPlugin(Star):
         await self._web_settings.load()
 
     async def _web_settings_api(self):
+        headers = {"Cache-Control": "no-store"}
         if web.request.method == "GET":
+            settings = await self._web_settings.read_snapshot()
+            settings["providers"] = self._web_chat_providers()
             return web.json_response(
-                {"status": "ok", "data": self._web_settings.snapshot()}
+                {"status": "ok", "data": settings}, headers=headers
             )
         try:
             payload = await web.request.json()
             settings = await self._web_settings.update(payload)
-            return web.json_response({"status": "ok", "data": settings})
+            return web.json_response(
+                {"status": "ok", "data": settings}, headers=headers
+            )
         except SettingsValidationError as exc:
             return web.error_response(
                 str(exc), status_code=409 if "重新加载" in str(exc) else 400
@@ -237,3 +242,19 @@ class MultiParserPlugin(Star):
         except Exception as exc:
             logger.warning(f"WebUI 设置保存失败: {type(exc).__name__}")
             return web.error_response("设置保存失败，请重试。", status_code=500)
+
+    def _web_chat_providers(self) -> list[dict[str, str]]:
+        """仅向设置表单公开当前实例已加载聊天模型的 ID 和名称。"""
+        providers = []
+        try:
+            for provider in self.context.get_all_providers():
+                try:
+                    meta = provider.meta()
+                    if isinstance(meta.id, str) and meta.id:
+                        model = meta.model if isinstance(meta.model, str) else ""
+                        providers.append({"id": meta.id, "model": model})
+                except Exception as exc:
+                    logger.debug(f"WebUI 读取模型信息失败: {type(exc).__name__}")
+        except Exception as exc:
+            logger.debug(f"WebUI 读取聊天模型列表失败: {type(exc).__name__}")
+        return providers

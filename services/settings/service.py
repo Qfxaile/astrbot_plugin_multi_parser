@@ -4,18 +4,23 @@ import asyncio
 from collections.abc import Awaitable, Callable, Mapping, MutableMapping
 from copy import deepcopy
 
-from ...core.http import cookie_config_value
+from ...core.http import (
+    ProxyConfigurationError,
+    cookie_config_value,
+    validate_proxy_url,
+)
 from ...core.settings import PluginSettings
 from ...platforms.registry import PLATFORM_REGISTRY
+from .native_fields import (
+    SettingsValidationError,
+    native_groups,
+    validate_native_settings,
+)
 from .runtime_config import RuntimeSettingsConfig
 
 FEATURES_KEY = "webui_parse_type_settings_v1"
 MAX_COOKIE_LENGTH = 8192
 MAX_GITHUB_TOKEN_LENGTH = 512
-
-
-class SettingsValidationError(ValueError):
-    """表示 WebUI 配置提交未通过字段白名单或类型检查。"""
 
 
 class PluginSettingsService:
@@ -46,6 +51,11 @@ class PluginSettingsService:
         self._revision = revision if type(revision) is int and revision >= 0 else 0
         self.runtime_config.replace_parse_types(self._parse_types)
 
+    async def read_snapshot(self) -> dict[str, object]:
+        """等保存或回滚结束后，再读取同一版本的配置和版本号。"""
+        async with self._lock:
+            return self.snapshot()
+
     def snapshot(self) -> dict[str, object]:
         settings = PluginSettings(self.config)
         platforms = []
@@ -58,6 +68,7 @@ class PluginSettingsService:
                     "enabled": settings.platform_enabled(
                         registration.key, registration.enabled_by_default
                     ),
+                    "proxy_enabled": settings.platform_proxy_enabled(registration.key),
                     "parse_type_controls_ready": registration.parse_type_controls_ready,
                     "parse_types": [
                         {
@@ -83,6 +94,7 @@ class PluginSettingsService:
             "revision": self._revision,
             "scope": "当前 AstrBot 实例",
             "platforms": platforms,
+            "groups": native_groups(self.config),
         }
 
     async def update(self, payload: object) -> dict[str, object]:
@@ -104,6 +116,8 @@ class PluginSettingsService:
             "cookies",
             "clear_cookies",
             "github_token",
+            "settings",
+            "proxy_switches",
         }
         if set(payload) - allowed:
             raise SettingsValidationError("请求包含不支持的配置字段")
@@ -125,7 +139,8 @@ class PluginSettingsService:
             if set(new_cookies) & set(clear_cookies):
                 raise SettingsValidationError("同一平台不能同时替换和清除 Cookies")
 
-            native_changes: dict[str, object] = {}
+            native_changes = validate_native_settings(payload.get("settings", {}))
+            self._apply_proxy_changes(native_changes, payload.get("proxy_switches", {}))
             if "github_token" in payload:
                 native_changes["github_token"] = self._validate_github_token(
                     payload["github_token"]
@@ -185,6 +200,29 @@ class PluginSettingsService:
         save_sync = getattr(self.config, "save_config", None)
         if callable(save_sync):
             await asyncio.to_thread(save_sync)
+
+    def _apply_proxy_changes(self, changes: dict[str, object], payload: object) -> None:
+        updates = self._validate_switches(payload)
+        if not updates and "proxy_url" not in changes:
+            return
+        current = self.config.get("proxy_switches")
+        switches = dict(current) if isinstance(current, Mapping) else {}
+        switches.update(updates)
+        if updates:
+            changes["proxy_switches"] = switches
+        current_url = PluginSettings(self.config).text("proxy_url")
+        new_url = changes.get("proxy_url", current_url)
+        try:
+            if any(updates.values()) or ("proxy_url" in changes and new_url):
+                validate_proxy_url(new_url)
+        except ProxyConfigurationError as exc:
+            raise SettingsValidationError(str(exc)) from None
+        if "proxy_url" in changes and not new_url:
+            settings = PluginSettings({"proxy_switches": switches})
+            if any(
+                settings.platform_proxy_enabled(item.key) for item in PLATFORM_REGISTRY
+            ):
+                raise SettingsValidationError("请先关闭所有平台代理，再清空代理地址")
 
     @staticmethod
     def _validate_github_token(value: object) -> str:

@@ -82,6 +82,8 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 原生插件配置变化同步 `_conf_schema.json`、README 和测试，并检查配置服务是否需要调整。插件 WebUI 专属设置使用独立持久化，不加入 `_conf_schema.json`。项目环境统一通过 `uv` 管理，不假设仓库、AstrBot 或虚拟环境位于固定目录。改变依赖时同步 `pyproject.toml`，运行依赖还需同步 `requirements.txt`。
 
+将原生配置接入 WebUI 时，先核对配置 Schema、运行时消费者和字段生效条件，再在 `services/settings/native_fields.py` 维护菜单白名单。用配置服务测试核对字段覆盖、部分更新与写入失败回滚。用浏览器检查 `pages/config/` 的滚动、即时保存和输入草稿行为。
+
 ### 修改版本或发布资料
 
 以 `metadata.yaml` 为唯一版本源。只有用户明确要求发布或升版时才修改版本，并同步 README 徽章、CHANGELOG 和 Git 标签；普通功能、修复和重构不升版。

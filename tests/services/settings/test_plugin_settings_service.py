@@ -1,8 +1,12 @@
 import asyncio
+import json
 from copy import deepcopy
+from pathlib import Path
 from threading import get_ident
 
 import pytest
+from astrbot_multi_parser.core.http import http_client_proxy_options
+from astrbot_multi_parser.core.settings import PluginSettings
 from astrbot_multi_parser.platforms.github.parser import GitHubParser
 from astrbot_multi_parser.services.settings.runtime_config import RuntimeSettingsConfig
 from astrbot_multi_parser.services.settings.service import (
@@ -46,6 +50,203 @@ def make_service(config=None, store=None):
         write_store=store.put,
     )
     return service, runtime, store, config
+
+
+def test_web_menus_cover_native_schema_without_exposing_internal_fields():
+    schema_path = Path(__file__).resolve().parents[3] / "_conf_schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    service, _, _, _ = make_service({"internal_option": "hidden"})
+
+    groups = service.snapshot()["groups"]
+    assert set(groups) == {"delivery", "ai", "network"}
+    fields = [
+        field for cards in groups.values() for card in cards for field in card["fields"]
+    ]
+    group_values = {field["key"]: field["value"] for field in fields}
+    elsewhere = {"platform_switches", "proxy_switches", "cookies", "github_token"}
+    assert len(group_values) == len(fields)
+    assert group_values == {
+        key: value["default"] for key, value in schema.items() if key not in elsewhere
+    }
+    assert {field["key"] for field in fields if field["type"] == "provider"} == {
+        "ai_summary_text_provider_id",
+        "ai_summary_vision_provider_id",
+    }
+
+
+async def test_native_menu_updates_live_values_and_keeps_unrelated_config():
+    config = Config(forward_mode="always", github_token="keep", internal_option=3)
+    service, runtime, store, _ = make_service(config)
+    settings = PluginSettings(runtime)
+    assert settings.text("forward_mode") == "always"
+    prompt = "第一行\n第二行\n"
+
+    snapshot = await service.update(
+        {
+            "revision": 0,
+            "settings": {
+                "forward_mode": "never",
+                "parse_mode": "tool",
+                "enable_ai_summary": True,
+                "ai_summary_text_provider_id": "summarizer",
+                "ai_summary_prompt": prompt,
+                "request_timeout_seconds": 45,
+                "size_check_timeout_seconds": 2.5,
+            },
+        }
+    )
+
+    assert settings.text("forward_mode") == "never"
+    assert settings.text("parse_mode") == "tool"
+    assert settings.boolean("enable_ai_summary") is True
+    assert settings.text("ai_summary_text_provider_id") == "summarizer"
+    assert settings.integer("request_timeout_seconds") == 45
+    assert settings.decimal("size_check_timeout_seconds") == 2.5
+    group_values = {
+        field["key"]: field["value"]
+        for cards in snapshot["groups"].values()
+        for card in cards
+        for field in card["fields"]
+    }
+    assert group_values["ai_summary_prompt"] == prompt
+    assert group_values["forward_mode"] == "never"
+    assert config["github_token"] == "keep"
+    assert config["internal_option"] == 3
+    assert config.save_calls == 1
+    assert store.values[FEATURES_KEY]["revision"] == 1
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        {"forward_mode": "unknown"},
+        {"non_forward_message_limit": -2},
+        {"enable_ai_summary": "true"},
+        {"request_timeout_seconds": True},
+        {"size_check_timeout_seconds": float("nan")},
+        {"ai_summary_timeout_seconds": float("inf")},
+        {"image_download_concurrency": 17},
+        {"image_download_concurrency": 0},
+        {"ai_summary_max_input_chars": 999},
+        {"github_token": "wrong section"},
+        {"platform_feature_switches": {}},
+    ],
+)
+async def test_invalid_native_menu_values_leave_config_and_revision_unchanged(invalid):
+    service, _, store, config = make_service()
+
+    with pytest.raises(SettingsValidationError):
+        await service.update(
+            {"revision": 0, "settings": {"parse_mode": "tool", **invalid}}
+        )
+
+    assert config == store.values == {}
+    assert service.snapshot()["revision"] == 0
+
+
+async def test_proxy_requires_valid_url_and_updates_individual_platforms():
+    service, runtime, _, config = make_service(Config(proxy_switches={"weibo": False}))
+
+    with pytest.raises(SettingsValidationError, match="代理"):
+        await service.update({"revision": 0, "proxy_switches": {"bilibili": True}})
+    with pytest.raises(SettingsValidationError, match="代理"):
+        await service.update(
+            {"revision": 0, "settings": {"proxy_url": "socks5://proxy.example:1080"}}
+        )
+    with pytest.raises(SettingsValidationError, match="开关"):
+        await service.update({"revision": 0, "proxy_switches": {"unknown": True}})
+
+    url = "http://user:password@proxy.example:8080"
+    applied = await service.update(
+        {
+            "revision": 0,
+            "settings": {"proxy_url": url},
+            "proxy_switches": {"bilibili": True},
+        }
+    )
+    assert config["proxy_switches"] == {"weibo": False, "bilibili": True}
+    platform = next(item for item in applied["platforms"] if item["key"] == "bilibili")
+    assert platform["proxy_enabled"] is True
+    assert http_client_proxy_options(runtime, "bilibili") == {
+        "trust_env": False,
+        "proxy": url,
+    }
+    assert http_client_proxy_options(runtime, "weibo") == {"trust_env": False}
+
+    with pytest.raises(SettingsValidationError, match="清空"):
+        await service.update({"revision": 1, "settings": {"proxy_url": ""}})
+    await service.update(
+        {
+            "revision": 1,
+            "settings": {"proxy_url": ""},
+            "proxy_switches": {"bilibili": False},
+        }
+    )
+
+    assert config["proxy_url"] == ""
+    assert http_client_proxy_options(runtime, "bilibili") == {"trust_env": False}
+
+
+async def test_native_menu_save_failure_rolls_back_existing_and_new_values():
+    config = Config(forward_mode="always", fail_first_save=True)
+    service, runtime, store, _ = make_service(config)
+
+    with pytest.raises(OSError, match="disk failure"):
+        await service.update(
+            {
+                "revision": 0,
+                "settings": {
+                    "forward_mode": "never",
+                    "proxy_url": "https://proxy.example",
+                },
+                "proxy_switches": {"github": True},
+            }
+        )
+
+    assert config == {"forward_mode": "always"}
+    assert runtime["forward_mode"] == "always"
+    assert "proxy_switches" not in runtime
+    assert store.values == {}
+    assert service.snapshot()["revision"] == 0
+
+
+async def test_web_snapshot_waits_for_pending_write_and_reads_rolled_back_values():
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    class FailingStore(Store):
+        async def put(self, key, value):
+            started.set()
+            await release.wait()
+            raise OSError("storage failure")
+
+    service, _, _, _ = make_service(Config(forward_mode="always"), FailingStore())
+    saving = asyncio.create_task(
+        service.update({"revision": 0, "settings": {"forward_mode": "never"}})
+    )
+    try:
+        await asyncio.wait_for(started.wait(), timeout=2)
+        reading = asyncio.create_task(service.read_snapshot())
+        await asyncio.sleep(0)
+        assert not reading.done()
+    finally:
+        release.set()
+        with pytest.raises(OSError, match="storage failure"):
+            await asyncio.wait_for(saving, timeout=2)
+
+    snapshot = await asyncio.wait_for(reading, timeout=2)
+    assert snapshot["revision"] == 0
+    delivery_fields = [
+        field for card in snapshot["groups"]["delivery"] for field in card["fields"]
+    ]
+    assert (
+        next(
+            field["value"]
+            for field in delivery_fields
+            if field["key"] == "forward_mode"
+        )
+        == "always"
+    )
 
 
 async def test_native_update_awaits_async_save_without_waiting_for_other_tasks():

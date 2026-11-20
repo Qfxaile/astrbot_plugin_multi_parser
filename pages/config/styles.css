@@ -219,3 +219,104 @@ h3 { font-size: 15px; }
   .sidebar h2 { padding: 8px var(--gutter) 2px; }
   .detail { padding-block: 14px; }
 }
+
+select, textarea { font: inherit; }
+:where(select, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.settings-row { padding: 10px 0; }
+.field-label { min-width: 0; flex: 1; }
+.field-label label { font-weight: 600; }
+.field-label .description { margin-top: 3px; }
+.settings-input { min-width: 0; margin: 0; }
+.settings-select, .settings-form { width: min(44%, 320px); flex: none; }
+.settings-row-stacked { align-items: stretch; flex-direction: column; }
+.settings-row-stacked .settings-form { width: 100%; }
+.prompt-input { min-height: 148px; resize: vertical; }
+
+.settings-select { position: relative; }
+.settings-select select {
+  display: block;
+  appearance: none;
+  padding-inline: 12px 36px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.settings-select::after {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: 15px;
+  width: 8px;
+  height: 8px;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  color: var(--muted);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+  content: "";
+}
+
+.settings-select:has(select:disabled)::after { opacity: .6; }
+.settings-select select:disabled { cursor: not-allowed; }
+.settings-select select:enabled:hover {
+  border-color: var(--accent);
+  background: var(--surface-hover);
+}
+
+/* 浏览器支持自定义原生选项面板时，沿用页面配色和间距。 */
+@supports (appearance: base-select) and selector(::picker(select)) {
+  .settings-select select, .settings-select ::picker(select) { appearance: base-select; }
+  .settings-select select::picker-icon { display: none; }
+  .settings-select select:open { border-color: var(--accent); }
+  .settings-select:has(select:open)::after {
+    color: var(--accent);
+    transform: translateY(-25%) rotate(225deg);
+  }
+
+  .settings-select ::picker(select) {
+    box-sizing: border-box;
+    inline-size: anchor-size(width);
+    min-inline-size: 0;
+    max-block-size: min(20rem, 45dvh);
+    margin-block: 5px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    color: var(--text);
+    background: var(--surface);
+    box-shadow: 0 8px 22px #0003;
+    overflow-y: auto;
+  }
+
+  .settings-select option {
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 7px 9px;
+    border-radius: calc(var(--radius) - 3px);
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .settings-select option:checked { background: var(--accent-soft); font-weight: 600; }
+  .settings-select option:is(:hover, :focus-visible) {
+    outline: 1px solid var(--accent);
+    outline-offset: -1px;
+    background: var(--surface-hover);
+  }
+  .settings-select option::checkmark {
+    flex: none;
+    order: 1;
+    margin-inline-start: auto;
+    color: var(--accent);
+  }
+}
+
+.proxy-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px 16px; margin-top: 12px; }
+.proxy-row { padding-inline: 12px; border: 1px solid var(--line); border-radius: var(--radius); }
+.proxy-row + .proxy-row { border-top: 1px solid var(--line); }
+@media (max-width: 480px) {
+  .settings-row:has(.settings-form, .settings-select) { align-items: stretch; flex-direction: column; }
+  .settings-select, .settings-form { width: 100%; }
+}

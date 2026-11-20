@@ -20,10 +20,10 @@
       <nav class="tabs" role="tablist" aria-label="设置分类">
         <button class="tab" type="button" role="tab" disabled aria-disabled="true"><span class="icon-slot" data-icon="dashboard" aria-hidden="true"></span>工作台</button>
         <button class="tab" type="button" role="tab" id="platform-tab" aria-selected="true" aria-controls="platform-panel"><span class="icon-slot" data-icon="layers" aria-hidden="true"></span>平台配置</button>
-        <button class="tab" type="button" role="tab" disabled aria-disabled="true"><span class="icon-slot" data-icon="send" aria-hidden="true"></span>发送方式</button>
-        <button class="tab" type="button" role="tab" disabled aria-disabled="true"><span class="icon-slot" data-icon="brain" aria-hidden="true"></span>AI 与会话</button>
+        <button class="tab" type="button" role="tab" id="delivery-tab" aria-selected="false" aria-controls="delivery-panel" tabindex="-1"><span class="icon-slot" data-icon="send" aria-hidden="true"></span>发送方式</button>
+        <button class="tab" type="button" role="tab" id="ai-tab" aria-selected="false" aria-controls="ai-panel" tabindex="-1"><span class="icon-slot" data-icon="brain" aria-hidden="true"></span>AI 与会话</button>
         <button class="tab" type="button" role="tab" disabled aria-disabled="true"><span class="icon-slot" data-icon="shield" aria-hidden="true"></span>黑白名单</button>
-        <button class="tab" type="button" role="tab" disabled aria-disabled="true"><span class="icon-slot" data-icon="network" aria-hidden="true"></span>网络设置</button>
+        <button class="tab" type="button" role="tab" id="network-tab" aria-selected="false" aria-controls="network-panel" tabindex="-1"><span class="icon-slot" data-icon="network" aria-hidden="true"></span>网络设置</button>
         <button class="tab" type="button" role="tab" disabled aria-disabled="true"><span class="icon-slot" data-icon="file-text" aria-hidden="true"></span>插件日志</button>
       </nav>
       <main class="panels" id="panels">
@@ -35,6 +35,15 @@
           <div class="detail scroll-area" id="detail-scroll" tabindex="0" role="region" aria-label="平台详情">
             <div class="detail-content" id="detail"><p class="description">正在读取平台配置…</p></div>
           </div>
+        </div>
+        <div class="detail scroll-area" id="delivery-panel" role="tabpanel" aria-labelledby="delivery-tab" tabindex="0" hidden>
+          <div class="detail-content" id="delivery-content"><p class="description">正在读取设置…</p></div>
+        </div>
+        <div class="detail scroll-area" id="ai-panel" role="tabpanel" aria-labelledby="ai-tab" tabindex="0" hidden>
+          <div class="detail-content" id="ai-content"><p class="description">正在读取设置…</p></div>
+        </div>
+        <div class="detail scroll-area" id="network-panel" role="tabpanel" aria-labelledby="network-tab" tabindex="0" hidden>
+          <div class="detail-content" id="network-content"><p class="description">正在读取设置…</p></div>
         </div>
       </main>
     </div>

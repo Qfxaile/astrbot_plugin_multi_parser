@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -231,6 +232,72 @@ def test_plugin_registers_web_settings_api_with_plugin_name_prefix():
     assert methods == ["GET", "POST"]
     assert description
     assert len(context.registered_web_apis) == 1
+
+
+async def test_web_settings_lists_only_public_chat_model_metadata(monkeypatch):
+    def broken_metadata():
+        raise RuntimeError("broken provider")
+
+    context = SimpleNamespace(
+        register_web_api=lambda *_: None,
+        get_all_providers=lambda: [
+            SimpleNamespace(meta=broken_metadata),
+            SimpleNamespace(
+                meta=lambda: SimpleNamespace(
+                    id="chat-a", model="model-a", api_key="test-provider-secret-key"
+                )
+            ),
+        ],
+    )
+    plugin = MultiParserPlugin(context, {})
+    monkeypatch.setattr(main.web, "request", SimpleNamespace(method="GET"))
+
+    response = await plugin._web_settings_api()
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert json.loads(response.body)["data"]["providers"] == [
+        {"id": "chat-a", "model": "model-a"}
+    ]
+    assert b"test-provider-secret-key" not in response.body
+
+
+async def test_web_settings_can_save_when_chat_model_listing_is_unavailable(
+    monkeypatch,
+):
+    provider_list_calls = []
+
+    def failing_provider_list():
+        provider_list_calls.append(True)
+        raise RuntimeError("unavailable")
+
+    context = SimpleNamespace(
+        register_web_api=lambda *_: None, get_all_providers=failing_provider_list
+    )
+    config = {}
+    plugin = MultiParserPlugin(context, config)
+    monkeypatch.setattr(plugin._web_settings, "write_store", AsyncMock())
+    monkeypatch.setattr(main.web, "request", SimpleNamespace(method="GET"))
+
+    response = await plugin._web_settings_api()
+    assert response.status_code == 200
+    assert json.loads(response.body)["data"]["providers"] == []
+
+    monkeypatch.setattr(
+        main.web,
+        "request",
+        SimpleNamespace(
+            method="POST",
+            json=AsyncMock(
+                return_value={"revision": 0, "settings": {"parse_mode": "tool"}}
+            ),
+        ),
+    )
+    response = await plugin._web_settings_api()
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert json.loads(response.body)["data"]["revision"] == 1
+    assert plugin.tool_mode is True
+    assert len(provider_list_calls) == 1
 
 
 def test_plugin_respects_platform_switches():

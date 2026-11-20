@@ -51,6 +51,12 @@ def http_client_proxy_options(
         return {"trust_env": False}
 
     proxy_url = settings.text("proxy_url")
+    validate_proxy_url(proxy_url)
+    return {"proxy": proxy_url, "trust_env": False}
+
+
+def validate_proxy_url(proxy_url: str) -> None:
+    """校验运行时与设置表单共用的 HTTP/HTTPS 代理地址。"""
     try:
         parsed = urlsplit(proxy_url)
         port = parsed.port
@@ -61,7 +67,7 @@ def http_client_proxy_options(
 
     if (
         not proxy_url
-        or any(ord(character) < 32 for character in proxy_url)
+        or any(character.isspace() or ord(character) < 32 for character in proxy_url)
         or parsed.scheme.lower() not in {"http", "https"}
         or not parsed.hostname
         or parsed.path not in {"", "/"}
@@ -72,7 +78,6 @@ def http_client_proxy_options(
         raise ProxyConfigurationError(
             "已启用平台代理，但代理地址不是有效的 HTTP/HTTPS URL。"
         )
-    return {"proxy": proxy_url, "trust_env": False}
 
 
 def host_matches(hostname: str, suffixes: Collection[str]) -> bool:

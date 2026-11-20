@@ -59,6 +59,8 @@ uv run ruff check .
 | 平台扩展接口与能力描述 | `core/ports/platform.py` |
 | 平台清单及解析器、登录适配器对应关系 | `platforms/registry.py` |
 | 配置读取和解析器创建 | `services/composition/configuration.py` |
+| WebUI 配置分组、提交校验和持久化 | `services/settings/native_fields.py` 声明原生字段白名单并复用 Schema，`services/settings/service.py` 负责保存与运行时更新 |
+| 插件 WebUI 界面 | `pages/config/`，由 `app.js` 协调标签页和请求，平台与原生设置面板分别管理自己的表单 |
 | 登录编排、二维码轮询、登录状态、会话互斥与取消、凭据持久化和文案 | `services/authentication/service.py`、`services/authentication/polling.py`、`services/authentication/status.py`、`services/authentication/sessions.py`、`services/authentication/cookie_store.py`、`services/authentication/messages.py` |
 | 消息上下文、分享卡片、自动解析编排、文本处理和投递 | `services/message_context.py`、`services/share_card.py`、`services/parsing/coordinator.py`、`services/text_processing.py`、`services/delivery/service.py` |
 | 投递策略、内容组装、链接过滤、直链投递、事件身份和 OneBot 适配 | `services/delivery/policy.py`、`services/content_assembly.py`、`services/link_filter.py`、`services/delivery/forward_links.py`、`services/event_identity.py`、`services/onebot_*.py` |
