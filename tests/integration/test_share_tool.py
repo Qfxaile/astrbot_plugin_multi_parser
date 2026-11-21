@@ -381,3 +381,30 @@ async def test_parser_error_is_private_and_does_not_leak_url(reader, monkeypatch
     assert "读取失败" in error.text and NOTE not in error.text
     assert await offered(plugin, message("再看看图片")) is None
     assert not event.sent and not urls
+
+
+async def test_saved_private_policy_applies_to_already_offered_tool(
+    reader, monkeypatch
+):
+    plugin, urls = reader
+    event = message(f"{ARTICLE} 讲什么？")
+    event.unified_msg_origin = "qq:FriendMessage:123"
+    registered = await offered(plugin, event)
+    assert registered is not None
+    monkeypatch.setattr(plugin._web_settings, "write_store", AsyncMock())
+    await plugin._web_settings.update(
+        {
+            "revision": 0,
+            "access_rules": {
+                "mode": "blacklist",
+                "private": {
+                    "template_id": None,
+                    "rules": ["wechat/article"],
+                },
+            },
+        }
+    )
+    assert await offered(plugin, event) is None
+    [text] = await invoke(registered, event)
+    assert "没有已启用的解析类型" in text.text
+    assert not urls

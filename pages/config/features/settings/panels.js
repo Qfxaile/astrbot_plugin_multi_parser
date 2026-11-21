@@ -1,4 +1,4 @@
-import { element, submitOnEnter, toggle } from "./controls.js";
+import { element, submitOnEnter, toggle } from "../../shared/controls.js";
 
 const TITLES = { delivery: "发送方式", ai: "AI 与会话", network: "网络设置" };
 

@@ -29,6 +29,7 @@ class ParseTypeSpec:
 
     key: str
     display_name: str
+    category: str = "other"
 
 
 @dataclass(frozen=True)

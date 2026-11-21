@@ -19,10 +19,12 @@ from ...core.media.operations import requested_image_number
 from ...core.parser import Parser
 from ..delivery.onebot_gateway import OneBotGateway
 from ..message_context import context_from_segments, extract_context, quoted_message
+from ..settings.access_rules import RequestAccess
 
 
 class ShareReader:
-    def __init__(self):
+    def __init__(self, access_for_event: Callable[[AstrMessageEvent], RequestAccess]):
+        self.access_for_event = access_for_event
         # 只记成功打开的来源；按 AstrBot 会话分开，新会话与插件重载均从空开始。
         self.recent: OrderedDict[tuple[str, str], ParseContext] = OrderedDict()
 
@@ -55,21 +57,24 @@ class ShareReader:
                 return
         if not reply and source.json_urls and not text:
             return
-        parsers = enabled_parsers()
-        parser = await _matching_parser(parsers, source)
+        access = self.access_for_event(event)
+        parsers = list(access.parsers(enabled_parsers()))
+        if not parsers:
+            return
+        parser = await _matching_parser(parsers, source, access)
         pending_reply = None
         if parser is None and reply:
             source = context_from_segments(
                 reply.chain or [], reply.message_str or reply.text or ""
             )
-            parser = await _matching_parser(parsers, source)
+            parser = await _matching_parser(parsers, source, access)
             if not source.combined_text and event.get_platform_name() == "aiocqhttp":
                 pending_reply = reply.id
         elif (
             parser is None and key in self.recent and "://" not in source.combined_text
         ):
             source = self.recent[key]
-            parser = await _matching_parser(parsers, source)
+            parser = await _matching_parser(parsers, source, access)
         if parser is None and not pending_reply:
             return
         tool = FunctionTool(
@@ -105,6 +110,10 @@ class ShareReader:
         """后台读取正文或一张图，把媒体固化后释放解析临时文件。"""
         if type(image_number) is not int or image_number < 0:
             return "图片序号须为非负整数，0 表示只读正文。"
+        access = self.access_for_event(event)
+        parsers = list(access.parsers(enabled_parsers()))
+        if not parsers:
+            return "没有已启用的解析类型可以读取这条分享。"
         result = None
         token = requested_image_number.set(image_number)
         try:
@@ -117,8 +126,8 @@ class ShareReader:
                     return "无法取得本会话的引用消息。"
                 source = context_from_segments(raw.get("message") or [])
             # 工具可能在配置保存之后才真正执行，不能沿用注册时的解析器列表。
-            if source.combined_text:
-                for parser in enabled_parsers():
+            with access.feature_scope():
+                for parser in parsers if source.combined_text else ():
                     if not await parser.match(source):
                         continue
                     with TemporaryFileRegistry.capture() as files:
@@ -150,11 +159,12 @@ class ShareReader:
                 cleanup_temporary_files(result)
 
 
-async def _matching_parser(parsers, source):
-    if source.combined_text:
-        for parser in parsers:
-            if await parser.match(source):
-                return parser
+async def _matching_parser(parsers, source, access):
+    with access.feature_scope():
+        if source.combined_text:
+            for parser in parsers:
+                if await parser.match(source):
+                    return parser
     return None
 
 

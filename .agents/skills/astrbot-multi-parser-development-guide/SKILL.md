@@ -41,6 +41,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 平台入口和协议实现：`platforms/<platform>/parser.py`、支持登录平台的 `platforms/<platform>/login.py` 及同目录 `client.py`、`models.py`、`content.py` 模块
 - 配置声明：`_conf_schema.json`
 - 行为验证：`tests/`
+- 插件 WebUI：`pages/config/app.js` 为页面入口，`pages/config/shared/` 存放共享 DOM 控件与图标，`pages/config/features/` 按平台、设置、名单拆分功能模块，`pages/config/styles/` 存放统一设计样式
 
 跨平台能力进入 `core/` 或 `services/`，平台特有细节留在平台目录。每个平台由 `parser.py` 保留顶层解析入口；复杂平台将请求跳转、领域模型和内容转换分别放入 `client.py`、`models.py`、`content.py`，番茄小说、抖音、微博、小红书、Pixiv、腾讯频道已按实际职责拆分，避免为轻量入口创建空壳模块。
 
@@ -83,6 +84,10 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 原生插件配置变化同步 `_conf_schema.json`、README 和测试，并检查配置服务是否需要调整。插件 WebUI 专属设置使用独立持久化，不加入 `_conf_schema.json`。项目环境统一通过 `uv` 管理，不假设仓库、AstrBot 或虚拟环境位于固定目录。改变依赖时同步 `pyproject.toml`，运行依赖还需同步 `requirements.txt`。
 
 将原生配置接入 WebUI 时，先核对配置 Schema、运行时消费者和字段生效条件，再在 `services/settings/native_fields.py` 维护菜单白名单。用配置服务测试核对字段覆盖、部分更新与写入失败回滚。用浏览器检查 `pages/config/` 的滚动、即时保存和输入草稿行为。
+
+修改会话名单时，复用 `services/settings/access_rules.py` 与现有设置 API。验证 QQ 多实例隔离、群隔离 UMO、其他平台精确 UMO、统一私聊设置、并发和保存失败回滚。覆盖关闭/黑名单/白名单三态、名单外会话、空规则、直接切换模式但保留模板勾选、默认模板、预设分类、模板实时引用、名单项转自定义及直接切换模板。模板编辑不受全局平台启用状态限制，平台列表需显示全选、部分选中和未选中的模板能力。解析类型规则不改写已解析的结果。修改群聊目录时，覆盖连接失败、空列表及 QQ 官方仅列出已观测群聊的降级行为；用浏览器验证群聊列表、默认模板、手动 UMO、模板选择和规则开关。
+
+修改规则模板时，同时验证 WebUI 的内置模板只读状态、保存接口拒绝内置模板改动、读取旧设置时恢复预设内容，以及自建模板正常保存。
 
 ### 修改版本或发布资料
 

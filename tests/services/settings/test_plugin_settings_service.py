@@ -8,6 +8,7 @@ import pytest
 from astrbot_multi_parser.core.http import http_client_proxy_options
 from astrbot_multi_parser.core.settings import PluginSettings
 from astrbot_multi_parser.platforms.github.parser import GitHubParser
+from astrbot_multi_parser.services.settings.access_rules import default_access_payload
 from astrbot_multi_parser.services.settings.runtime_config import RuntimeSettingsConfig
 from astrbot_multi_parser.services.settings.service import (
     FEATURES_KEY,
@@ -504,3 +505,202 @@ async def test_native_config_is_saved_and_restored_if_plugin_store_fails():
 
     assert config["platform_switches"]["bilibili"] is True
     assert config["github_token"] == "old"
+
+
+async def test_access_rules_publish_after_persistence_and_reload():
+    service, _, store, config = make_service()
+    rules = {
+        "mode": "off",
+        "default_template_id": "all",
+        "templates": default_access_payload()["templates"],
+        "private": {
+            "label": "",
+            "template_id": None,
+            "rules": ["bilibili/video"],
+        },
+        "groups": {
+            "qq:GroupMessage:88": {
+                "label": "群聊",
+                "template_id": None,
+                "rules": ["douyin/video"],
+            }
+        },
+    }
+    writing = asyncio.Event()
+    release = asyncio.Event()
+
+    async def write(key, value):
+        writing.set()
+        await release.wait()
+        await store.put(key, value)
+
+    service.write_store = write
+    update = asyncio.create_task(service.update({"revision": 0, "access_rules": rules}))
+    try:
+        await asyncio.wait_for(writing.wait(), 2)
+        assert service.access_rules.data == default_access_payload()
+    finally:
+        release.set()
+        snapshot = await update
+    assert snapshot["access_rules"] == rules
+    assert not config
+    assert (
+        await service.update(
+            {"revision": 1, "parse_types": {"douyin": {"video": False}}}
+        )
+    )["access_rules"] == rules
+    restored, _, _, _ = make_service(store=store)
+    await restored.load()
+    assert (await restored.read_snapshot())["access_rules"] == rules
+    with pytest.raises(SettingsValidationError, match="重新加载"):
+        await restored.update({"revision": 0, "access_rules": {}})
+
+
+async def test_access_rules_failed_write_keeps_confirmed_snapshot():
+    service, _, store, _ = make_service()
+    rules = {
+        "mode": "blacklist",
+        "default_template_id": "all",
+        "templates": default_access_payload()["templates"],
+        "private": None,
+        "groups": {},
+    }
+    await service.update({"revision": 0, "access_rules": rules})
+
+    async def fail(*_):
+        raise OSError("disk failure")
+
+    service.write_store = fail
+    with pytest.raises(OSError):
+        await service.update({"revision": 1, "access_rules": {}})
+    assert (
+        service.access_rules.data == store.values[FEATURES_KEY]["access_rules"] == rules
+    )
+    assert (await service.read_snapshot())["revision"] == 1
+
+
+@pytest.mark.parametrize("template_id", ["all", "video", "image_text"])
+@pytest.mark.parametrize(
+    "change", [{"name": "修改名称"}, {"rules": []}, {"builtin": False}]
+)
+async def test_builtin_template_update_is_rejected_without_persisting(
+    template_id, change
+):
+    service, _, store, _ = make_service()
+    before = await service.read_snapshot()
+    rules = deepcopy(before["access_rules"])
+    rules["templates"][template_id].update(change)
+
+    with pytest.raises(SettingsValidationError, match="内置模板"):
+        await service.update({"revision": 0, "access_rules": rules})
+
+    assert not store.values
+    assert await service.read_snapshot() == before
+
+
+async def test_builtin_templates_remain_available_when_omitted_from_update():
+    service, _, _, _ = make_service()
+    rules = default_access_payload()
+    expected_templates = rules["templates"]
+    rules["templates"] = {"custom": {"name": "自建模板", "rules": ["douyin/video"]}}
+    rules["default_template_id"] = "video"
+    rules["private"] = {"template_id": "video", "rules": None}
+
+    snapshot = await service.update({"revision": 0, "access_rules": rules})
+    saved = snapshot["access_rules"]
+    assert saved["default_template_id"] == saved["private"]["template_id"] == "video"
+    for template_id, template in expected_templates.items():
+        assert saved["templates"][template_id] == template
+
+    saved["templates"]["custom"].update(name="新名称", rules=["douyin/image_text"])
+    updated = await service.update({"revision": 1, "access_rules": saved})
+    assert updated["access_rules"]["templates"]["custom"] == {
+        "name": "新名称",
+        "rules": ["douyin/image_text"],
+        "builtin": False,
+    }
+
+
+async def test_legacy_builtin_overrides_restore_presets_without_losing_entries():
+    service, _, store, _ = make_service()
+    group = "qq:GroupMessage:88"
+    current = default_access_payload()
+    current["mode"] = "whitelist"
+    current["default_template_id"] = "image_text"
+    current["groups"][group] = {
+        "label": "测试群",
+        "template_id": "video",
+        "rules": None,
+    }
+    current["private"] = {"label": "", "template_id": "custom", "rules": None}
+    current["templates"]["custom"] = {
+        "name": "自建模板",
+        "rules": ["douyin/video"],
+        "builtin": False,
+    }
+    for template_id in ("all", "video", "image_text"):
+        current["templates"][template_id].update(name="旧名称", rules=[])
+    await store.put(FEATURES_KEY, {"revision": 4, "access_rules": current})
+
+    await service.load()
+    snapshot = await service.read_snapshot()
+    expected = {
+        **current,
+        "templates": {
+            **default_access_payload()["templates"],
+            "custom": current["templates"]["custom"],
+        },
+    }
+    assert snapshot["revision"] == 4
+    assert snapshot["access_rules"] == expected
+    assert service.access_rules.groups[group].denied_types == (
+        set(expected["templates"]["all"]["rules"])
+        - set(expected["templates"]["video"]["rules"])
+    )
+
+
+async def test_unpublished_old_list_experiment_loads_safe_defaults():
+    service, _, store, _ = make_service()
+    await store.put(
+        FEATURES_KEY,
+        {
+            "revision": 3,
+            "access_rules": {"enabled": False, "group_lists": {"x": {}}},
+        },
+    )
+    await service.load()
+    rules = (await service.read_snapshot())["access_rules"]
+    assert rules == default_access_payload()
+    await service.update({"revision": 3, "access_rules": rules})
+    assert store.values[FEATURES_KEY]["access_rules"] == rules
+
+
+async def test_legacy_enabled_flag_migrates_to_off_mode_without_changing_rules():
+    service, _, store, _ = make_service()
+    current = default_access_payload()
+    current["mode"] = "whitelist"
+    await store.put(
+        FEATURES_KEY,
+        {"revision": 4, "access_rules": {**current, "enabled": False}},
+    )
+
+    await service.load()
+    loaded = (await service.read_snapshot())["access_rules"]
+
+    assert loaded["mode"] == "off"
+    assert "enabled" not in loaded
+    assert loaded["templates"] == current["templates"]
+
+
+async def test_mode_switch_preserves_rule_scope_and_changes_interpretation():
+    service, _, store, _ = make_service()
+    group = "qq:GroupMessage:88"
+    rules = {
+        "mode": "blacklist",
+        "groups": {group: {"template_id": None, "rules": ["douyin/video"]}},
+    }
+    before = await service.update({"revision": 0, "access_rules": rules})
+    rules["mode"] = "whitelist"
+    after = await service.update({"revision": 1, "access_rules": rules})
+    assert after["access_rules"]["mode"] == "whitelist"
+    assert after["access_rules"]["groups"] == before["access_rules"]["groups"]

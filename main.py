@@ -20,6 +20,7 @@ from .services.delivery.video import (
 from .services.message_context import extract_context
 from .services.parsing import ParseCoordinator
 from .services.parsing.share_tool import ShareReader
+from .services.settings.group_directory import GroupDirectory
 from .services.settings.runtime_config import RuntimeSettingsConfig
 from .services.settings.service import PluginSettingsService, SettingsValidationError
 from .services.summary.service import AISummaryService
@@ -41,7 +42,8 @@ class MultiParserPlugin(Star):
             write_store=self.put_kv_data,
         )
         self.parsers = build_parsers(self._runtime_config)
-        self._share_reader = ShareReader()
+        self._share_reader = ShareReader(self._access_for_event)
+        self._group_directory = GroupDirectory(context)
         self._services = ServiceContainer(context, config)
         if context is not None:
             context.register_web_api(
@@ -49,6 +51,12 @@ class MultiParserPlugin(Star):
                 self._web_settings_api,
                 ["GET", "POST"],
                 "读取或保存多平台解析 WebUI 设置（包含明文凭据）",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/qq-groups",
+                self._web_qq_groups_api,
+                ["POST"],
+                "读取 QQ 群列表",
             )
 
     def _delivery_service(self) -> DeliveryService:
@@ -63,6 +71,9 @@ class MultiParserPlugin(Star):
     def enabled_parsers(self):
         """返回当前启用的平台解析器，供自动解析用例调用。"""
         return enabled_parsers(self.config, self.parsers)
+
+    def _access_for_event(self, event: AstrMessageEvent):
+        return self._web_settings.access_rules.for_event(event)
 
     # ParseCoordinator 依赖的窄接口，直接提供实现
     async def react_success(self, event: AstrMessageEvent) -> None:
@@ -210,7 +221,9 @@ class MultiParserPlugin(Star):
         context = extract_context(event)
         if not context.combined_text:
             return
-        async for item in ParseCoordinator(self).run(event, context):
+        async for item in ParseCoordinator(self).run(
+            event, context, access=self._access_for_event(event)
+        ):
             yield item
 
     async def terminate(self):
@@ -226,6 +239,7 @@ class MultiParserPlugin(Star):
         if web.request.method == "GET":
             settings = await self._web_settings.read_snapshot()
             settings["providers"] = self._web_chat_providers()
+            settings["adapters"] = self._group_directory.qq_adapters()
             return web.json_response(
                 {"status": "ok", "data": settings}, headers=headers
             )
@@ -258,3 +272,22 @@ class MultiParserPlugin(Star):
         except Exception as exc:
             logger.debug(f"WebUI 读取聊天模型列表失败: {type(exc).__name__}")
         return providers
+
+    async def _web_qq_groups_api(self):
+        """返回所选 QQ 实例可用于名单配置的群聊。"""
+        payload = await web.request.json()
+        instance = payload.get("instance") if isinstance(payload, dict) else None
+        if not isinstance(instance, str) or not instance or len(instance) > 128:
+            return web.error_response("缺少有效的 QQ 适配器实例 ID", status_code=400)
+        try:
+            data = await self._group_directory.list_groups(instance)
+        except LookupError:
+            return web.error_response("找不到所选 QQ 适配器实例", status_code=404)
+        except Exception as exc:
+            logger.warning(f"读取 QQ 群列表失败: {type(exc).__name__}")
+            return web.error_response(
+                "无法读取 QQ 群列表，请检查适配器连接。", status_code=502
+            )
+        return web.json_response(
+            {"status": "ok", "data": data}, headers={"Cache-Control": "no-store"}
+        )

@@ -1,4 +1,4 @@
-import { element, submitOnEnter, toggle } from "./controls.js";
+import { element, platformListRow, submitOnEnter, toggle } from "../../shared/controls.js";
 
 export function createPlatformPanel(state, submit) {
   const drafts = new Map();
@@ -13,21 +13,19 @@ export function createPlatformPanel(state, submit) {
     list.replaceChildren();
 
     for (const platform of platforms) {
-      const row = element("div", { class: "platform-row" });
-      const select = element("button", {
-        class: "select-platform", type: "button", id: `select-${platform.key}`,
-        "aria-current": String(platform.key === state.selected),
-      });
-      select.append(element("span", {}, platform.name));
-      select.addEventListener("click", () => {
-        state.selected = platform.key;
-        if (scroll) scroll.scrollTop = 0;
-        render();
-        document.getElementById(`select-${platform.key}`)?.focus();
-      });
-      row.append(select, toggle(`platform-${platform.key}`, `启用${platform.name}`, platform.enabled,
-        (enabled) => submit({ platform_switches: { [platform.key]: enabled } }), locked()));
-      list.append(row);
+      list.append(platformListRow({
+        id: `select-${platform.key}`,
+        name: platform.name,
+        selected: platform.key === state.selected,
+        onSelect: () => {
+          state.selected = platform.key;
+          if (scroll) scroll.scrollTop = 0;
+          render();
+          document.getElementById(`select-${platform.key}`)?.focus();
+        },
+        control: toggle(`platform-${platform.key}`, `启用${platform.name}`, platform.enabled,
+          (enabled) => submit({ platform_switches: { [platform.key]: enabled } }), locked()),
+      }));
     }
     list.scrollTop = listScroll;
 

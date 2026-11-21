@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 from astrbot_multi_parser.core.parser import BaseParser
-from astrbot_multi_parser.core.ports import PlatformFeature, PlatformSpec
+from astrbot_multi_parser.core.ports import ParseTypeSpec, PlatformFeature, PlatformSpec
 from astrbot_multi_parser.platforms.registry import (
     PLATFORM_REGISTRY,
     login_platforms,
@@ -88,6 +88,28 @@ def test_platform_registry_rejects_inconsistent_login_capability(monkeypatch):
     )
 
     with pytest.raises(ValueError, match="login 能力声明"):
+        registry.validate_platform_registry()
+
+
+def test_platform_registry_rejects_unknown_parse_type_category(monkeypatch):
+    from astrbot_multi_parser.platforms import registry
+
+    original = PLATFORM_REGISTRY[0]
+    monkeypatch.setattr(
+        registry,
+        "PLATFORM_REGISTRY",
+        (
+            PlatformSpec(
+                original.parser_type,
+                original.login_provider_type,
+                features=original.features,
+                parse_types=(ParseTypeSpec("video", "视频", "unknown"),),
+                parse_type_controls_ready=True,
+            ),
+        ),
+    )
+
+    with pytest.raises(ValueError, match="解析类型分类"):
         registry.validate_platform_registry()
 
 

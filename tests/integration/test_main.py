@@ -125,6 +125,9 @@ class FakeEvent:
     def get_platform_id(self):
         return self.platform_id
 
+    def get_session_id(self):
+        return self.unified_msg_origin.split(":", 2)[-1]
+
     def get_self_id(self):
         raw = self.message_obj.raw_message
         return str(raw.get("self_id") or "") if isinstance(raw, dict) else ""
@@ -180,20 +183,18 @@ class FakeConversationManager:
 
 
 def make_plugin(result: ParseResult, *, conversation_manager=None, **config):
-    plugin = MultiParserPlugin.__new__(MultiParserPlugin)
-    plugin.config = {
+    config = {
         "platform_switches": {"fake": True},
         "enable_parse_reaction": False,
         "send_video_by_url": True,
         **config,
     }
-    plugin.parsers = {"fake": FakeParser(result)}
     conv_mgr = conversation_manager or FakeConversationManager()
-    plugin.context = SimpleNamespace(conversation_manager=conv_mgr)
-    # 初始化完整的 ServiceContainer
-    from astrbot_multi_parser.services.composition.container import ServiceContainer
-
-    plugin._services = ServiceContainer(plugin.context, plugin.config)
+    context = SimpleNamespace(
+        conversation_manager=conv_mgr, register_web_api=lambda *_: None
+    )
+    plugin = MultiParserPlugin(context, config)
+    plugin.parsers = {"fake": FakeParser(result)}
     return plugin
 
 
@@ -231,7 +232,11 @@ def test_plugin_registers_web_settings_api_with_plugin_name_prefix():
     assert handler.__name__ == "_web_settings_api"
     assert methods == ["GET", "POST"]
     assert description
-    assert len(context.registered_web_apis) == 1
+    assert len(context.registered_web_apis) == 2
+    assert context.registered_web_apis[1][0:3:2] == (
+        "/astrbot_plugin_multi_parser/qq-groups",
+        ["POST"],
+    )
 
 
 async def test_web_settings_lists_only_public_chat_model_metadata(monkeypatch):
@@ -2646,3 +2651,177 @@ async def test_probe_preserves_head_and_content_range_header_parsing(
     size_info = await plugin.probe_video_size("https://example.com/video.mp4")
 
     assert size_info.size_bytes == expected_size
+
+
+async def test_group_type_rules_keep_other_candidates_and_concurrent_groups(
+    monkeypatch,
+):
+    plugin = MultiParserPlugin(None, {})
+    douyin = plugin.parsers["douyin"]
+    bilibili = plugin.parsers["bilibili"]
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def douyin_candidate(url):
+        if "1234" in url:
+            entered.set()
+            await release.wait()
+            assert not douyin.parse_feature_enabled("video")
+        else:
+            assert douyin.parse_feature_enabled("video")
+        return build_result(platform="douyin", title=url)
+
+    monkeypatch.setattr(douyin, "_parse_candidate", douyin_candidate)
+    monkeypatch.setattr(
+        bilibili,
+        "_parse_video",
+        AsyncMock(return_value=build_result(platform="bilibili", title="B站视频")),
+    )
+    monkeypatch.setattr(plugin, "react_success", AsyncMock())
+    monkeypatch.setattr(plugin._web_settings, "write_store", AsyncMock())
+    monkeypatch.setattr(
+        main, "extract_context", lambda event: ParseContext(text=event.message_str)
+    )
+    await plugin._web_settings.update(
+        {
+            "revision": 0,
+            "access_rules": {
+                "mode": "blacklist",
+                "groups": {
+                    "bot:GroupMessage:88": {
+                        "label": "A",
+                        "template_id": None,
+                        "rules": ["douyin/video"],
+                    }
+                },
+            },
+        }
+    )
+
+    def message(group, urls, instance="bot"):
+        event = FakeEvent(platform_id=instance, raw_message={"group_id": group})
+        event.private = False
+        event.message_str = urls
+        event.unified_msg_origin = f"{instance}:GroupMessage:123_{group}"
+        return event
+
+    video = "https://www.douyin.com/video/5678"
+    note = "https://www.iesdouyin.com/share/slides/1234/"
+    waiting = asyncio.create_task(
+        collect_plugin_results(plugin, message("88", f"{video} {note}"))
+    )
+    try:
+        await asyncio.wait_for(entered.wait(), 2)
+        other = await asyncio.wait_for(
+            collect_plugin_results(plugin, message("89", video)), 2
+        )
+        assert other[0][0].text == video
+    finally:
+        release.set()
+        first = await waiting
+    assert first[0][0].text == note
+    assert douyin.parse_feature_enabled("video")
+    assert (
+        await collect_plugin_results(
+            plugin,
+            message("88", f"{video} https://www.bilibili.com/video/BV1xx411c7mD"),
+        )
+    )[0][0].text == "B站视频"
+    assert (
+        await collect_plugin_results(plugin, message("88", video, instance="second"))
+    )[0][0].text == video
+    assert await collect_plugin_results(plugin, message("88", video)) == []
+
+    await plugin._web_settings.update(
+        {"revision": 1, "parse_types": {"douyin": {"video": False}}}
+    )
+    assert await collect_plugin_results(plugin, message("89", video)) == []
+    await plugin._web_settings.update(
+        {"revision": 2, "parse_types": {"douyin": {"video": True}}}
+    )
+    assert await collect_plugin_results(plugin, message("88", video)) == []
+    assert (await collect_plugin_results(plugin, message("89", video)))[0][
+        0
+    ].text == video
+
+    access = plugin._web_settings.access_rules.data
+    access["mode"] = "whitelist"
+    await plugin._web_settings.update(
+        {"revision": 3, "access_rules": {**access, "groups": {}}}
+    )
+    assert await collect_plugin_results(plugin, message("88", video)) == []
+    assert await collect_plugin_results(plugin, message("89", video)) == []
+
+    await plugin._web_settings.update(
+        {
+            "revision": 4,
+            "access_rules": access,
+        }
+    )
+    assert (await collect_plugin_results(plugin, message("88", video)))[0][
+        0
+    ].text == video
+    assert await collect_plugin_results(plugin, message("89", video)) == []
+
+
+async def test_disabled_video_type_does_not_strip_attachments_from_allowed_article(
+    monkeypatch,
+):
+    plugin = MultiParserPlugin(None, {"send_video_by_url": False})
+    event = FakeEvent(platform_id="qq", raw_message={"group_id": "88"})
+    event.private = False
+    event.unified_msg_origin = "qq:GroupMessage:88"
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda _: ParseContext(text="https://weibo.com/ttarticle/p/show?id=123"),
+    )
+    article = build_result(
+        platform="weibo", title="文章", video_url="https://example.com/attached.mp4"
+    )
+    parse = AsyncMock(return_value=article)
+    monkeypatch.setattr(plugin.parsers["weibo"], "_parse_article", parse)
+    monkeypatch.setattr(plugin._web_settings, "write_store", AsyncMock())
+    await plugin._web_settings.update(
+        {
+            "revision": 0,
+            "access_rules": {
+                "mode": "blacklist",
+                "groups": {
+                    event.unified_msg_origin: {
+                        "label": "",
+                        "template_id": None,
+                        "rules": ["weibo/video"],
+                    }
+                },
+            },
+        }
+    )
+    messages = await collect_plugin_results(plugin, event)
+    assert "https://example.com/attached.mp4" in messages[0][0].text
+    assert article.media.video_url == "https://example.com/attached.mp4"
+    parse.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    "instance, expected", [(None, 400), ("missing", 404), ("offline", 502)]
+)
+async def test_qq_directory_endpoint_errors_do_not_leak_adapter_details(
+    monkeypatch, instance, expected
+):
+    plugin = MultiParserPlugin(None, {})
+    monkeypatch.setattr(
+        main.web,
+        "request",
+        SimpleNamespace(json=AsyncMock(return_value={"instance": instance})),
+    )
+    list_groups = AsyncMock(
+        side_effect=LookupError("private adapter details")
+        if instance == "missing"
+        else OSError("private adapter details")
+    )
+    monkeypatch.setattr(plugin._group_directory, "list_groups", list_groups)
+    response = await plugin._web_qq_groups_api()
+    assert response.status_code == expected
+    assert b"private adapter details" not in response.body
+    assert list_groups.await_count == int(instance is not None)

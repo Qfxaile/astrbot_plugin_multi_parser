@@ -12,6 +12,7 @@ from ...core.media import cleanup_temporary_files
 from ...core.parser import Parser
 from ...core.rendering import ParseResultRenderer
 from ...core.settings import PluginSettings
+from ..settings.access_rules import RequestAccess
 
 
 class ParseRuntime(Protocol):
@@ -74,20 +75,21 @@ class ParseCoordinator:
         self.runtime = runtime
 
     async def run(
-        self, event: AstrMessageEvent, context: ParseContext
+        self, event: AstrMessageEvent, context: ParseContext, *, access: RequestAccess
     ) -> AsyncIterator[Any]:
         original_has_send_oper = getattr(event, "_has_send_oper", None)
-        for parser in self.runtime.enabled_parsers():
+        for parser in access.parsers(self.runtime.enabled_parsers()):
             result: ParseResult | None = None
             restore_send_state = False
             try:
-                matched = await parser.match(context)
-                if not isinstance(matched, bool):
-                    raise TypeError(f"{parser.name} match 必须返回 bool")
-                if not matched:
-                    continue
-                restore_send_state = True
-                result = await parser.parse(context)
+                with access.feature_scope():
+                    matched = await parser.match(context)
+                    if not isinstance(matched, bool):
+                        raise TypeError(f"{parser.name} match 必须返回 bool")
+                    if not matched:
+                        continue
+                    restore_send_state = True
+                    result = await parser.parse(context)
                 if not isinstance(result, ParseResult):
                     raise TypeError(f"{parser.name} parse 必须返回 ParseResult")
                 if result.diagnostics.skipped:

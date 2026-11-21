@@ -34,9 +34,9 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
         ),
         parse_type_controls_ready=True,
         parse_types=(
-            ParseTypeSpec("video", "视频"),
-            ParseTypeSpec("dynamic", "动态/图文"),
-            ParseTypeSpec("article", "专栏文章"),
+            ParseTypeSpec("video", "视频", "video"),
+            ParseTypeSpec("dynamic", "动态/图文", "image_text"),
+            ParseTypeSpec("article", "专栏文章", "image_text"),
             ParseTypeSpec("live", "直播间"),
             ParseTypeSpec("bangumi", "番剧/影视介绍"),
             ParseTypeSpec("mall", "会员购/票务/商品"),
@@ -55,8 +55,8 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
         ),
         parse_type_controls_ready=True,
         parse_types=(
-            ParseTypeSpec("video", "视频"),
-            ParseTypeSpec("image_text", "图文"),
+            ParseTypeSpec("video", "视频", "video"),
+            ParseTypeSpec("image_text", "图文", "image_text"),
             ParseTypeSpec("live", "直播"),
             ParseTypeSpec("product", "商品"),
             ParseTypeSpec("music", "汽水音乐"),
@@ -81,8 +81,8 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
         ),
         parse_type_controls_ready=True,
         parse_types=(
-            ParseTypeSpec("video_note", "视频笔记"),
-            ParseTypeSpec("image_note", "图文笔记"),
+            ParseTypeSpec("video_note", "视频笔记", "video"),
+            ParseTypeSpec("image_note", "图文笔记", "image_text"),
         ),
     ),
     PlatformSpec(
@@ -96,7 +96,7 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
             }
         ),
         parse_type_controls_ready=True,
-        parse_types=(ParseTypeSpec("post", "帖子"),),
+        parse_types=(ParseTypeSpec("post", "帖子", "image_text"),),
     ),
     PlatformSpec(
         WeiboParser,
@@ -111,9 +111,9 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
         ),
         parse_type_controls_ready=True,
         parse_types=(
-            ParseTypeSpec("post", "微博/转发"),
-            ParseTypeSpec("article", "长文章"),
-            ParseTypeSpec("video", "独立视频"),
+            ParseTypeSpec("post", "微博/转发", "image_text"),
+            ParseTypeSpec("article", "长文章", "image_text"),
+            ParseTypeSpec("video", "独立视频", "video"),
         ),
     ),
     PlatformSpec(
@@ -128,8 +128,8 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
         ),
         parse_type_controls_ready=True,
         parse_types=(
-            ParseTypeSpec("article", "公众号文章"),
-            ParseTypeSpec("channels", "视频号"),
+            ParseTypeSpec("article", "公众号文章", "image_text"),
+            ParseTypeSpec("channels", "视频号", "video"),
         ),
     ),
     PlatformSpec(
@@ -144,7 +144,7 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
         ),
         parse_type_controls_ready=True,
         parse_types=(
-            ParseTypeSpec("post", "社区帖子"),
+            ParseTypeSpec("post", "社区帖子", "image_text"),
             ParseTypeSpec("game", "游戏信息"),
         ),
     ),
@@ -160,9 +160,9 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
         ),
         parse_type_controls_ready=True,
         parse_types=(
-            ParseTypeSpec("question_answer", "问题/回答"),
-            ParseTypeSpec("article", "文章"),
-            ParseTypeSpec("idea", "想法"),
+            ParseTypeSpec("question_answer", "问题/回答", "image_text"),
+            ParseTypeSpec("article", "文章", "image_text"),
+            ParseTypeSpec("idea", "想法", "image_text"),
         ),
     ),
     PlatformSpec(
@@ -183,7 +183,7 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
             }
         ),
         parse_type_controls_ready=True,
-        parse_types=(ParseTypeSpec("post", "频道帖子"),),
+        parse_types=(ParseTypeSpec("post", "频道帖子", "image_text"),),
     ),
     PlatformSpec(
         QzoneParser,
@@ -196,7 +196,7 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
             }
         ),
         parse_type_controls_ready=True,
-        parse_types=(ParseTypeSpec("post", "公开说说"),),
+        parse_types=(ParseTypeSpec("post", "公开说说", "image_text"),),
     ),
     PlatformSpec(
         PixivParser,
@@ -204,7 +204,7 @@ PLATFORM_REGISTRY: tuple[PlatformSpec, ...] = (
         enabled_by_default=False,
         features=frozenset({PlatformFeature.PARSE, PlatformFeature.IMAGES}),
         parse_type_controls_ready=True,
-        parse_types=(ParseTypeSpec("illustration", "插画作品"),),
+        parse_types=(ParseTypeSpec("illustration", "插画作品", "image_text"),),
     ),
 )
 
@@ -251,6 +251,11 @@ def validate_platform_registry() -> None:
             raise ValueError(f"{item.key} 的解析类型键格式无效")
         if any(not parse_type.display_name.strip() for parse_type in item.parse_types):
             raise ValueError(f"{item.key} 的解析类型显示名不能为空")
+        if any(
+            parse_type.category not in ("video", "image_text", "other")
+            for parse_type in item.parse_types
+        ):
+            raise ValueError(f"{item.key} 的解析类型分类无效")
         if item.supports_login != item.supports(PlatformFeature.LOGIN):
             raise ValueError(f"{item.key} 的 login 能力声明与 Provider 不一致")
         if item.login_provider_type is not None and not inspect.isclass(

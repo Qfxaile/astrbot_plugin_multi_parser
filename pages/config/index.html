@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>多平台解析设置</title>
-    <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./styles/main.css">
     <script type="module" src="./app.js"></script>
   </head>
   <body>
@@ -22,7 +22,7 @@
         <button class="tab" type="button" role="tab" id="platform-tab" aria-selected="true" aria-controls="platform-panel"><span class="icon-slot" data-icon="layers" aria-hidden="true"></span>平台配置</button>
         <button class="tab" type="button" role="tab" id="delivery-tab" aria-selected="false" aria-controls="delivery-panel" tabindex="-1"><span class="icon-slot" data-icon="send" aria-hidden="true"></span>发送方式</button>
         <button class="tab" type="button" role="tab" id="ai-tab" aria-selected="false" aria-controls="ai-panel" tabindex="-1"><span class="icon-slot" data-icon="brain" aria-hidden="true"></span>AI 与会话</button>
-        <button class="tab" type="button" role="tab" disabled aria-disabled="true"><span class="icon-slot" data-icon="shield" aria-hidden="true"></span>黑白名单</button>
+        <button class="tab" type="button" role="tab" id="access-tab" aria-selected="false" aria-controls="access-panel" tabindex="-1"><span class="icon-slot" data-icon="shield" aria-hidden="true"></span>黑白名单</button>
         <button class="tab" type="button" role="tab" id="network-tab" aria-selected="false" aria-controls="network-panel" tabindex="-1"><span class="icon-slot" data-icon="network" aria-hidden="true"></span>网络设置</button>
         <button class="tab" type="button" role="tab" disabled aria-disabled="true"><span class="icon-slot" data-icon="file-text" aria-hidden="true"></span>插件日志</button>
       </nav>
@@ -41,6 +41,15 @@
         </div>
         <div class="detail scroll-area" id="ai-panel" role="tabpanel" aria-labelledby="ai-tab" tabindex="0" hidden>
           <div class="detail-content" id="ai-content"><p class="description">正在读取设置…</p></div>
+        </div>
+        <div class="access-panel" id="access-panel" role="tabpanel" aria-labelledby="access-tab" data-view="directory" hidden>
+          <aside class="sidebar access-sidebar" aria-label="名单配置与群聊列表">
+            <div id="access-picker" class="access-picker"></div>
+            <div id="access-list" class="platform-list scroll-area" tabindex="0" aria-label="已配置的群聊列表"></div>
+          </aside>
+          <div class="access-workspace" id="access-workspace" aria-label="名单权限详情">
+            <div class="detail scroll-area" id="access-detail"><div class="detail-content"><p class="description">正在读取名单…</p></div></div>
+          </div>
         </div>
         <div class="detail scroll-area" id="network-panel" role="tabpanel" aria-labelledby="network-tab" tabindex="0" hidden>
           <div class="detail-content" id="network-content"><p class="description">正在读取设置…</p></div>

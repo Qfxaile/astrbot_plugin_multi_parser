@@ -1,7 +1,8 @@
-import { element } from "./controls.js";
-import { hydrateIcons } from "./icons.js";
-import { createPlatformPanel } from "./platform-panel.js";
-import { createSettingsPanels } from "./settings-panels.js";
+import { element } from "./shared/controls.js";
+import { hydrateIcons } from "./shared/icons.js";
+import { createPlatformPanel } from "./features/platforms/panel.js";
+import { createSettingsPanels } from "./features/settings/panels.js";
+import { createAccessPanel } from "./features/access/panel.js";
 
 const bridge = window.AstrBotPluginPage;
 const state = { snapshot: null, selected: "", busy: false, reloadRequired: false };
@@ -10,6 +11,7 @@ const retry = document.querySelector("#retry");
 const tabs = [...document.querySelectorAll('[role="tab"]:not(:disabled)')];
 const renderPlatforms = createPlatformPanel(state, submit);
 const renderSettings = createSettingsPanels(state, submit);
+const renderAccess = createAccessPanel(state, submit, (instance) => bridge.apiPost("qq-groups", { instance }));
 
 function setStatus(message, error = false) {
   status.textContent = message;
@@ -54,6 +56,7 @@ function render() {
   const activeId = document.activeElement.id;
   renderPlatforms();
   renderSettings();
+  renderAccess();
   if (activeId) document.getElementById(activeId)?.focus({ preventScroll: true });
 }
 
@@ -61,11 +64,11 @@ async function submit(change, onApplied, controlId) {
   if (!state.snapshot || state.busy || state.reloadRequired) return;
   const activeId = controlId || document.activeElement.id;
   state.busy = true;
-  document.querySelectorAll("main input, main textarea, main select, main form button").forEach((control) => { control.disabled = true; });
+  document.querySelectorAll("main input, main textarea, main select, main form button, #access-panel button").forEach((control) => { control.disabled = true; });
   setStatus("正在应用…");
   try {
     const settings = await bridge.apiPost("settings", { revision: state.snapshot.revision, ...change });
-    applySnapshot({ ...settings, providers: state.snapshot.providers });
+    applySnapshot({ ...settings, providers: state.snapshot.providers, adapters: state.snapshot.adapters });
     onApplied?.();
     setStatus("已生效");
   } catch {

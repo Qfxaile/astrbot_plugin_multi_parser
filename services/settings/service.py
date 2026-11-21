@@ -4,6 +4,8 @@ import asyncio
 from collections.abc import Awaitable, Callable, Mapping, MutableMapping
 from copy import deepcopy
 
+from astrbot.api import logger
+
 from ...core.http import (
     ProxyConfigurationError,
     cookie_config_value,
@@ -11,6 +13,7 @@ from ...core.http import (
 )
 from ...core.settings import PluginSettings
 from ...platforms.registry import PLATFORM_REGISTRY
+from .access_rules import AccessRules
 from .native_fields import (
     SettingsValidationError,
     native_groups,
@@ -41,12 +44,17 @@ class PluginSettingsService:
         self._lock = asyncio.Lock()
         self._revision = 0
         self._parse_types = self._defaults()
+        self.access_rules = AccessRules()
 
     async def load(self) -> None:
         stored = await self.read_store(FEATURES_KEY, {})
         if not isinstance(stored, Mapping):
             return
         self._parse_types = self._merge_valid_features(stored, self._parse_types)
+        try:
+            self.access_rules = AccessRules.from_store(stored.get("access_rules", {}))
+        except SettingsValidationError:
+            logger.warning("WebUI 名单读取失败，已载入其余设置。")
         revision = stored.get("revision", 0)
         self._revision = revision if type(revision) is int and revision >= 0 else 0
         self.runtime_config.replace_parse_types(self._parse_types)
@@ -95,6 +103,7 @@ class PluginSettingsService:
             "scope": "当前 AstrBot 实例",
             "platforms": platforms,
             "groups": native_groups(self.config),
+            "access_rules": deepcopy(self.access_rules.data),
         }
 
     async def update(self, payload: object) -> dict[str, object]:
@@ -118,6 +127,7 @@ class PluginSettingsService:
             "github_token",
             "settings",
             "proxy_switches",
+            "access_rules",
         }
         if set(payload) - allowed:
             raise SettingsValidationError("请求包含不支持的配置字段")
@@ -128,6 +138,11 @@ class PluginSettingsService:
         async with self._lock:
             if expected_revision != self._revision:
                 raise SettingsValidationError("配置已被其他页面更新，请重新加载")
+            next_access = (
+                AccessRules.from_payload(payload["access_rules"])
+                if "access_rules" in payload
+                else self.access_rules
+            )
             new_platforms = self._validate_switches(
                 payload.get("platform_switches", {})
             )
@@ -174,7 +189,11 @@ class PluginSettingsService:
                     await self._save_native_config()
                 await self.write_store(
                     FEATURES_KEY,
-                    {"revision": next_revision, "platforms": next_features},
+                    {
+                        "revision": next_revision,
+                        "platforms": next_features,
+                        "access_rules": next_access.data,
+                    },
                 )
             except Exception:
                 self.config.update(old_values)
@@ -188,6 +207,7 @@ class PluginSettingsService:
                 raise
 
             self._parse_types = next_features
+            self.access_rules = next_access
             self._revision = next_revision
             self.runtime_config.replace_parse_types(next_features)
             return self.snapshot()
