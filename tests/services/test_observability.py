@@ -1,8 +1,44 @@
 import asyncio
+import os
 import sqlite3
 from datetime import datetime
+from stat import S_IMODE
 
+import pytest
 from astrbot_multi_parser.services.observability import PluginObservability
+
+
+async def test_observability_initializes_and_persists_without_posix_getuid(
+    monkeypatch, tmp_path
+):
+    monkeypatch.delattr(os, "getuid", raising=False)
+    database = tmp_path / "plugin" / "observability.sqlite3"
+    service = PluginObservability(database)
+    assert (await service.logs())["total"] == 0
+    service.record_parse("douyin", "success", 18, sent=True)
+    service.record_ai_usage("prompt", "completion", exact_input=6, exact_output=2)
+    await service.flush()
+
+    reopened = PluginObservability(database)
+    assert (await reopened.logs())["rows"][0]["platform"] == "douyin"
+    totals = (await reopened.dashboard())["totals"]
+    assert totals["sent"] == 1
+    assert totals["tokens"] == 8
+
+
+@pytest.mark.skipif(not hasattr(os, "getuid"), reason="requires POSIX file modes")
+async def test_observability_restricts_owned_posix_database_permissions(tmp_path):
+    directory = tmp_path / "plugin"
+    directory.mkdir()
+    directory.chmod(0o755)
+    database = directory / "observability.sqlite3"
+    database.touch()
+    database.chmod(0o644)
+
+    await PluginObservability(database).logs()
+
+    assert S_IMODE(directory.stat().st_mode) == 0o700
+    assert S_IMODE(database.stat().st_mode) == 0o600
 
 
 async def test_parse_metrics_and_logs_are_sanitized_and_survive_recreation(tmp_path):

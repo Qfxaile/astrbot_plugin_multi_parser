@@ -106,8 +106,9 @@ function mountLogs(root, bridge) {
 
   function showEmpty(text, error = false) {
     const empty = element("tr", { class: "logs-empty-row" });
-    empty.append(element("td", { colspan: String(columns.length), class: "description logs-state" },
-      element("span", { role: error ? "alert" : "status" }, text)));
+    const cell = element("td", { colspan: String(columns.length), class: "description logs-state" });
+    cell.append(element("span", { role: error ? "alert" : "status" }, text));
+    empty.append(cell);
     body.replaceChildren(empty);
   }
 

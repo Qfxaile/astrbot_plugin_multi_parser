@@ -296,8 +296,7 @@ class PluginObservability:
 
     def _initialize(self) -> None:
         self.database_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        if self.database_path.parent.stat().st_uid == os.getuid():
-            os.chmod(self.database_path.parent, 0o700)
+        _restrict_owned_path(self.database_path.parent, 0o700)
         with (
             closing(sqlite3.connect(self.database_path, timeout=5)) as connection,
             connection,
@@ -363,13 +362,18 @@ class PluginObservability:
                     connection.execute(
                         f"ALTER TABLE parse_logs ADD COLUMN {column} TEXT NOT NULL DEFAULT ''"
                     )
-        if self.database_path.stat().st_uid == os.getuid():
-            os.chmod(self.database_path, 0o600)
+        _restrict_owned_path(self.database_path, 0o600)
 
     def _execute(self, operation):
         with closing(sqlite3.connect(self.database_path, timeout=5)) as connection:
             connection.row_factory = sqlite3.Row
             return operation(connection)
+
+
+def _restrict_owned_path(path: Path, mode: int) -> None:
+    getuid = getattr(os, "getuid", None)
+    if getuid is not None and path.stat().st_uid == getuid():
+        path.chmod(mode)
 
 
 def _log_row(row: sqlite3.Row) -> dict[str, object]:
