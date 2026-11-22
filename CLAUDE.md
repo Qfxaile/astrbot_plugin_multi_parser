@@ -144,15 +144,16 @@ uv run ruff check .
 
 ## 分支与发布流程
 
-- `main` 是稳定主分支，只接受从 `develop` 发起的发布 PR；禁止直接向 `main` 推送或从其他分支合并。
+- `main` 是稳定主分支，常规变更只接受从 `develop` 发起的发布 PR。唯一例外是生产发布必须紧急回滚：从最新 `main` 创建 `revert/<说明>` 分支，仅包含回滚所需的变更，通过 PR 合入 `main`，仍须遵守分支保护和审查要求。禁止直接推送 `main`。
 - `develop` 是集成开发分支。新功能、缺陷修复和重构均从最新 `develop` 创建独立开发分支，完成实现和验证后通过 PR 合并回 `develop`。分支名由贡献者自行决定，但应能辨识工作内容。
 - 开发分支 → `develop`：使用 GitHub 的 `Squash and merge`，每个开发 PR 保留一个整理后的提交。
-- `develop` → `main` 的发布 PR、`main` → `develop` 的回同步 PR：使用 `Create a merge commit`，保留两个长期分支的共同历史，不使用 Squash 或 Rebase 合并。
+- 发布 PR、紧急回滚 PR，以及 `main` 回同步至 `develop` 的 PR：使用 `Create a merge commit`，不使用 Squash 或 Rebase 合并。
 - 只有准备发布时才从 `develop` 向 `main` 发起 PR。发布 PR 必须更新 `metadata.yaml` 版本号，并同步 README 版本徽章、CHANGELOG；版本号遵循项目已有的语义化版本约定。PR 合并后必须使用同一个版本号创建 Git 标签和 GitHub Release，Release 标题只能写版本号（例如 `v1.4.0`），避免标签或 Release 指向尚未进入 `main` 的提交。
 - 发布 PR 应以 `develop` 为源、`main` 为目标，说明版本号、用户可见变更、兼容性影响和验证结果，并通过仓库配置的必需检查与审查后才能合并。普通开发 PR 不修改版本号、发布标签或 Release。
 - 发布前确认当前 `main` 已包含在 `develop` 的历史中；未包含时先通过回同步 PR 对齐，处理冲突时保留 `develop` 中尚未发布的改动。发布合并后，用回同步 PR 将 `main` 的发布提交纳入 `develop`。紧急修复优先在 `develop` 完成；如果必须先在 `main` 紧急回滚，回滚后也要通过 PR 及时同步并核对下一版内容。不得强推或重写长期分支历史。
 - 仓库托管平台应为 `main` 配置分支保护：禁止直接推送和强推，要求 PR、必需 CI 检查及审查；`develop` 至少要求通过 PR 和必需 CI 检查。文档约定不能替代仓库权限配置。
 - GitHub 分支规则按目标分支限制合并方式：`main` 仅允许 Merge commit，`develop` 允许 Squash 与 Merge commit。规则不能按来源分支选择合并方式，`develop` 的 PR 由合并者按上述约定选择。
+- **同一次对话不得既发起 PR，又通过任何 PR。** 发起后只报告 PR 链接和验证结果，不批准、不合并、不启用自动合并。通过 PR 必须由用户在另一次对话中明确授权；即使同一次对话要求同时发起和通过，也只执行发起。发布、紧急回滚和回同步均无例外。
 
 ## 验证流程
 
