@@ -1,11 +1,13 @@
 import asyncio
 import base64
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import httpx
 import pytest
+import yaml
 from astrbot.api.message_components import Image, Node, Nodes, Plain, Record, Video
 from astrbot.core.star.filter.permission import PermissionType, PermissionTypeFilter
 from astrbot.core.star.star_handler import star_handlers_registry
@@ -278,13 +280,17 @@ async def test_web_observability_apis_return_plugin_metrics_and_release_metadata
     assert dashboard.headers["cache-control"] == "no-store"
     assert log_data[0]["platform"] == "bilibili"
     assert log_data[0]["error_type"] == "ValueError"
-    assert about_data["version"] == "v1.4.0"
+    metadata_path = Path(main.__file__).with_name("metadata.yaml")
+    metadata = yaml.safe_load(metadata_path.read_text(encoding="utf-8"))
+    assert about_data["version"] == metadata["version"]
     assert about_data["author"] == "Qfxaile"
     assert about_data["repo"].endswith("astrbot_plugin_multi_parser")
     assert about_data["logo"].startswith("data:image/png;base64,")
-    assert about_data["updates"][0]["version"] == "未发布"
-    assert about_data["updates"][0]["notes"]
-    assert about_data["updates"][1]["version"] == about_data["version"]
+    latest_release = next(
+        entry for entry in about_data["updates"] if entry["version"] != "未发布"
+    )
+    assert latest_release["version"] == about_data["version"]
+    assert latest_release["notes"]
     assert about.headers["cache-control"] == "no-store"
 
 

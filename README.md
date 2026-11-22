@@ -7,7 +7,7 @@
 <p align="center">自动识别聊天消息中的内容链接，并发送作品信息、图文、视频或音频。</p>
 
 <p align="center">
-  <a href="https://github.com/Qfxaile/astrbot_plugin_multi_parser/releases"><img src="https://img.shields.io/badge/version-v1.4.0-2f6f5e" alt="Version v1.4.0"></a>
+  <a href="https://github.com/Qfxaile/astrbot_plugin_multi_parser/releases"><img src="https://img.shields.io/badge/version-v2.0.0-2f6f5e" alt="Version v2.0.0"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-%3E%3D3.10-3776ab" alt="Python 3.10+"></a>
   <a href="https://astrbot.app/"><img src="https://img.shields.io/badge/AstrBot-plugin-4c78a8" alt="AstrBot Plugin"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2f6f5e" alt="MIT License"></a>
@@ -351,9 +351,11 @@ astrbot_plugin_multi_parser/
 
 - `main` 是稳定主分支，常规发布只接受来自 `develop` 的 PR。紧急回滚是唯一例外：从最新 `main` 创建 `revert/<说明>` 分支，通过仅包含回滚变更的 PR 合入 `main`，仍须遵守分支保护和审查要求。禁止直接推送 `main`。
 - `develop` 是日常集成分支。新功能、缺陷修复和重构均从最新 `develop` 创建开发分支，验证完成后通过 PR 合并回 `develop`。
+- 发起开发 PR 前，从远端 `main`、`develop` 和来源分支的 `metadata.yaml` 核对版本。若 `develop` 与 `main` 同版本，先由开发者确认一个更高的合法版本，并在来源分支更新；若 `develop` 版本合法且已高于 `main`，默认沿用，不必再次升版。版本缺失、格式无效或 `develop` 低于 `main` 时，先纠正再发起 PR。
+- 即使未升版，PR 正文和交付说明仍需列出 `main`、`develop`、来源分支的版本，有升版时注明合并后的预期版本。通过开发 PR 前重新核对，避免合入后版本与 `main` 相同或低于当前 `develop`。纯历史回同步和紧急回滚不适用开发 PR 的升版要求。
 - 开发分支合入 `develop` 时使用 `Squash and merge`。发布、紧急回滚和回同步 PR 使用 `Create a merge commit`，保留提交历史。
 - 发布前确认 `develop` 已包含当前 `main` 的历史。发布或紧急回滚后，通过 PR 将 `main` 同步回 `develop`，保留尚未发布的开发改动。
-- 只有发布时才从 `develop` 向 `main` 发起 PR。发布 PR 必须变更 `metadata.yaml` 版本号，并同步 README 版本徽章与 CHANGELOG；合并后使用同一个版本号为 `main` 的合并提交创建 Git 标签和 GitHub Release，Release 标题只写版本号，例如 `v1.4.0`。
+- 只有发布时才从 `develop` 向 `main` 发起 PR。发布沿用 `develop` 已确定且高于 `main` 的合法版本，不再升版；核对 README 版本徽章与 CHANGELOG 已同步。合并后使用同一个版本号为 `main` 的合并提交创建 Git 标签和 GitHub Release，Release 标题只写版本号，例如 `v1.4.0`。
 - 发布 PR 应写明版本号、用户可见变更、兼容性影响和验证结果。仓库应为 `main` 配置分支保护、必需检查和审查，`develop` 至少要求通过 PR 和必需检查。
 - 对话式协作中，发起 PR 和通过 PR 必须分开；发起当次不得批准、合并或启用自动合并，通过须由用户在另一次对话中明确授权。
 
