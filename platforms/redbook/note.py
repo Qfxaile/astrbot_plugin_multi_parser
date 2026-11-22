@@ -4,6 +4,11 @@ from ...core.contracts import ParseResult
 class RedBookNoteContent:
     """将小红书不同页面结构归一化为图集或视频笔记。"""
 
+    @staticmethod
+    def _note_parse_type(note: dict) -> str:
+        """按笔记声明分类，与是否能提取出播放流无关。"""
+        return "video_note" if note.get("type") == "video" else "image_note"
+
     def _parse_explore_state(self, state: dict, note_id: str) -> ParseResult:
         note_root = state.get("note") if isinstance(state, dict) else None
         note_map = (
@@ -13,6 +18,9 @@ class RedBookNoteContent:
         note = note_entry.get("note") if isinstance(note_entry, dict) else None
         if not isinstance(note, dict) or not note:
             raise ValueError("小红书 Explore 页面中未找到笔记数据")
+        parse_type = self._note_parse_type(note)
+        if not self.parse_feature_enabled(parse_type):
+            return ParseResult.skipped(self.name)
         image_list = note.get("imageList")
         if not isinstance(image_list, list):
             image_list = []
@@ -27,7 +35,7 @@ class RedBookNoteContent:
         ]
         video_url = (
             self._select_video_url(note.get("video"))
-            if note.get("type") == "video"
+            if parse_type == "video_note"
             else ""
         )
         result = ParseResult(platform=self.name)
@@ -56,6 +64,9 @@ class RedBookNoteContent:
         note = data.get("noteData") if isinstance(data, dict) else None
         if not isinstance(note, dict) or not note:
             raise ValueError("小红书 Discovery 页面中未找到笔记数据")
+        parse_type = self._note_parse_type(note)
+        if not self.parse_feature_enabled(parse_type):
+            return ParseResult.skipped(self.name)
         image_list = note.get("imageList")
         if not isinstance(image_list, list):
             image_list = []
@@ -70,7 +81,7 @@ class RedBookNoteContent:
         ]
         video_url = (
             self._select_video_url(note.get("video"))
-            if note.get("type") == "video"
+            if parse_type == "video_note"
             else ""
         )
         cover_urls = []

@@ -1,13 +1,13 @@
 # AstrBot 多平台内容解析器
 
 <p align="center">
-  <img src="https://github.com/Qfxaile/astrbot_plugin_multi_parser/blob/main/logo.png" alt="AstrBot 多平台内容解析器" width="180">
+  <img src="https://raw.githubusercontent.com/Qfxaile/astrbot_plugin_multi_parser/main/logo.png" alt="AstrBot 多平台内容解析器" width="180">
 </p>
 
 <p align="center">自动识别聊天消息中的内容链接，并发送作品信息、图文、视频或音频。</p>
 
 <p align="center">
-  <a href="https://github.com/Qfxaile/astrbot_plugin_multi_parser/releases"><img src="https://img.shields.io/badge/version-v1.4.0-2f6f5e" alt="Version v1.4.0"></a>
+  <a href="https://github.com/Qfxaile/astrbot_plugin_multi_parser/releases"><img src="https://img.shields.io/badge/version-v2.0.0-2f6f5e" alt="Version v2.0.0"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-%3E%3D3.10-3776ab" alt="Python 3.10+"></a>
   <a href="https://astrbot.app/"><img src="https://img.shields.io/badge/AstrBot-plugin-4c78a8" alt="AstrBot Plugin"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2f6f5e" alt="MIT License"></a>
@@ -57,6 +57,8 @@
 > [!IMPORTANT]
 > 当前不支持 TikTok，也不解析 Bilibili 音频、独立音轨或 `au` 号。直播仅展示直播间信息，不提取或转发持续直播流；番剧、电影和纪录片仅展示作品介绍，不获取或发送视频。
 
+抖音直播接口返回空内容或无法解析为 JSON 时，插件会尝试从公开直播页提取直播间信息。
+
 ## 快速开始
 
 ### 环境要求
@@ -96,7 +98,36 @@ git clone https://github.com/Qfxaile/astrbot_plugin_multi_parser.git astrbot_plu
 
 ## 配置
 
-所有配置均可在 AstrBot 插件配置页面修改。
+基础配置可在 AstrBot 插件配置页面修改。插件管理中的「平台配置」页面提供平台侧栏、平台启用开关、解析类型细分开关及 Cookies 编辑；开关变更立即生效，凭据输入框按 Enter 保存。解析类型设置只存于插件数据，不会出现在原生配置表单中。平台详情和凭据设置作用于当前 AstrBot 实例。
+
+插件设置页也可以管理现有的原生配置，保存后立即用于后续操作。
+
+| 菜单 | 配置内容 |
+| --- | --- |
+| 发送方式 | 合并转发、消息上限、视频直发与回退、输出链接过滤、OneBot 表情回应 |
+| AI 与会话 | 分享读取模式、会话记录、AI 总结及提示词。总结模型从当前 AstrBot 实例已加载的聊天模型中选择 |
+| 黑白名单 | 使用统一模式，按群聊或所有私聊配置平台和解析类型；支持实时生效的规则模板 |
+| 网络设置 | 请求与视频大小检查超时、图片下载并发、HTTP/HTTPS 代理地址和逐平台代理开关 |
+| 工作台 | 解析、发送、失败与 AI 总结 Token 概览，可切换时间范围并查看逐日数值 |
+| 插件日志 | 分页查看全部自动解析记录，支持按时间、来源、平台和结果筛选，也可搜索群 ID 或 UMO |
+| 关于 | 当前安装版本、作者和可折叠的版本更新记录；可复制仓库地址到浏览器打开 |
+
+开关和下拉框改动后自动保存，文本与数字输入框按 Enter 保存，提示词用 Shift + Enter 换行。使用平台代理时，先填写代理地址再开启对应平台。
+
+一条消息包含多个链接时，按原有优先级选择第一个已启用的解析候选。短链在跳转后判定类型，命中已关闭的类型时会静默跳过，并继续检查其他链接。QQ 表情回应在确认有可发送的解析内容后、发送前触发。
+
+工作台统计、插件解析日志及 AI 总结 Token 用量在后台写入 AstrBot 插件数据目录中的 SQLite，不阻塞解析和投递。插件正常卸载时等待已排队的数据写完；已写入的数据在重载或重启后保留，不设日志条数或统计时间上限。工作台默认展示近 14 天，也可查看今天、近 7 天、近 30 天或全部时间。发送数按产生投递的解析结果计数，不按消息条数计数；交由 AstrBot 发送的消息不代表客户端已签收。Token 统计仅覆盖插件的 AI 总结调用，不包括 AstrBot 主对话及按需阅读工具调用。Provider 返回用量信息时记录精确值，否则按提示词和总结文本字符数估算，图片 Token 不纳入估算。
+
+插件日志仅在 AstrBot 管理界面展示，由 SQLite 筛选和分页，时间按记录时的服务器本地时间显示。新记录可区分适配器实例、群聊和私聊；列表展示可用的群 ID，详情展示完整 AstrBot 会话标识（UMO）、解析平台、最多 3 条脱敏候选链接、结果、耗时与错误原因。日志不保存消息正文或独立发送者字段；UMO 本身可能包含群或用户标识，请勿直接公开日志。新记录剔除 URL 凭据与片段，并隐藏所有查询参数值。升级保留旧记录，原来没有保存的群 ID 和 UMO 不会补填。
+
+### 按解析类型管理黑白名单
+
+- 全局名单模式下拉框提供「关闭」「黑名单模式」「白名单模式」，更改后立即生效。关闭时名单不限制解析；黑名单模式下，名单项勾选的解析类型禁止解析，未加入名单的会话不受名单限制；白名单模式下，仅名单项勾选的类型允许解析，未勾选类型及名单外会话均禁止解析。切换模式只改变规则的生效方式，不改写模板或名单项的勾选状态。
+- AstrBot 标记为「其他消息」且无法匹配群聊或私聊规则的事件，按名单外会话处理：白名单模式下不解析，黑名单和关闭模式下不受名单限制。
+- 群聊规则按机器人实例和群 ID 隔离。QQ OneBot 可从群列表选择，QQ 官方显示当前适配器已观测的群；也可手动填写完整 UMO，并设置可选的自定义别名。群聊列表优先显示别名，未设置别名时显示目录群名或 UMO。所有适配器的私聊共用一个规则项。
+- 群聊列表直接显示已配置群聊，不另设空的「群聊名单」菜单。「全部规则」「仅视频类规则」「仅图文类规则」是只读模板，可以查看、应用或设为默认，不能修改或删除。旧设置中改过的内置模板会恢复为预设，已有名单项仍引用原来的模板。自建模板可编辑，改动会实时影响所有引用它的名单项。
+- 模板的解析类型开关独立于平台全局开关；平台行会显示全选、部分选中及未纳入模板状态。新增群聊默认使用全局默认模板，可直接切换模板。直接编辑某个名单项的解析开关时，该项会复制当前模板规则并转为自定义，后续模板变化不再影响它。
+- 名单只控制平台注册的解析类型，不负责筛选解析结果中的视频附件或链接。「平台配置」中已关闭的平台或解析类型不能被名单重新开启。设置保存在插件数据中，修改后对下一条消息生效；AstrBot 自身的会话限制仍优先于插件处理。
 
 ### AI 按需读取分享
 
@@ -169,6 +200,8 @@ git clone https://github.com/Qfxaile/astrbot_plugin_multi_parser.git astrbot_plu
 | `cookies.zhihu_cookies` | 是 | 用于知乎内容解析 |
 
 GitHub 默认启用，仅解析公开仓库主页；Issue、PR、文件、提交等仓库子路径不会触发解析。可在 `github_token` 中填写 GitHub Token 以提高请求速率限制。Token 仅用于请求 `github.com` 仓库页面，不会发送到 OpenGraph 图片地址。
+
+也可以在插件 WebUI 的 GitHub 平台详情中更新或清除 Token。已保存的 Token 和 Cookies 会在输入框中直接以明文显示，修改后按 Enter 保存并立即用于后续请求。请仅在可信且已登录 AstrBot 的管理界面中操作凭据。
 
 番茄小说仅解析 `changdunovel.com/t/...` 公开分享链接，展示小说标题、作者、简介和封面，不抓取章节正文，也不需要 Cookie。
 
@@ -317,11 +350,15 @@ astrbot_plugin_multi_parser/
 
 ### 分支与发布
 
-- `main` 是稳定主分支，只接受从 `develop` 发起的发布 PR；禁止直接推送或从其他分支合并到 `main`。
+- `main` 是稳定主分支，常规发布只接受来自 `develop` 的 PR。紧急回滚是唯一例外：从最新 `main` 创建 `revert/<说明>` 分支，通过仅包含回滚变更的 PR 合入 `main`，仍须遵守分支保护和审查要求。禁止直接推送 `main`。
 - `develop` 是日常集成分支。新功能、缺陷修复和重构均从最新 `develop` 创建开发分支，验证完成后通过 PR 合并回 `develop`。
-- 开发 PR 和发布 PR 合并时统一使用 GitHub 的 `Squash and merge`，避免长期分支积累过于零散的提交。
-- 只有发布时才从 `develop` 向 `main` 发起 PR。发布 PR 必须变更 `metadata.yaml` 版本号，并同步 README 版本徽章与 CHANGELOG；合并后使用同一个版本号为 `main` 的合并提交创建 Git 标签和 GitHub Release，Release 标题只写版本号，例如 `v1.4.0`。
+- 发起开发 PR 前，从远端 `main`、`develop` 和来源分支的 `metadata.yaml` 核对版本。若 `develop` 与 `main` 同版本，先由开发者确认一个更高的合法版本，并在来源分支更新；若 `develop` 版本合法且已高于 `main`，默认沿用，不必再次升版。版本缺失、格式无效或 `develop` 低于 `main` 时，先纠正再发起 PR。
+- 即使未升版，PR 正文和交付说明仍需列出 `main`、`develop`、来源分支的版本，有升版时注明合并后的预期版本。通过开发 PR 前重新核对，避免合入后版本与 `main` 相同或低于当前 `develop`。纯历史回同步和紧急回滚不适用开发 PR 的升版要求。
+- 开发分支合入 `develop` 时使用 `Squash and merge`。发布、紧急回滚和回同步 PR 使用 `Create a merge commit`，保留提交历史。
+- 发布前确认 `develop` 已包含当前 `main` 的历史。发布或紧急回滚后，通过 PR 将 `main` 同步回 `develop`，保留尚未发布的开发改动。
+- 只有发布时才从 `develop` 向 `main` 发起 PR。发布沿用 `develop` 已确定且高于 `main` 的合法版本，不再升版；核对 README 版本徽章与 CHANGELOG 已同步。合并后使用同一个版本号为 `main` 的合并提交创建 Git 标签和 GitHub Release，Release 标题只写版本号，例如 `v1.4.0`。
 - 发布 PR 应写明版本号、用户可见变更、兼容性影响和验证结果。仓库应为 `main` 配置分支保护、必需检查和审查，`develop` 至少要求通过 PR 和必需检查。
+- 对话式协作中，发起 PR 和通过 PR 必须分开；发起当次不得批准、合并或启用自动合并，通过须由用户在另一次对话中明确授权。
 
 ## 参考与致谢
 

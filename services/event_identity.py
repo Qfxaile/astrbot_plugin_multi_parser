@@ -3,10 +3,28 @@
 from collections.abc import Mapping
 
 from astrbot.api.event import AstrMessageEvent
+from astrbot.core.platform.message_type import MessageType
+
+QQ_ADAPTERS = {"aiocqhttp", "qq_official", "qq_official_webhook"}
 
 
 class EventIdentity:
     """集中处理事件对象的兼容读取，不包含消息发送逻辑。"""
+
+    @staticmethod
+    def group_rule_key(event: AstrMessageEvent) -> str:
+        """QQ 群按原生群 ID 匹配；其他适配器匹配完整群聊 UMO。"""
+        umo = event.unified_msg_origin
+        _, _, rest = umo.partition(":")
+        if not rest.startswith(f"{MessageType.GROUP_MESSAGE.value}:"):
+            return ""
+        if EventIdentity.platform_name(event) in QQ_ADAPTERS and (
+            group := event.get_group_id()
+        ):
+            return (
+                f"{event.get_platform_id()}:{MessageType.GROUP_MESSAGE.value}:{group}"
+            )
+        return umo
 
     @staticmethod
     def raw_message(event: AstrMessageEvent):

@@ -1,6 +1,7 @@
 """识别微信链接并分派到文章或视频号内容解析器。"""
 
 import re
+from collections.abc import Iterator
 
 from ...core.contracts import ParseContext, ParseResult
 from ...core.parser import BaseParser
@@ -29,30 +30,40 @@ class WeChatParser(WeChatArticleContent, WeChatChannelsContent, BaseParser):
         r"https?://channels\.weixin\.qq\.com/finder-preview/pages/"
         r"(?:sph|feed)\?[^\s<>\"']+"
     )
+    ROUTES = (
+        ("article", ARTICLE_PATTERN),
+        ("channels", CHANNELS_SHORT_PATTERN),
+        ("channels", CHANNELS_PREVIEW_PATTERN),
+    )
 
     async def match(self, context: ParseContext) -> bool:
         """判断消息中是否包含受支持的微信内容链接。"""
-        text = context.combined_text
         return any(
-            re.search(pattern, text)
-            for pattern in (
-                self.ARTICLE_PATTERN,
-                self.CHANNELS_SHORT_PATTERN,
-                self.CHANNELS_PREVIEW_PATTERN,
-            )
+            self.parse_feature_enabled(kind) for kind, _ in self._routes(context)
         )
 
     async def parse(self, context: ParseContext) -> ParseResult:
         """按链接类型解析公众号文章或视频号作品。"""
-        text = context.combined_text
-        if match := re.search(self.ARTICLE_PATTERN, text):
-            return await self._parse_article(self._clean_url(match.group(0)))
-        for pattern in (self.CHANNELS_SHORT_PATTERN, self.CHANNELS_PREVIEW_PATTERN):
-            if match := re.search(pattern, text):
-                return await self._parse_channels(self._clean_url(match.group(0)))
+        matched = False
+        for kind, url in self._routes(context):
+            matched = True
+            if not self.parse_feature_enabled(kind):
+                continue
+            if kind == "article":
+                return await self._parse_article(url)
+            return await self._parse_channels(url)
+        if matched:
+            return ParseResult.skipped(self.name)
         result = ParseResult(platform=self.name)
         result.diagnostics.error = "未找到受支持的微信链接。"
         return result
+
+    def _routes(self, context: ParseContext) -> Iterator[tuple[str, str]]:
+        text = context.combined_text
+        # 保留公众号、视频号短链、视频号预览的原有优先级。
+        for kind, pattern in self.ROUTES:
+            if match := re.search(pattern, text):
+                yield kind, self._clean_url(match.group(0))
 
     @staticmethod
     def _clean_url(url: str) -> str:

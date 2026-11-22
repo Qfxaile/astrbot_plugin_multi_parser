@@ -67,15 +67,64 @@ class DouyinParser(
     }
 
     async def match(self, context: ParseContext) -> bool:
-        return bool(re.search(self.PATTERN, context.combined_text))
+        return any(
+            self._route_enabled(match.group(0)) for match in self._matches(context)
+        )
+
+    def _matches(self, context: ParseContext):
+        return re.finditer(self.PATTERN, context.combined_text)
+
+    def _route_enabled(self, url: str) -> bool:
+        if kind := self._parse_type(url):
+            return self.parse_feature_enabled(kind)
+        parsed = urlparse(url)
+        if parsed.hostname == "qishui.douyin.com":
+            return self.parse_feature_enabled("music")
+        if re.fullmatch(r"/(?:share/|m/)?note/\d+/?", parsed.path):
+            return self.parse_feature_enabled("video") or self.parse_feature_enabled(
+                "image_text"
+            )
+        return any(
+            self.parse_feature_enabled(kind)
+            for kind in ("video", "image_text", "live", "product", "music")
+        )
+
+    @classmethod
+    def _parse_type(cls, url: str) -> str | None:
+        """按抖音分享地址判断其内容路由。"""
+        if cls._is_shop_url(url):
+            return "product"
+        if is_qishui_track_url(url):
+            return "music"
+        if re.search(cls.LIVE_REFLOW_PATTERN, url) or re.search(
+            r"https?://live\.douyin\.com/\d+", url
+        ):
+            return "live"
+        work = re.search(r"/(?:share/|m/)?(?P<type>slides|video|note)/\d+", url)
+        if work:
+            if work.group("type") == "note":
+                return None
+            return "video" if work.group("type") == "video" else "image_text"
+        if urlparse(url).hostname in cls.REDIRECT_HOSTS:
+            return None
+        return "video" if "aweme_id=" in url else None
 
     async def parse(self, context: ParseContext) -> ParseResult:
-        match = re.search(self.PATTERN, context.combined_text)
-        if not match:
-            result = ParseResult(platform=self.name)
-            result.diagnostics.error = "未找到大陆抖音链接。"
-            return result
+        matched = False
+        for match in self._matches(context):
+            matched = True
+            url = match.group(0)
+            if self._route_enabled(url):
+                result = await self._parse_candidate(url)
+                if not result.diagnostics.skipped:
+                    return result
+        if matched:
+            return ParseResult.skipped(self.name)
+        result = ParseResult(platform=self.name)
+        result.diagnostics.error = "未找到大陆抖音链接。"
+        return result
 
+    async def _parse_candidate(self, url: str) -> ParseResult:
         cookies = build_cookies(
             cookie_config_value(self.config, "douyin_cookies"),
             (".douyin.com", ".iesdouyin.com"),
@@ -87,7 +136,6 @@ class DouyinParser(
             cookies=cookies,
             **self.http_client_options,
         ) as client:
-            url = match.group(0)
             hostname = urlparse(url).hostname or ""
             response = None
             if hostname in self.REDIRECT_HOSTS:
@@ -105,6 +153,9 @@ class DouyinParser(
                     result.diagnostics.error = str(exc)
                     return result
                 url = str(response.url)
+
+                if not self._route_enabled(url):
+                    return ParseResult.skipped(self.name)
 
             if self._is_shop_url(url):
                 result = self._parse_shop_url(url)
@@ -179,6 +230,13 @@ class DouyinParser(
                 else:
                     retained_lines.append(line)
             result.content.extra_lines = retained_lines
+            resolved_type = (
+                "video"
+                if work_type == "video" or play_token or result.media.video_url
+                else "image_text"
+            )
+            if not self.parse_feature_enabled(resolved_type):
+                return ParseResult.skipped(self.name)
             if play_token:
                 probed_url = await self._probe_video_url(client, play_token, share_url)
                 if probed_url:

@@ -41,6 +41,8 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 平台入口和协议实现：`platforms/<platform>/parser.py`、支持登录平台的 `platforms/<platform>/login.py` 及同目录 `client.py`、`models.py`、`content.py` 模块
 - 配置声明：`_conf_schema.json`
 - 行为验证：`tests/`
+- 插件 WebUI：`pages/config/app.js` 为页面入口，`pages/config/shared/` 存放共享 DOM 控件与图标，`pages/config/features/` 按平台、设置、名单、工作台、日志和关于拆分功能模块，`pages/config/styles/` 存放统一设计样式
+- 工作台、解析日志和 Token 用量：`services/observability.py` 通过异步 SQLite 持久化到插件数据目录，`pages/config/features/dashboard/`、`logs/` 和 `about/` 提供只读视图
 
 跨平台能力进入 `core/` 或 `services/`，平台特有细节留在平台目录。每个平台由 `parser.py` 保留顶层解析入口；复杂平台将请求跳转、领域模型和内容转换分别放入 `client.py`、`models.py`、`content.py`，番茄小说、抖音、微博、小红书、Pixiv、腾讯频道已按实际职责拆分，避免为轻量入口创建空壳模块。
 
@@ -58,9 +60,11 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 新增平台或跨层依赖时运行 `tests/test_architecture_dependencies.py`，保持平台适配器不依赖服务层、核心不依赖平台实现。
 
-复用 `BaseParser`、`PlatformSpec`、`PluginSettings`、统一契约、安全 HTTP、平台代理、媒体和投递服务。新增解析器必须覆写 `BaseParser` 的 `match` 与 `parse`，并只通过平台注册表接入；`BaseParser` 本身提供可复用的 HTTP、Cookie 和媒体基础能力。配置值的布尔、数值、枚举和平台开关读取统一使用 `PluginSettings`，不要在服务或基础设施模块重复转换。AI 总结、会话历史等后处理优先使用 `ParseResult.visible_text_lines` 和 `ParseResult.ordered_image_references`，不要重复遍历平台字段。新增请求客户端时接入 `core/http.py` 的平台代理参数，确保解析、登录和插件侧媒体请求遵循同一平台开关。保持内容顺序，区分鉴权失败、网络失败、内容不存在和部分媒体失败。新增平台时更新平台包导出、`platforms/registry.py`、`platforms/__init__.py`、`_conf_schema.json`、README、项目事实文档和测试，并运行注册表的 `validate_platform_registry()`、`validate_platform_configuration()` 校验；按用户可见程度更新 CHANGELOG。核心与服务公共扩展点优先通过 `core/__init__.py`、`services/__init__.py` 惰性导出，并同步包边界测试；`services/composition/configuration.py` 与 `services/authentication/service.py` 从注册表装配，只有装配语义变化时才修改。
+复用 `BaseParser`、`PlatformSpec`、`PluginSettings`、统一契约、安全 HTTP、平台代理、媒体和投递服务。新增解析器必须覆写 `BaseParser` 的 `match` 与 `parse`，并只通过平台注册表接入；`BaseParser` 本身提供可复用的 HTTP、Cookie 和媒体基础能力。细粒度解析能力仅在解析路由完成接入后标记 `PlatformSpec.parse_type_controls_ready`；未就绪能力必须在 WebUI 禁用并明确标注，不允许看起来可操作却不改变实际解析。配置值的布尔、数值、枚举和平台开关读取统一使用 `PluginSettings`，不要在服务或基础设施模块重复转换。AI 总结、会话历史等后处理优先使用 `ParseResult.visible_text_lines` 和 `ParseResult.ordered_image_references`，不要重复遍历平台字段。新增请求客户端时接入 `core/http.py` 的平台代理参数，确保解析、登录和插件侧媒体请求遵循同一平台开关。保持内容顺序，区分鉴权失败、网络失败、内容不存在和部分媒体失败。新增平台时更新平台包导出、`platforms/registry.py`、`platforms/__init__.py`、`_conf_schema.json`、README、项目事实文档和测试，并运行注册表的 `validate_platform_registry()`、`validate_platform_configuration()` 校验；按用户可见程度更新 CHANGELOG。核心与服务公共扩展点优先通过 `core/__init__.py`、`services/__init__.py` 惰性导出，并同步包边界测试；`services/composition/configuration.py` 与 `services/authentication/service.py` 从注册表装配，只有装配语义变化时才修改。
 
 修改自动链接解析入口、平台解析器、表情回应或投递流程时，先核对 AstrBot 的事件传播和默认 LLM 触发条件。自动解析只能附加解析输出，禁止停止事件、修改或消费原消息、设置 LLM 禁用状态，或主动请求 LLM 接管后续流程；发送解析结果后仍须让后续插件与 AstrBot 默认流程按原规则处理。若发送副作用会改变事件状态，恢复进入解析处理器前的原值，并用成功解析、匹配异常、解析异常、未匹配和入口已有发送状态测试防止回归。
+
+修改解析类型开关时，对照 `develop` 检查全开时的选链优先级，并测试混合链接、短链跳转到关闭类型、继续匹配后续平台。调整解析或发送时机时，验证第一条消息等待期间第二条仍可产出结果。
 
 ### 修改平台登录
 
@@ -78,19 +82,33 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 ### 修改配置或依赖
 
-配置变化同步 `_conf_schema.json`、README 和测试，并检查配置服务是否需要调整。项目环境统一通过 `uv` 管理，不假设仓库、AstrBot 或虚拟环境位于固定目录。改变依赖时同步 `pyproject.toml`，运行依赖还需同步 `requirements.txt`。
+原生插件配置变化同步 `_conf_schema.json`、README 和测试，并检查配置服务是否需要调整。插件 WebUI 专属设置使用独立持久化，不加入 `_conf_schema.json`。项目环境统一通过 `uv` 管理，不假设仓库、AstrBot 或虚拟环境位于固定目录。改变依赖时同步 `pyproject.toml`，运行依赖还需同步 `requirements.txt`。
+
+将原生配置接入 WebUI 时，先核对配置 Schema、运行时消费者和字段生效条件，再在 `services/settings/native_fields.py` 维护菜单白名单。用配置服务测试核对字段覆盖、部分更新与写入失败回滚。用浏览器检查 `pages/config/` 的滚动、即时保存和输入草稿行为。
+
+修改会话名单时，复用 `services/settings/access_rules.py` 与现有设置 API。验证 QQ 多实例隔离、群隔离 UMO、其他平台精确 UMO、统一私聊设置、并发和保存失败回滚。覆盖关闭/黑名单/白名单三态、名单外会话、空规则、直接切换模式但保留模板勾选、默认模板、预设分类、模板实时引用、名单项转自定义及直接切换模板。模板编辑不受全局平台启用状态限制，平台列表需显示全选、部分选中和未选中的模板能力。解析类型规则不改写已解析的结果。修改群聊目录时，覆盖连接失败、空列表及 QQ 官方仅列出已观测群聊的降级行为；用浏览器验证群聊列表、默认模板、手动 UMO、模板选择和规则开关。
+
+修改规则模板时，同时验证 WebUI 的内置模板只读状态、保存接口拒绝内置模板改动、读取旧设置时恢复预设内容，以及自建模板正常保存。
+
+修改插件工作台、日志或关于页时，确认解析日志不含消息正文、独立发送者字段或凭据；来源使用事件原始 UMO 与原生群 ID，不发起额外网络查询。验证 SQLite 旧表原位迁移、后台写入不阻塞解析、正常卸载完成落库、日志与每日统计的一致性，以及不同时间范围和 Token 用量的精确值/估算回退。检查日志接口不缓存且只返回当前页，筛选覆盖全部历史，脱敏链接不含 URL 用户信息、片段或查询参数原值；用浏览器验证筛选、分页、详情和窄屏布局。README 图片在插件文档中无法显示时使用 `raw.githubusercontent.com` 图片地址，不用 GitHub `blob` 页面地址；品牌图在 README 与关于页均应居中显示。
 
 ### 修改版本或发布资料
 
-以 `metadata.yaml` 为唯一版本源。只有用户明确要求发布或升版时才修改版本，并同步 README 徽章、CHANGELOG 和 Git 标签；普通功能、修复和重构不升版。
+以 `metadata.yaml` 为唯一版本源，不用标签、README 徽章或 `pyproject.toml` 代替。开发阶段按 PR 规则确认下一版本，正式发布时沿用已确认的版本。
+
+调整关于页时，验证本地 Logo 缺失的回退、已安装版本与未发布记录的区分，以及按版本折叠和外部仓库链接。
 
 ### 分支与发布流程
 
-- `main` 是稳定主分支，只接受从 `develop` 发起的发布 PR；不得直接向 `main` 推送，也不得从其他分支合并到 `main`。
+- 向 `main` 发起 PR 前核对来源：常规发布使用 `develop`；只有紧急回滚允许从最新 `main` 创建 `revert/<说明>` 分支，核对差异只包含回滚所需的变更。两类 PR 都必须遵守分支保护；不得直接推送 `main`。
 - `develop` 是集成开发分支。新工作从最新 `develop` 创建独立分支，完成实现和验证后通过 PR 合并回 `develop`。
-- 开发 PR 和发布 PR 合并时统一使用 GitHub 的 `Squash and merge`，确保每个 PR 在目标分支形成一个整理后的提交。
-- 只有发布时才从 `develop` 向 `main` 发起 PR。发布 PR 必须包含 `metadata.yaml` 版本号变更，并同步 README 徽章和 CHANGELOG；合并后使用同一个版本号为 `main` 上的合并提交创建 Git 标签和 GitHub Release，Release 标题只能写版本号，例如 `v1.4.0`。
-- 紧急修复也必须先合入 `develop`，再通过发布 PR 合入 `main`。检查仓库分支保护是否禁止直接推送和强推，并要求必需 CI 检查与审查。
+- 发起开发 PR 前运行 `git fetch origin main develop`，用 `git show origin/main:metadata.yaml`、`git show origin/develop:metadata.yaml` 与 `git show HEAD:metadata.yaml` 分别读取远端版本和待推送的来源分支版本。按 `v主.次.修订` 格式校验并逐段作数字比较。版本缺失、格式无效或 `develop` 低于 `main` 时，报告实际情况，先解决异常再发起。
+- 两个长期分支同版本时，暂停创建 PR，要求开发者确认严格高于 `main` 的版本；只有确认后的合法版本已写入来源分支才能继续。`develop` 已合法领先时默认沿用，来源分支不得降版，未经确认不得另行升版。发起 PR 时在正文及交付说明列出 `main`、`develop` 和来源分支各自版本，有升版时注明合并后的预期版本。纯历史回同步和紧急回滚只报告版本，不触发开发 PR 升版。
+- 通过开发 PR 前重新 fetch 长期分支，按最新 PR 来源提交重新核对版本，确认合入后版本仍严格高于 `main`，且不低于当前 `develop`；不满足则停止，不批准、不合并。
+- 合并前核对 PR 方向：开发分支 → `develop` 使用 `gh pr merge --squash`；发布、紧急回滚和回同步 PR 使用 `gh pr merge --merge`。不得压缩或重排长期分支之间的提交历史。
+- 同一次对话不得既发起 PR 又通过 PR。发起后只交付链接和验证结果，不运行批准、合并或开启自动合并的操作，即使它们针对另一个 PR；通过须在另一次对话获得用户明确授权。发布或回滚合并后需要发起回同步 PR 时，也留到另一次对话。
+- 只有发布时才从 `develop` 向 `main` 发起 PR。发起和通过时核对 `develop` 的已确认版本合法且高于当前 `main`，同步核对 README 徽章与 CHANGELOG，不要求再次升版；合并后使用同一个版本号为 `main` 上的合并提交创建 Git 标签和 GitHub Release，Release 标题只能写版本号，例如 `v1.4.0`。
+- 发布前更新远端引用，用 `git merge-base --is-ancestor origin/main origin/develop` 验证 `develop` 已包含当前 `main`；不满足时先回同步。回同步发生冲突时检查实际文件差异，保留未发布改动；只对齐历史时，核对同步前后 `develop` 文件树一致。紧急回滚也要回同步。检查分支保护和必需 CI 检查与审查，不绕过规则。
 
 ### 同步项目指导文档
 
@@ -105,7 +123,7 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 本 Skill 记录 AI 的查找、实现、验证和交付流程
 - 避免复制 `AGENTS.md`/`CLAUDE.md` 中的项目事实
 
-普通功能可以修正 `metadata.yaml` 的描述、短描述和仓库地址，但不能借此修改版本号。
+普通功能可以修正 `metadata.yaml` 的描述、短描述和仓库地址；版本号仅按上述流程调整。
 
 ## 验证与交付
 
@@ -117,13 +135,14 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 新行为有回归测试，安全边界和敏感信息不泄漏已覆盖。
 - README、CHANGELOG、`AGENTS.md`、项目 Skill、配置 Schema 和元数据描述与当前代码一致，没有固定盘符、父目录、解释器或虚拟环境路径。
 - 提交和 PR 使用中文，提交信息符合 Conventional Commits。
-- 功能分支来自最新 `develop`，开发 PR 的目标为 `develop`；涉及发布时，发布 PR 的目标为 `main`，版本号已变更且发布资料已同步。
-- 开发 PR 和发布 PR 的合并方式为 `Squash and merge`。
+- 功能分支来自最新 `develop`，开发 PR 的目标为 `develop`；版本校验已通过，PR 正文列出各分支版本。涉及发布时，发布 PR 的目标为 `main`，沿用已确认版本且发布资料已同步。
+- 核对 PR 方向与合并方式；GitHub 的 `develop` 目标规则同时允许 Squash 和 Merge commit，不能替代这一步。
 
 PR 合并后核对：
 
-- 开发 PR 已合入 `develop`；发布 PR 已合入 `main`。
+- 开发及回同步 PR 已合入 `develop`；发布及紧急回滚 PR 已合入 `main`。
 - 发布完成后，`main` 上已创建同版本 Git 标签和 GitHub Release，Release 标题仅为版本号。
+- 发布、紧急回滚及回同步 PR 核对合并提交确有两个父提交。发布或回滚后另开对话发起回同步 PR；回同步合并后更新远端引用并验证 `origin/main` 是 `origin/develop` 的祖先。
 
 ## 确保 Skill 有效性
 

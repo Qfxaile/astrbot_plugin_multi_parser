@@ -17,6 +17,7 @@ from .http import (
     request_timeout,
 )
 from .media import ImageMaterializer
+from .settings import PluginSettings
 
 
 @runtime_checkable
@@ -54,6 +55,14 @@ class BaseParser:
     def http_client_options(self) -> dict[str, object]:
         """返回当前平台创建 HTTP 客户端时使用的代理参数。"""
         return http_client_proxy_options(self.config, self.name)
+
+    def parse_feature_enabled(self, feature: str, default: bool = True) -> bool:
+        """读取当前平台指定内容类型的开关，旧配置默认保持启用。"""
+        return PluginSettings(self.config).parse_feature_enabled(
+            self.name,
+            feature,
+            default,
+        )
 
     @asynccontextmanager
     async def http_client(

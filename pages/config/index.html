@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>多平台解析设置</title>
+    <link rel="stylesheet" href="./styles/main.css">
+    <link rel="stylesheet" href="./styles/dashboard.css">
+    <link rel="stylesheet" href="./styles/logs.css">
+    <link rel="stylesheet" href="./styles/about.css">
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="header">
+        <h1><span class="icon-slot" data-icon="settings" aria-hidden="true"></span>多平台解析设置</h1>
+        <div class="header-meta">
+          <span id="scope">当前 AstrBot 实例</span>
+          <span id="status" class="status" role="status">正在读取…</span>
+          <button id="retry" class="button" type="button" hidden>重新读取</button>
+        </div>
+      </header>
+      <nav class="tabs" role="tablist" aria-label="设置分类">
+        <button class="tab" type="button" role="tab" id="dashboard-tab" aria-selected="true" aria-controls="dashboard-panel"><span class="icon-slot" data-icon="dashboard" aria-hidden="true"></span>工作台</button>
+        <button class="tab" type="button" role="tab" id="platform-tab" aria-selected="false" aria-controls="platform-panel" tabindex="-1"><span class="icon-slot" data-icon="layers" aria-hidden="true"></span>平台配置</button>
+        <button class="tab" type="button" role="tab" id="delivery-tab" aria-selected="false" aria-controls="delivery-panel" tabindex="-1"><span class="icon-slot" data-icon="send" aria-hidden="true"></span>发送方式</button>
+        <button class="tab" type="button" role="tab" id="ai-tab" aria-selected="false" aria-controls="ai-panel" tabindex="-1"><span class="icon-slot" data-icon="brain" aria-hidden="true"></span>AI 与会话</button>
+        <button class="tab" type="button" role="tab" id="access-tab" aria-selected="false" aria-controls="access-panel" tabindex="-1"><span class="icon-slot" data-icon="shield" aria-hidden="true"></span>黑白名单</button>
+        <button class="tab" type="button" role="tab" id="network-tab" aria-selected="false" aria-controls="network-panel" tabindex="-1"><span class="icon-slot" data-icon="network" aria-hidden="true"></span>网络设置</button>
+        <button class="tab" type="button" role="tab" id="logs-tab" aria-selected="false" aria-controls="logs-panel" tabindex="-1"><span class="icon-slot" data-icon="file-text" aria-hidden="true"></span>插件日志</button>
+        <button class="tab" type="button" role="tab" id="about-tab" aria-selected="false" aria-controls="about-panel" tabindex="-1"><span class="icon-slot" data-icon="info" aria-hidden="true"></span>关于</button>
+      </nav>
+      <main class="panels" id="panels">
+        <section class="detail scroll-area" id="dashboard-panel" role="tabpanel" aria-labelledby="dashboard-tab" tabindex="0">
+          <div id="dashboard-content"><p class="description">正在读取工作台…</p></div>
+        </section>
+        <div class="platform-panel" id="platform-panel" role="tabpanel" aria-labelledby="platform-tab" hidden>
+          <aside class="sidebar" aria-labelledby="platform-list-title">
+            <h2 id="platform-list-title"><span class="icon-slot" data-icon="layers" aria-hidden="true"></span>平台列表</h2>
+            <div class="platform-list scroll-area" id="platform-list" tabindex="0" aria-label="滚动浏览平台"></div>
+          </aside>
+          <div class="detail scroll-area" id="detail-scroll" tabindex="0" role="region" aria-label="平台详情">
+            <div class="detail-content" id="detail"><p class="description">正在读取平台配置…</p></div>
+          </div>
+        </div>
+        <div class="detail scroll-area" id="delivery-panel" role="tabpanel" aria-labelledby="delivery-tab" tabindex="0" hidden>
+          <div class="detail-content" id="delivery-content"><p class="description">正在读取设置…</p></div>
+        </div>
+        <div class="detail scroll-area" id="ai-panel" role="tabpanel" aria-labelledby="ai-tab" tabindex="0" hidden>
+          <div class="detail-content" id="ai-content"><p class="description">正在读取设置…</p></div>
+        </div>
+        <div class="access-panel" id="access-panel" role="tabpanel" aria-labelledby="access-tab" data-view="directory" hidden>
+          <aside class="sidebar access-sidebar" aria-label="名单配置与群聊列表">
+            <div id="access-picker" class="access-picker"></div>
+            <div id="access-list" class="platform-list scroll-area" tabindex="0" aria-label="已配置的群聊列表"></div>
+          </aside>
+          <div class="access-workspace" id="access-workspace" aria-label="名单权限详情">
+            <div class="detail scroll-area" id="access-detail"><div class="detail-content"><p class="description">正在读取名单…</p></div></div>
+          </div>
+        </div>
+        <div class="detail scroll-area" id="network-panel" role="tabpanel" aria-labelledby="network-tab" tabindex="0" hidden>
+          <div class="detail-content" id="network-content"><p class="description">正在读取设置…</p></div>
+        </div>
+        <section class="detail scroll-area" id="logs-panel" role="tabpanel" aria-labelledby="logs-tab" tabindex="0" hidden>
+          <div id="logs-content"><p class="description">正在读取插件日志…</p></div>
+        </section>
+        <section class="detail scroll-area" id="about-panel" role="tabpanel" aria-labelledby="about-tab" tabindex="0" hidden>
+          <div class="detail-content" id="about-content"><p class="description">正在读取插件信息…</p></div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

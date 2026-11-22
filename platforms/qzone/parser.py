@@ -48,7 +48,10 @@ class QzoneParser(QzonePageContent, BaseParser):
     )
 
     async def match(self, context: ParseContext) -> bool:
-        return self._find_share_url(context.combined_text) is not None
+        return (
+            self.parse_feature_enabled("post")
+            and self._find_share_url(context.combined_text) is not None
+        )
 
     async def parse(self, context: ParseContext) -> ParseResult:
         url = self._find_share_url(context.combined_text)

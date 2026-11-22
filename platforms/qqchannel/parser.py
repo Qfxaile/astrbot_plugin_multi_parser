@@ -47,7 +47,9 @@ class QQChannelParser(BaseParser):
     }
 
     async def match(self, context: ParseContext) -> bool:
-        return self._find_card(context) is not None
+        return (
+            self.parse_feature_enabled("post") and self._find_card(context) is not None
+        )
 
     async def parse(self, context: ParseContext) -> ParseResult:
         card = self._find_card(context)

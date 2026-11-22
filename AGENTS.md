@@ -17,7 +17,8 @@
 - 这是 AstrBot 插件，支持 B站、抖音、番茄小说、小红书、贴吧、微博、微信、小黑盒、知乎、GitHub、腾讯频道、QQ空间和 Pixiv。
 - `main.py` 负责插件注册、命令入口和服务装配，不承载平台解析细节。
 - `core/` 保存跨平台契约和基础能力；`services/` 保存编排与策略；`platforms/` 保存平台特有实现；`tests/` 保存 pytest 测试。
-- `metadata.yaml` 是插件版本的唯一来源。除非用户明确要求发布或升版，不修改版本号。
+- `metadata.yaml` 是插件版本的唯一来源。下一版本按分支流程在开发 PR 中确定，未经开发者确认不自行升版。
+- 关于页从已安装插件的 `metadata.yaml`、`CHANGELOG.md` 和 `logo.png` 读取信息，不查询远端版本或图片。
 - 当前代码和文档冲突时，以经过测试验证的代码行为为准，并在同次变更中修正文档。
 
 ## 开发环境
@@ -55,18 +56,23 @@ uv run ruff check .
 | 登录契约、登录 HTTP 基类和二维码渲染 | `core/platform_login.py` |
 | 安全 HTTP、可信 URL、Cookie、平台代理、商品网页元数据、媒体和渲染 | `core/http.py`、`core/webpage.py`、`core/product_metadata.py`、`core/media/operations.py`、`core/rendering/result_renderer.py`；`ParseResultRenderer` 负责结果到消息组件的转换 |
 | 配置类型读取与平台开关 | `core/settings/values.py`；基础设施和服务不得重复实现配置类型转换 |
+| WebUI 配置持久化与名单权限 | `services/settings/service.py` 保存和发布配置；`services/settings/access_rules.py` 按群聊 UMO 和统一私聊设置判定解析权限，自动解析与 AI 按需读取共用 |
 | 解析器窄扩展契约、公共 HTTP 客户端和基础能力 | `core/parser.py` 的 `Parser` Protocol 与可实例化 `BaseParser`；平台适配器优先复用 `BaseParser.http_client()` |
 | 平台扩展接口与能力描述 | `core/ports/platform.py` |
 | 平台清单及解析器、登录适配器对应关系 | `platforms/registry.py` |
 | 配置读取和解析器创建 | `services/composition/configuration.py` |
+| WebUI 配置分组、提交校验和持久化 | `services/settings/native_fields.py` 声明原生字段白名单并复用 Schema，`services/settings/service.py` 负责保存与运行时更新 |
+| 插件 WebUI 界面 | `pages/config/app.js` 协调标签页和请求；`pages/config/features/` 按平台、设置、名单、工作台、日志和关于页面拆分功能模块；`shared/` 保存通用控件与图标，`styles/` 保存统一设计样式 |
 | 登录编排、二维码轮询、登录状态、会话互斥与取消、凭据持久化和文案 | `services/authentication/service.py`、`services/authentication/polling.py`、`services/authentication/status.py`、`services/authentication/sessions.py`、`services/authentication/cookie_store.py`、`services/authentication/messages.py` |
 | 消息上下文、分享卡片、自动解析编排、文本处理和投递 | `services/message_context.py`、`services/share_card.py`、`services/parsing/coordinator.py`、`services/text_processing.py`、`services/delivery/service.py` |
 | 投递策略、内容组装、链接过滤、直链投递、事件身份和 OneBot 适配 | `services/delivery/policy.py`、`services/content_assembly.py`、`services/link_filter.py`、`services/delivery/forward_links.py`、`services/event_identity.py`、`services/onebot_*.py` |
 | 合并转发编排与 OneBot 昵称缓存 | `services/delivery/forward.py`、`services/delivery/onebot_identity.py` |
 | 按需阅读与请求级工具 | `services/parsing/share_tool.py`；`parse_mode=tool` 时从当前或被引用的消息取得分享，按图序读取媒体 |
 | LLM 会话历史写入与媒体序列化 | `services/conversation/history.py` |
+| 插件解析运行日志、按日统计与 AI Token 用量 | `services/observability.py` 异步持久化至 AstrBot 插件数据目录中的 SQLite；日志详情保留群 ID、会话 UMO、脱敏候选链接及运行结果，不保存原消息正文 |
 | AI 总结、Provider 选择和多模态输入 | `services/summary/service.py`、`services/summary/provider.py` |
 | 视频大小探测、发送和回退策略 | `services/delivery/video.py`、`services/delivery/video_delivery.py`、`services/delivery/video_fallback.py` |
+| QQ 群聊目录 | `services/settings/group_directory.py`；按实例查询 OneBot 群列表或读取 QQ 官方已观测群聊，仅返回群 ID、UMO 和名称 |
 | 平台请求、签名、登录和载荷转换 | `platforms/<platform>/` |
 
 跨平台规则放入 `core/` 或 `services/`；平台协议细节留在对应平台目录。Controller/命令入口只做权限与参数检查、调用服务并返回结果。自动解析由 `services/parsing/coordinator.py` 的 `ParseCoordinator` 编排；解析器通过 `core/parser.py` 的 `Parser` Protocol 提供异步 `match` 和 `parse`，并通过 `PlatformSpec` 注册，校验要求声明 `PARSE` 能力。平台适配器不得反向依赖服务层，核心模块不得依赖平台实现；依赖方向由 `tests/test_architecture_dependencies.py` 校验。`BaseParser` 本身保留可实例化的公共 HTTP、Cookie 和媒体能力，供基础能力复用。京东、淘宝、拼多多源码和测试保留，但不注册、不出现在配置开关和自动解析主流程中。
@@ -81,9 +87,11 @@ uv run ruff check .
 - README 和对应测试
 
 平台注册表提供 `validate_platform_registry()` 和
-`validate_platform_configuration()` 校验入口；调整平台时必须确保注册表、配置 Schema
-和对应测试同时通过。核心与服务公共类型优先从包入口惰性导出，新增公共扩展点时同步
+`validate_platform_configuration()` 校验入口；调整平台时必须确保注册表、原生配置 Schema
+和对应测试同时通过。只由插件 WebUI 管理的细粒度解析开关不写入 `_conf_schema.json`，能力元数据及默认值由平台注册表提供；`PlatformSpec.parse_type_controls_ready` 标记细分开关是否已经接入解析路由，未就绪的平台开关必须在 WebUI 禁用并说明。核心与服务公共类型优先从包入口惰性导出，新增公共扩展点时同步
 检查 `core/__init__.py`、`services/__init__.py` 和包边界测试。
+
+细粒度开关只过滤原有解析候选，保留全开时的选链优先级。短链或内容探测确定到已关闭的类型时使用 `ParseResult.skipped()` 表达静默跳过，自动解析与按需阅读继续尝试下一个候选。实际解析错误遵循原有错误路径。
 
 `services/composition/configuration.py` 和 `services/authentication/service.py` 从注册表装配解析器与登录适配器，只有装配语义变化时才修改。
 
@@ -106,7 +114,10 @@ uv run ruff check .
 - 登录适配器复用 `HTTPPlatformLoginProvider`、`read_login_response_body` 和公共二维码渲染；可信域、Cookie 值及 CookieJar 白名单序列化复用 `core/http.py`。
 - 平台解析器或登录适配器的增删与顺序只在 `platforms/registry.py` 声明，配置和认证服务从注册表装配，不维护平行清单。
 - 公开 API 和关键异步入口使用准确的中文文档字符串。注释解释边界、顺序、并发和降级原因，不逐行复述代码。
-- 配置变化同步 `_conf_schema.json`、README 和测试，并检查 `services/composition/configuration.py` 是否需要调整；注册表已经提供所需装配语义时不要制造无意义改动。
+- 原生插件配置变化同步 `_conf_schema.json`、README 和测试；插件 WebUI 专属配置使用独立持久化，不加入原生配置 Schema。并检查 `services/composition/configuration.py` 是否需要调整；注册表已经提供所需装配语义时不要制造无意义改动。
+- 名单规则只限制平台和解析类型，不修改解析后的媒体或文本。QQ 群按实例和原生群 ID 匹配，其他群用完整 UMO，所有私聊共用一份名单项。全局模式为关闭、黑名单或白名单：关闭时名单不生效；黑名单仅禁止名单项中勾选的解析类型；白名单仅允许名单项中勾选的类型，名单外会话全部禁止解析。模式切换即时生效，只切换规则解释，不改写模板或名单项数据，也不要求确认。规则模板可被多个名单项实时引用；单独编辑名单项时复制模板规则并与模板解除关联。默认模板及全部、仅视频、仅图文预设均属于插件 WebUI 配置，不进入 `_conf_schema.json`。自动解析与 AI 工具均在匹配和解析期间施加限制，投递前复位。
+- 工作台与插件日志只展示插件自动解析运行记录，不拦截或读取 AstrBot 全局日志；解析日志、每日统计和 AI Token 用量通过后台任务持久化到插件数据目录的 SQLite，解析和总结不等待写入，插件正常卸载时等待落库，不设日志条数或统计时间上限。工作台默认近 14 天，支持今天、近 7 天、近 14 天、近 30 天及全部时间。日志只在管理界面提供，包含来源类型、原始会话 UMO、群 ID、平台、脱敏候选链接、结果、耗时和错误原因，不保存原消息正文、独立发送者字段或凭据；最多记录 3 条链接，剔除 URL 凭据与片段，隐藏所有查询参数值。旧记录原位迁移，不推断会话。日志支持时间、来源、平台、结果，以及群 ID、UMO、链接或错误关键词组合筛选，在 SQLite 中执行筛选与分页。Token 统计只覆盖插件 AI 总结；Provider 返回用量时记精确值，否则显示基于文本长度的估算，并注明图片 Token 不包含在估算中。
+- 群聊列表直接显示已配置群，不另建空的群聊名单菜单。内置模板由平台注册能力生成，可引用及设为默认，但不可改名、编辑规则或删除；只有自建模板可编辑。模板解析类型开关独立于平台全局开关；模板平台行须表达全选、部分选中和未纳入状态。
 - `_conf_schema.json` 的用户可见文案保持简洁：平台开关用一句话概括支持的内容类型；Cookies 配置只说明是否选填及用途；登录状态、填写格式、兼容限制和故障处理等详细说明放入 README，不堆叠在配置提示中。Cookies 分组仍需保留简短的敏感信息警告。
 - 不为单次需求增加兼容层、重复入口或无调用方的扩展点。
 
@@ -129,17 +140,23 @@ uv run ruff check .
 - 新增、删除或调整平台时，同步检查 `AGENTS.md`、`CLAUDE.md`、项目 Skill、README、`_conf_schema.json`、`metadata.yaml` 的描述字段、CHANGELOG 和平台清单测试。
 - 模块职责、公共 API、目录结构、配置项、依赖、命令权限或验证流程变化时，在同次变更中更新 `AGENTS.md` 和 `CLAUDE.md` 的对应项目事实，以及项目 Skill 的 AI 执行指南。
 - `AGENTS.md`/`CLAUDE.md` 记录稳定的项目事实、边界和索引；项目 Skill 记录 AI 的查找、实现、验证和交付流程，避免大段重复。
-- 普通功能开发可以更新 `metadata.yaml` 的描述和仓库地址，但只有明确发布或升版时才修改版本号、README 版本徽章和 Git 标签。
+- 普通功能开发可以更新 `metadata.yaml` 的描述和仓库地址；版本号按下方开发 PR 规则处理。README 版本徽章、Git 标签和 GitHub Release 只在正式发布流程中更新。
 
 ## 分支与发布流程
 
-- `main` 是稳定主分支，只接受从 `develop` 发起的发布 PR；禁止直接向 `main` 推送或从其他分支合并。
+- `main` 是稳定主分支，常规变更只接受从 `develop` 发起的发布 PR。唯一例外是生产发布必须紧急回滚：从最新 `main` 创建 `revert/<说明>` 分支，仅包含回滚所需的变更，通过 PR 合入 `main`，仍须遵守分支保护和审查要求。禁止直接推送 `main`。
 - `develop` 是集成开发分支。新功能、缺陷修复和重构均从最新 `develop` 创建独立开发分支，完成实现和验证后通过 PR 合并回 `develop`。分支名由贡献者自行决定，但应能辨识工作内容。
-- 合并开发 PR 或发布 PR 时统一使用 GitHub 的 `Squash and merge`，每个 PR 在目标分支保留一个经过整理的提交，避免 `develop` 和 `main` 的提交历史过于杂乱。
-- 只有准备发布时才从 `develop` 向 `main` 发起 PR。发布 PR 必须更新 `metadata.yaml` 版本号，并同步 README 版本徽章、CHANGELOG；版本号遵循项目已有的语义化版本约定。PR 合并后必须使用同一个版本号创建 Git 标签和 GitHub Release，Release 标题只能写版本号（例如 `v1.4.0`），避免标签或 Release 指向尚未进入 `main` 的提交。
-- 发布 PR 应以 `develop` 为源、`main` 为目标，说明版本号、用户可见变更、兼容性影响和验证结果，并通过仓库配置的必需检查与审查后才能合并。普通开发 PR 不修改版本号、发布标签或 Release。
-- 紧急修复也先按常规流程合入 `develop`，再以发布 PR 合入 `main`，确保两个长期分支保持一致；不得只修 `main`。
+- 发起开发 PR 前，更新远端 `main`、`develop` 引用，从两者及 PR 来源分支的 `metadata.yaml` 读取版本。沿用仓库的 `v主.次.修订` 格式，按语义版本比较，不按字符串排序。
+- `develop` 与 `main` 同版本时，需要开发者确认一个严格高于 `main` 的版本号，并在 PR 来源分支更新 `metadata.yaml`；尚未确认或更新时，不发起 PR。`develop` 版本合法且已高于 `main` 时，默认沿用并检查来源分支没有降版，无需重复询问；另行升版仍需开发者确认。版本缺失、格式无效或 `develop` 低于 `main` 时，先解决异常再发起 PR。
+- 发起 PR 时，无论是否升版，都在 PR 正文和交付说明列出当时的 `main`、`develop` 和 PR 来源分支版本；有升版时注明合并后的预期版本。通过开发 PR 前更新远端引用并重新核对，确保合并后的版本仍严格高于 `main`，且不低于当前 `develop`。纯历史回同步和紧急回滚不触发开发 PR 升版要求。
+- 开发分支 → `develop`：使用 GitHub 的 `Squash and merge`，每个开发 PR 保留一个整理后的提交。
+- 发布 PR、紧急回滚 PR，以及 `main` 回同步至 `develop` 的 PR：使用 `Create a merge commit`，不使用 Squash 或 Rebase 合并。
+- 只有准备发布时才从 `develop` 向 `main` 发起 PR。发起和通过发布 PR 前，核对 `develop` 中已确定的合法版本严格高于 `main`，并核对 README 版本徽章、CHANGELOG 与该版本一致；不因发起发布 PR 而再次升版。PR 合并后必须使用同一个版本号为 `main` 的合并提交创建 Git 标签和 GitHub Release，Release 标题只能写版本号（例如 `v1.4.0`）。
+- 发布 PR 应以 `develop` 为源、`main` 为目标，说明版本号、用户可见变更、兼容性影响和验证结果，并通过仓库配置的必需检查与审查后才能合并。普通开发 PR 不创建发布标签或 Release。
+- 发布前确认当前 `main` 已包含在 `develop` 的历史中；未包含时先通过回同步 PR 对齐，处理冲突时保留 `develop` 中尚未发布的改动。发布合并后，用回同步 PR 将 `main` 的发布提交纳入 `develop`。紧急修复优先在 `develop` 完成；如果必须先在 `main` 紧急回滚，回滚后也要通过 PR 及时同步并核对下一版内容。不得强推或重写长期分支历史。
 - 仓库托管平台应为 `main` 配置分支保护：禁止直接推送和强推，要求 PR、必需 CI 检查及审查；`develop` 至少要求通过 PR 和必需 CI 检查。文档约定不能替代仓库权限配置。
+- GitHub 分支规则按目标分支限制合并方式：`main` 仅允许 Merge commit，`develop` 允许 Squash 与 Merge commit。规则不能按来源分支选择合并方式，`develop` 的 PR 由合并者按上述约定选择。
+- **同一次对话不得既发起 PR，又通过任何 PR。** 发起后只报告 PR 链接和验证结果，不批准、不合并、不启用自动合并。通过 PR 必须由用户在另一次对话中明确授权；即使同一次对话要求同时发起和通过，也只执行发起。发布、紧急回滚和回同步均无例外。
 
 ## 验证流程
 
@@ -165,5 +182,4 @@ git diff --check
 - 提交信息使用 Conventional Commits：`<type>(<scope>): <中文主题>`，主题简洁、使用祈使表达、末尾不加句号。
 - PR 使用中文说明行为变化、验证结果和兼容性影响。
 - 用户功能、配置或安装方式变化时更新 README；用户可见变化按需更新 CHANGELOG。
-- 仅在明确的发布任务中同步 `metadata.yaml`、README 版本徽章、CHANGELOG 和 Git 标签。
 - 不提交凭据、调试日志、缓存、临时文件或无关格式化改动。

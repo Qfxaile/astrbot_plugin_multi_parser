@@ -1,0 +1,67 @@
+#about-content { max-width: 860px; }
+
+.about-identity {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 4px 0 22px;
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+}
+.about-brand {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  color: var(--accent-secondary);
+}
+.about-brand > .icon-slot {
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+.about-logo { display: block; width: 100%; height: 100%; object-fit: contain; }
+.about-identity h2 { overflow-wrap: anywhere; }
+.about-meta {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.about-meta > div { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 6px; min-width: 0; }
+.about-meta dd { margin: 0; color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+.button.about-repo { min-height: 34px; padding-block: 6px; border-color: var(--line); text-decoration: none; }
+.about-repo .icon-slot, .about-state .icon-slot { width: 14px; height: 14px; }
+.about-repo-copy { display: grid; justify-items: center; gap: 6px; width: min(100%, 28rem); min-width: 0; }
+
+.about-updates { margin-top: 18px; }
+.about-updates h3 { margin-bottom: 10px; }
+.about-history { border: 1px solid var(--line); border-radius: var(--radius); }
+.about-release + .about-release { border-top: 1px solid var(--line); }
+.about-release summary {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 8px 12px;
+  list-style: none;
+  cursor: pointer;
+}
+.about-release summary::-webkit-details-marker { display: none; }
+.about-release summary:is(:hover, :focus-visible) { background: var(--surface-hover); }
+.about-release summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.about-release summary > .icon-slot { width: 14px; height: 14px; color: var(--muted); transform: rotate(-90deg); }
+.about-release[open] > summary > .icon-slot { transform: none; }
+.about-release-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 8px; font-weight: 650; overflow-wrap: anywhere; }
+.about-installed { color: var(--accent-secondary); font-size: 12px; font-weight: 500; }
+.about-release time { font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.about-notes { display: grid; gap: 7px; margin: 0; padding: 2px 16px 14px 36px; overflow-wrap: anywhere; }
+.about-notes li::marker { color: var(--muted); }
+.about-state { display: grid; justify-items: center; gap: 12px; padding: 24px 0; }
+.about-empty { padding: 10px 0; }
