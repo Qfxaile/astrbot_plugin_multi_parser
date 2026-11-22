@@ -102,9 +102,9 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 - `main` 是稳定主分支，只接受从 `develop` 发起的发布 PR；不得直接向 `main` 推送，也不得从其他分支合并到 `main`。
 - `develop` 是集成开发分支。新工作从最新 `develop` 创建独立分支，完成实现和验证后通过 PR 合并回 `develop`。
-- 开发 PR 和发布 PR 合并时统一使用 GitHub 的 `Squash and merge`，确保每个 PR 在目标分支形成一个整理后的提交。
+- 合并前核对 PR 方向：开发分支 → `develop` 使用 `gh pr merge --squash`；`develop` → `main` 的发布 PR、`main` → `develop` 的回同步 PR 使用 `gh pr merge --merge`。不得压缩或重排长期分支之间的提交历史。
 - 只有发布时才从 `develop` 向 `main` 发起 PR。发布 PR 必须包含 `metadata.yaml` 版本号变更，并同步 README 徽章和 CHANGELOG；合并后使用同一个版本号为 `main` 上的合并提交创建 Git 标签和 GitHub Release，Release 标题只能写版本号，例如 `v1.4.0`。
-- 紧急修复也必须先合入 `develop`，再通过发布 PR 合入 `main`。检查仓库分支保护是否禁止直接推送和强推，并要求必需 CI 检查与审查。
+- 发布前更新远端引用，用 `git merge-base --is-ancestor origin/main origin/develop` 验证 `develop` 已包含当前 `main`；不满足时先回同步。回同步发生冲突时检查实际文件差异，保留未发布改动；只对齐历史时，核对同步前后 `develop` 文件树一致。紧急回滚也要回同步。检查分支保护和必需 CI 检查与审查，不绕过规则。
 
 ### 同步项目指导文档
 
@@ -132,12 +132,13 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - README、CHANGELOG、`AGENTS.md`、项目 Skill、配置 Schema 和元数据描述与当前代码一致，没有固定盘符、父目录、解释器或虚拟环境路径。
 - 提交和 PR 使用中文，提交信息符合 Conventional Commits。
 - 功能分支来自最新 `develop`，开发 PR 的目标为 `develop`；涉及发布时，发布 PR 的目标为 `main`，版本号已变更且发布资料已同步。
-- 开发 PR 和发布 PR 的合并方式为 `Squash and merge`。
+- 核对 PR 方向与合并方式；GitHub 的 `develop` 目标规则同时允许 Squash 和 Merge commit，不能替代这一步。
 
 PR 合并后核对：
 
 - 开发 PR 已合入 `develop`；发布 PR 已合入 `main`。
 - 发布完成后，`main` 上已创建同版本 Git 标签和 GitHub Release，Release 标题仅为版本号。
+- 发布及回同步 PR 核对合并提交确有两个父提交。发布后通过 PR 回同步，并在获取最新远端引用后验证 `origin/main` 是 `origin/develop` 的祖先。
 
 ## 确保 Skill 有效性
 
