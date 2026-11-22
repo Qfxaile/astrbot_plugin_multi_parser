@@ -1,4 +1,9 @@
+import re
+from base64 import b64encode
+from pathlib import Path
+
 import httpx as httpx
+import yaml
 from astrbot.api import AstrBotConfig, logger, web
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.provider import ProviderRequest
@@ -58,6 +63,24 @@ class MultiParserPlugin(Star):
                 ["POST"],
                 "读取 QQ 群列表",
             )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/dashboard",
+                self._web_dashboard_api,
+                ["GET", "POST"],
+                "读取插件工作台统计",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/logs",
+                self._web_logs_api,
+                ["POST"],
+                "读取插件解析运行日志",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/about",
+                self._web_about_api,
+                ["GET"],
+                "读取插件版本和更新日志",
+            )
 
     def _delivery_service(self) -> DeliveryService:
         return self._services.delivery
@@ -74,6 +97,35 @@ class MultiParserPlugin(Star):
 
     def _access_for_event(self, event: AstrMessageEvent):
         return self._web_settings.access_rules.for_event(event)
+
+    def record_parse(
+        self,
+        platform,
+        status,
+        duration_ms,
+        *,
+        sent=False,
+        error_type="",
+        source="",
+        umo="",
+        group_id="",
+        links="",
+        result="",
+        error_reason="",
+    ):
+        self._services.observability.record_parse(
+            platform,
+            status,
+            duration_ms,
+            sent=sent,
+            error_type=error_type,
+            source=source,
+            umo=umo,
+            group_id=group_id,
+            links=links,
+            result=result,
+            error_reason=error_reason,
+        )
 
     # ParseCoordinator 依赖的窄接口，直接提供实现
     async def react_success(self, event: AstrMessageEvent) -> None:
@@ -227,8 +279,11 @@ class MultiParserPlugin(Star):
             yield item
 
     async def terminate(self):
-        """插件卸载时取消仍在进行的平台登录。"""
-        await self._services.authentication.close()
+        """插件卸载时取消登录并等待后台统计写入。"""
+        try:
+            await self._services.authentication.close()
+        finally:
+            await self._services.observability.flush()
 
     async def initialize(self) -> None:
         """加载 WebUI 专属解析设置。"""
@@ -291,3 +346,90 @@ class MultiParserPlugin(Star):
         return web.json_response(
             {"status": "ok", "data": data}, headers={"Cache-Control": "no-store"}
         )
+
+    async def _web_dashboard_api(self):
+        """返回持久化工作台统计，支持选择统计时间范围。"""
+        period = "14d"
+        if getattr(web.request, "method", "GET").upper() == "POST":
+            payload = await web.request.json()
+            if isinstance(payload, dict):
+                period = payload.get("period", period)
+        if not isinstance(period, str):
+            period = "14d"
+        return web.json_response(
+            {
+                "status": "ok",
+                "data": await self._services.observability.dashboard(period),
+            },
+            headers={"Cache-Control": "no-store"},
+        )
+
+    async def _web_logs_api(self):
+        """返回符合条件的一页插件日志，不读取 AstrBot 全局日志。"""
+        payload = await web.request.json()
+        try:
+            data = await self._services.observability.logs(
+                payload if isinstance(payload, dict) else None
+            )
+        except Exception:
+            logger.exception("读取插件 SQLite 解析日志失败")
+            return web.error_response(
+                "插件解析日志数据库读取失败，请检查 AstrBot 服务日志。",
+                status_code=500,
+            )
+        return web.json_response(
+            {"status": "ok", "data": data}, headers={"Cache-Control": "no-store"}
+        )
+
+    async def _web_about_api(self):
+        """读取已安装插件的标识、版本与更新记录。"""
+        root = Path(__file__).resolve().parent
+        metadata = yaml.safe_load((root / "metadata.yaml").read_text("utf-8"))
+        changelog = (root / "CHANGELOG.md").read_text("utf-8")
+        try:
+            logo = "data:image/png;base64," + b64encode(
+                (root / "logo.png").read_bytes()
+            ).decode("ascii")
+        except OSError:
+            logo = ""
+        return web.json_response(
+            {
+                "status": "ok",
+                "data": {
+                    "name": metadata.get("display_name", PLUGIN_NAME),
+                    "version": metadata.get("version", "未知"),
+                    "author": metadata.get("author", "未知"),
+                    "repo": metadata.get("repo", ""),
+                    "logo": logo,
+                    "updates": _release_notes(changelog),
+                },
+            },
+            headers={"Cache-Control": "no-store"},
+        )
+
+
+def _release_notes(changelog: str) -> list[dict[str, str | list[str]]]:
+    """按 CHANGELOG 的章节顺序提取版本标题、日期和列表项。"""
+    sections: list[tuple[str, str, list[str]]] = []
+    notes = None
+    for line in changelog.splitlines():
+        line = line.strip()
+        if line.startswith("## "):
+            notes = None
+            heading = line[3:].strip()
+            if heading == "未发布":
+                notes = []
+                sections.append((heading, "", notes))
+            elif match := re.fullmatch(
+                r"(v\d+\.\d+\.\d+(?:[-+][\w.-]+)?)(?: - (\d{4}-\d{2}-\d{2}))?",
+                heading,
+            ):
+                notes = []
+                sections.append((match[1], match[2] or "", notes))
+        elif notes is not None and line.startswith("- "):
+            notes.append(line[2:].strip())
+    return [
+        {"version": version, "date": date, "notes": notes}
+        for version, date, notes in sections
+        if notes
+    ]

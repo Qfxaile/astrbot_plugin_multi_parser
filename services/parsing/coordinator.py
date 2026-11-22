@@ -1,6 +1,7 @@
 """自动链接解析用例，隔离 AstrBot 入口与平台遍历流程。"""
 
 from collections.abc import AsyncIterator
+from time import perf_counter
 from typing import Any, Protocol
 
 from astrbot.api import logger
@@ -12,6 +13,7 @@ from ...core.media import cleanup_temporary_files
 from ...core.parser import Parser
 from ...core.rendering import ParseResultRenderer
 from ...core.settings import PluginSettings
+from ..event_identity import EventIdentity
 from ..settings.access_rules import RequestAccess
 
 
@@ -19,6 +21,22 @@ class ParseRuntime(Protocol):
     """解析用例所需的最小运行时能力。"""
 
     config: Any
+
+    def record_parse(
+        self,
+        platform: str,
+        status: str,
+        duration_ms: int,
+        *,
+        sent: bool = False,
+        error_type: str = "",
+        source: str = "",
+        umo: str = "",
+        group_id: str = "",
+        links: str = "",
+        result: str = "",
+        error_reason: str = "",
+    ) -> None: ...
 
     def enabled_parsers(self) -> list[Parser]: ...
 
@@ -79,8 +97,13 @@ class ParseCoordinator:
     ) -> AsyncIterator[Any]:
         original_has_send_oper = getattr(event, "_has_send_oper", None)
         for parser in access.parsers(self.runtime.enabled_parsers()):
+            started = perf_counter()
             result: ParseResult | None = None
             restore_send_state = False
+            status = ""
+            sent = False
+            error_type = error_reason = ""
+            duration_ms = None
             try:
                 with access.feature_scope():
                     matched = await parser.match(context)
@@ -93,6 +116,7 @@ class ParseCoordinator:
                 if not isinstance(result, ParseResult):
                     raise TypeError(f"{parser.name} parse 必须返回 ParseResult")
                 if result.diagnostics.skipped:
+                    status = "skipped"
                     continue
                 send_video_by_url = PluginSettings(self.runtime.config).boolean(
                     "send_video_by_url", True
@@ -126,44 +150,66 @@ class ParseCoordinator:
                         await self.runtime.send_forward_results(
                             event, content_results, result
                         )
+                        sent = True
                     except Exception as exc:
+                        status = "failure" if result.diagnostics.error else "success"
+                        error_type = type(exc).__name__
+                        error_reason = result.diagnostics.error or "合并转发发送失败"
                         logger.warning(f"{parser.name} 合并转发发送失败: {exc}")
                         yield event.plain_result(
                             f"{parser.name} 合并转发发送失败: {exc}"
                         )
                         if video_embedded:
+                            fallback_failed = False
                             async for fallback in self.runtime.forward_with_fallback(
                                 event,
                                 result,
                                 f"合并转发中的视频发送失败: {type(exc).__name__}",
                             ):
+                                fallback_failed = True
                                 yield fallback
+                            sent = not fallback_failed
                         return
                 else:
                     for message in content_results:
+                        sent = True
                         yield message
 
                 if result.media.audio_url:
+                    sent = True
                     yield event.chain_result(ParseResultRenderer.audio_chain(result))
 
+                fallback_reason = None
                 if send_video_by_url and result.media.video_url:
                     if should_send_video and not video_embedded:
                         try:
                             await self.runtime.send_video(event, result)
+                            sent = True
                         except Exception as exc:
+                            error_type = type(exc).__name__
+                            error_reason = "视频发送失败，已执行回退"
                             logger.warning(
                                 f"{parser.name} 视频发送失败，执行配置回退: "
-                                f"{type(exc).__name__}"
+                                f"{error_type}"
                             )
-                            async for fallback in self.runtime.forward_with_fallback(
-                                event, result, f"视频发送失败: {type(exc).__name__}"
-                            ):
-                                yield fallback
+                            fallback_reason = f"视频发送失败: {error_type}"
                     elif not should_send_video:
-                        async for fallback in self.runtime.forward_with_fallback(
-                            event, result, video_reason
-                        ):
-                            yield fallback
+                        fallback_reason = video_reason
+                if fallback_reason is not None:
+                    fallback_failed = False
+                    async for fallback in self.runtime.forward_with_fallback(
+                        event, result, fallback_reason
+                    ):
+                        fallback_failed = True
+                        yield fallback
+                    if fallback_failed:
+                        error_reason = "视频回退发送失败"
+                    else:
+                        sent = True
+
+                status = "failure" if result.diagnostics.error else "success"
+                error_reason = result.diagnostics.error or error_reason
+                duration_ms = round((perf_counter() - started) * 1000)
 
                 await self.runtime.record_history(event, context.combined_text, result)
                 for summary in await self.runtime.summarize(event, result):
@@ -171,11 +217,20 @@ class ParseCoordinator:
                 return
             except CookieAccessError as exc:
                 restore_send_state = True
+                if not status:
+                    status, error_type, error_reason = (
+                        "failure",
+                        type(exc).__name__,
+                        str(exc),
+                    )
                 logger.warning(f"{parser.name} Cookie 访问失败: {exc}")
                 yield event.plain_result(str(exc))
                 return
             except Exception as exc:
                 restore_send_state = True
+                if not status:
+                    # 任意异常文本可能包含用户输入或请求凭据，不写入持久化日志。
+                    status, error_type = "failure", type(exc).__name__
                 logger.warning(f"{parser.name} 解析失败: {exc}")
                 yield event.plain_result(f"{parser.name} 解析失败: {exc}")
                 return
@@ -184,3 +239,54 @@ class ParseCoordinator:
                     cleanup_temporary_files(result)
                 if restore_send_state and original_has_send_oper is not None:
                     event._has_send_oper = original_has_send_oper
+                if status:
+                    self.runtime.record_parse(
+                        parser.name,
+                        status,
+                        duration_ms
+                        if duration_ms is not None
+                        else round((perf_counter() - started) * 1000),
+                        sent=sent,
+                        error_type=error_type,
+                        **_parse_log_context(
+                            event,
+                            context,
+                            {
+                                "success": "解析成功",
+                                "failure": "解析失败",
+                                "skipped": "已跳过",
+                            }[status],
+                            error_reason=error_reason,
+                        ),
+                    )
+
+
+def _parse_log_context(
+    event: AstrMessageEvent,
+    context: ParseContext,
+    result: str,
+    *,
+    error_reason: str = "",
+) -> dict[str, str]:
+    """只采集定位解析来源所需的会话身份，群 ID 与 AstrBot UMO 分开保存。"""
+    adapter = EventIdentity.platform_name(event) or "未知适配器"
+    try:
+        chat_type = "私聊" if event.is_private_chat() else "群聊"
+    except Exception:
+        chat_type = "其他会话"
+    try:
+        umo = str(event.unified_msg_origin or "")
+    except Exception:
+        umo = ""
+    try:
+        group_id = str(event.get_group_id() or "") if chat_type == "群聊" else ""
+    except Exception:
+        group_id = ""
+    return {
+        "source": f"{adapter} · {chat_type}",
+        "umo": umo,
+        "group_id": group_id,
+        "links": context.combined_text,
+        "result": result,
+        "error_reason": error_reason,
+    }

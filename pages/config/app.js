@@ -3,6 +3,9 @@ import { hydrateIcons } from "./shared/icons.js";
 import { createPlatformPanel } from "./features/platforms/panel.js";
 import { createSettingsPanels } from "./features/settings/panels.js";
 import { createAccessPanel } from "./features/access/panel.js";
+import { loadDashboard } from "./features/dashboard/panel.js";
+import { loadLogs } from "./features/logs/panel.js";
+import { loadAbout } from "./features/about/panel.js";
 
 const bridge = window.AstrBotPluginPage;
 const state = { snapshot: null, selected: "", busy: false, reloadRequired: false };
@@ -34,6 +37,13 @@ function activate(tab) {
     item.tabIndex = selected ? 0 : -1;
     document.getElementById(item.getAttribute("aria-controls")).hidden = !selected;
   }
+  if (tab.id === "dashboard-tab") loadDashboard(bridge);
+  if (tab.id === "logs-tab") refreshLogs();
+  if (tab.id === "about-tab") loadAbout(bridge);
+}
+
+function refreshLogs() {
+  return loadLogs(bridge, state.snapshot?.platforms);
 }
 
 for (const [index, tab] of tabs.entries()) {
@@ -64,7 +74,8 @@ async function submit(change, onApplied, controlId) {
   if (!state.snapshot || state.busy || state.reloadRequired) return;
   const activeId = controlId || document.activeElement.id;
   state.busy = true;
-  document.querySelectorAll("main input, main textarea, main select, main form button, #access-panel button").forEach((control) => { control.disabled = true; });
+  document.querySelectorAll(":is(#platform-panel, #delivery-panel, #ai-panel, #network-panel, #access-panel) :is(input, textarea, select, form button), #access-panel button")
+    .forEach((control) => { control.disabled = true; });
   setStatus("正在应用…");
   try {
     const settings = await bridge.apiPost("settings", { revision: state.snapshot.revision, ...change });
@@ -103,6 +114,7 @@ async function load() {
     state.reloadRequired = false;
     render();
     setStatus("更改即时生效");
+    await loadDashboard(bridge);
   } catch (error) {
     if (!state.snapshot) document.querySelector("#detail").replaceChildren(element("p", { class: "description" }, error.message));
     setStatus("无法连接设置服务", true);

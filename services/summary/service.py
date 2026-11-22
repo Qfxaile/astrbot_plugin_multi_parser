@@ -9,6 +9,7 @@ from astrbot.core.utils.media_utils import MediaResolver
 
 from ...core.contracts import ParseResult
 from ...core.settings import PluginSettings
+from ..observability import PluginObservability, usage_counts
 from .provider import SummaryProviderResolver
 
 DEFAULT_PROMPT = """请对下面的互联网内容做准确、简洁、易读的中文总结。
@@ -30,11 +31,17 @@ DEFAULT_PROMPT = """请对下面的互联网内容做准确、简洁、易读的
 class AISummaryService:
     """调用 AstrBot 聊天 Provider，失败时返回空结果而不影响解析。"""
 
-    def __init__(self, context, config: Mapping[str, object]):
+    def __init__(
+        self,
+        context,
+        config: Mapping[str, object],
+        observability: PluginObservability | None = None,
+    ):
         self.context = context
         self.config = config
         self.settings = PluginSettings(config)
         self.provider_resolver = SummaryProviderResolver(context, config)
+        self.observability = observability
 
     def enabled(self) -> bool:
         return self.settings.boolean("enable_ai_summary")
@@ -118,7 +125,20 @@ class AISummaryService:
                 provider.text_chat(prompt=prompt, image_urls=image_urls or None),
                 timeout=max(1.0, timeout),
             )
-            return str(getattr(response, "completion_text", "") or "").strip()
+            completion = str(getattr(response, "completion_text", "") or "").strip()
         except Exception as exc:
             logger.warning(f"AI 总结失败: {type(exc).__name__}")
             return ""
+        if response is not None and self.observability is not None:
+            try:
+                exact_input, exact_output = usage_counts(response)
+                self.observability.record_ai_usage(
+                    prompt,
+                    completion,
+                    images=len(image_urls or []),
+                    exact_input=exact_input,
+                    exact_output=exact_output,
+                )
+            except Exception as exc:
+                logger.warning(f"读取 AI 总结用量失败: {type(exc).__name__}")
+        return completion

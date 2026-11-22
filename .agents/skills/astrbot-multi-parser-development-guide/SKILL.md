@@ -41,7 +41,8 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 平台入口和协议实现：`platforms/<platform>/parser.py`、支持登录平台的 `platforms/<platform>/login.py` 及同目录 `client.py`、`models.py`、`content.py` 模块
 - 配置声明：`_conf_schema.json`
 - 行为验证：`tests/`
-- 插件 WebUI：`pages/config/app.js` 为页面入口，`pages/config/shared/` 存放共享 DOM 控件与图标，`pages/config/features/` 按平台、设置、名单拆分功能模块，`pages/config/styles/` 存放统一设计样式
+- 插件 WebUI：`pages/config/app.js` 为页面入口，`pages/config/shared/` 存放共享 DOM 控件与图标，`pages/config/features/` 按平台、设置、名单、工作台、日志和关于拆分功能模块，`pages/config/styles/` 存放统一设计样式
+- 工作台、解析日志和 Token 用量：`services/observability.py` 通过异步 SQLite 持久化到插件数据目录，`pages/config/features/dashboard/`、`logs/` 和 `about/` 提供只读视图
 
 跨平台能力进入 `core/` 或 `services/`，平台特有细节留在平台目录。每个平台由 `parser.py` 保留顶层解析入口；复杂平台将请求跳转、领域模型和内容转换分别放入 `client.py`、`models.py`、`content.py`，番茄小说、抖音、微博、小红书、Pixiv、腾讯频道已按实际职责拆分，避免为轻量入口创建空壳模块。
 
@@ -89,9 +90,13 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 修改规则模板时，同时验证 WebUI 的内置模板只读状态、保存接口拒绝内置模板改动、读取旧设置时恢复预设内容，以及自建模板正常保存。
 
+修改插件工作台、日志或关于页时，确认解析日志不含消息正文、独立发送者字段或凭据；来源使用事件原始 UMO 与原生群 ID，不发起额外网络查询。验证 SQLite 旧表原位迁移、后台写入不阻塞解析、正常卸载完成落库、日志与每日统计的一致性，以及不同时间范围和 Token 用量的精确值/估算回退。检查日志接口不缓存且只返回当前页，筛选覆盖全部历史，脱敏链接不含 URL 用户信息、片段或查询参数原值；用浏览器验证筛选、分页、详情和窄屏布局。README 图片在插件文档中无法显示时使用 `raw.githubusercontent.com` 图片地址，不用 GitHub `blob` 页面地址；品牌图在 README 与关于页均应居中显示。
+
 ### 修改版本或发布资料
 
 以 `metadata.yaml` 为唯一版本源。只有用户明确要求发布或升版时才修改版本，并同步 README 徽章、CHANGELOG 和 Git 标签；普通功能、修复和重构不升版。
+
+调整关于页时，验证本地 Logo 缺失的回退、已安装版本与未发布记录的区分，以及按版本折叠和外部仓库链接。
 
 ### 分支与发布流程
 

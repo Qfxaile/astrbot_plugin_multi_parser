@@ -21,6 +21,8 @@ dist/
 
 *.log
 logs/
+!pages/config/features/logs/
+!pages/config/features/logs/**
 tmp/
 temp/
 

@@ -22,6 +22,7 @@ from astrbot_multi_parser.core.http import CookieAccessError
 from astrbot_multi_parser.core.media import operations as media
 from astrbot_multi_parser.main import MultiParserPlugin, VideoSizeInfo
 from astrbot_multi_parser.platforms.weibo import parser as weibo_parser
+from astrbot_multi_parser.services.composition import container as container_module
 from astrbot_multi_parser.services.delivery import DeliveryService
 from result_factory import build_result
 
@@ -232,11 +233,172 @@ def test_plugin_registers_web_settings_api_with_plugin_name_prefix():
     assert handler.__name__ == "_web_settings_api"
     assert methods == ["GET", "POST"]
     assert description
-    assert len(context.registered_web_apis) == 2
+    assert len(context.registered_web_apis) == 5
     assert context.registered_web_apis[1][0:3:2] == (
         "/astrbot_plugin_multi_parser/qq-groups",
         ["POST"],
     )
+    assert [entry[0] for entry in context.registered_web_apis[2:]] == [
+        "/astrbot_plugin_multi_parser/dashboard",
+        "/astrbot_plugin_multi_parser/logs",
+        "/astrbot_plugin_multi_parser/about",
+    ]
+    assert context.registered_web_apis[2][2] == ["GET", "POST"]
+    assert context.registered_web_apis[3][2] == ["POST"]
+
+
+async def test_web_observability_apis_return_plugin_metrics_and_release_metadata(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        container_module,
+        "get_astrbot_plugin_data_path",
+        lambda: str(tmp_path / "plugin-data"),
+    )
+    plugin = MultiParserPlugin(None, {})
+    plugin.record_parse("douyin", "success", 42, sent=True)
+    plugin.record_parse("bilibili", "failure", 7, error_type="ValueError")
+    await plugin._services.observability.flush()
+    monkeypatch.setattr(
+        main.web, "request", SimpleNamespace(json=AsyncMock(return_value={}))
+    )
+
+    dashboard = await plugin._web_dashboard_api()
+    logs = await plugin._web_logs_api()
+    about = await plugin._web_about_api()
+    dashboard_data = json.loads(dashboard.body)["data"]
+    log_data = json.loads(logs.body)["data"]["rows"]
+    about_data = json.loads(about.body)["data"]
+
+    assert dashboard_data["totals"]["parses"] == 1
+    assert dashboard_data["totals"]["sent"] == 1
+    assert dashboard_data["totals"]["failures"] == 1
+    assert len(dashboard_data["days"]) == 14
+    assert dashboard_data["period"] == "14d"
+    assert dashboard.headers["cache-control"] == "no-store"
+    assert log_data[0]["platform"] == "bilibili"
+    assert log_data[0]["error_type"] == "ValueError"
+    assert about_data["version"] == "v1.4.0"
+    assert about_data["author"] == "Qfxaile"
+    assert about_data["repo"].endswith("astrbot_plugin_multi_parser")
+    assert about_data["logo"].startswith("data:image/png;base64,")
+    assert about_data["updates"][0]["version"] == "未发布"
+    assert about_data["updates"][0]["notes"]
+    assert about_data["updates"][1]["version"] == about_data["version"]
+    assert about.headers["cache-control"] == "no-store"
+
+
+async def test_about_keeps_release_notes_without_unreleased_entries_or_logo(
+    monkeypatch, tmp_path
+):
+    (tmp_path / "metadata.yaml").write_text("version: v2.0.0\n", encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text(
+        "# 更新日志\n\n## 未发布\n\n## v2.0.0 - 2026-11-22\n\n"
+        "### 修复\n- 第一条\n\n## 附录\n- 不属于发布记录\n\n"
+        "## v1.0.0 - 2026-11-01\n- 第二条\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(main, "__file__", str(tmp_path / "main.py"))
+
+    response = await MultiParserPlugin(None, {})._web_about_api()
+    data = json.loads(response.body)["data"]
+
+    assert data["logo"] == ""
+    assert data["updates"] == [
+        {"version": "v2.0.0", "date": "2026-11-22", "notes": ["第一条"]},
+        {"version": "v1.0.0", "date": "2026-11-01", "notes": ["第二条"]},
+    ]
+
+
+async def test_web_logs_api_reports_database_query_failure(monkeypatch):
+    plugin = MultiParserPlugin(None, {})
+
+    async def fail_read(filters):
+        raise OSError("database unavailable")
+
+    monkeypatch.setattr(plugin._services.observability, "logs", fail_read)
+    monkeypatch.setattr(
+        main.web, "request", SimpleNamespace(json=AsyncMock(return_value={}))
+    )
+    response = await plugin._web_logs_api()
+
+    assert response.status_code == 500
+    assert "检查 AstrBot 服务日志" in json.loads(response.body)["message"]
+
+
+async def test_auto_parse_logs_identify_the_group_and_exact_astrbot_session(
+    monkeypatch,
+):
+    plugin = make_plugin(build_result(platform="test", title="解析结果"))
+    event = FakeEvent(platform_id="bot-a", raw_message={"group_id": "456"})
+    event.private = False
+    event.unified_msg_origin = "bot-a:GroupMessage:123_456"
+    event.message_str = "https://example.com/post 不保存这段正文"
+    monkeypatch.setattr(
+        main, "extract_context", lambda event: ParseContext(text=event.message_str)
+    )
+
+    await collect_plugin_results(plugin, event)
+    await plugin._services.observability.flush()
+    monkeypatch.setattr(
+        main.web,
+        "request",
+        SimpleNamespace(json=AsyncMock(return_value={"query": "456"})),
+    )
+    response = await plugin._web_logs_api()
+    (row,) = json.loads(response.body)["data"]["rows"]
+
+    assert response.headers["cache-control"] == "no-store"
+    assert row["source"] == "aiocqhttp · 群聊"
+    assert row["group_id"] == "456"
+    assert row["umo"] == "bot-a:GroupMessage:123_456"
+    assert row["links"] == ["https://example.com/post"]
+    assert "不保存这段正文" not in str(row)
+
+
+async def test_auto_parse_does_not_wait_for_observability_writes(monkeypatch):
+    plugin = make_plugin(build_result(platform="test", title="解析结果"))
+    observability = plugin._services.observability
+    release = asyncio.Event()
+    persist = observability._persist
+
+    async def blocked_write(operation):
+        await release.wait()
+        await persist(operation)
+
+    monkeypatch.setattr(observability, "_persist", blocked_write)
+    monkeypatch.setattr(main, "extract_context", lambda event: ParseContext(text="url"))
+
+    try:
+        first, second = await asyncio.wait_for(
+            asyncio.gather(
+                *(collect_plugin_results(plugin, FakeEvent()) for _ in range(2))
+            ),
+            timeout=1,
+        )
+        assert first and second
+    finally:
+        release.set()
+        await plugin.terminate()
+
+    assert (await observability.dashboard())["totals"]["sent"] == 2
+
+
+async def test_auto_parse_records_failed_forward_without_counting_it_as_sent(
+    monkeypatch,
+):
+    plugin = make_plugin(
+        build_result(platform="test", title="解析结果"), forward_mode="always"
+    )
+    monkeypatch.setattr(main, "extract_context", lambda event: ParseContext(text="url"))
+    await collect_plugin_results(plugin, FakeEvent(forward_failure_limit=0))
+    await plugin.terminate()
+
+    observability = plugin._services.observability
+    assert (await observability.dashboard())["totals"]["sent"] == 0
+    (row,) = (await observability.logs())["rows"]
+    assert row["status"] == "success"
+    assert row["error_reason"] == "合并转发发送失败"
 
 
 async def test_web_settings_lists_only_public_chat_model_metadata(monkeypatch):
@@ -1948,7 +2110,7 @@ async def test_terminate_closes_container_authentication_service():
 
     plugin = make_plugin(build_result(platform="test"))
     authentication = FakeAuthentication()
-    plugin._services = SimpleNamespace(authentication=authentication)
+    plugin._services.authentication = authentication
 
     await plugin.terminate()
 
