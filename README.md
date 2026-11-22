@@ -349,12 +349,13 @@ astrbot_plugin_multi_parser/
 
 ### 分支与发布
 
-- `main` 是稳定主分支，只接受从 `develop` 发起的发布 PR；禁止直接推送或从其他分支合并到 `main`。
+- `main` 是稳定主分支，常规发布只接受来自 `develop` 的 PR。紧急回滚是唯一例外：从最新 `main` 创建 `revert/<说明>` 分支，通过仅包含回滚变更的 PR 合入 `main`，仍须遵守分支保护和审查要求。禁止直接推送 `main`。
 - `develop` 是日常集成分支。新功能、缺陷修复和重构均从最新 `develop` 创建开发分支，验证完成后通过 PR 合并回 `develop`。
-- 开发分支合入 `develop` 时使用 `Squash and merge`。`develop` 发布到 `main`、`main` 回同步到 `develop` 时使用 `Create a merge commit`，保留共同的提交历史。
+- 开发分支合入 `develop` 时使用 `Squash and merge`。发布、紧急回滚和回同步 PR 使用 `Create a merge commit`，保留提交历史。
 - 发布前确认 `develop` 已包含当前 `main` 的历史。发布或紧急回滚后，通过 PR 将 `main` 同步回 `develop`，保留尚未发布的开发改动。
 - 只有发布时才从 `develop` 向 `main` 发起 PR。发布 PR 必须变更 `metadata.yaml` 版本号，并同步 README 版本徽章与 CHANGELOG；合并后使用同一个版本号为 `main` 的合并提交创建 Git 标签和 GitHub Release，Release 标题只写版本号，例如 `v1.4.0`。
 - 发布 PR 应写明版本号、用户可见变更、兼容性影响和验证结果。仓库应为 `main` 配置分支保护、必需检查和审查，`develop` 至少要求通过 PR 和必需检查。
+- 对话式协作中，发起 PR 和通过 PR 必须分开；发起当次不得批准、合并或启用自动合并，通过须由用户在另一次对话中明确授权。
 
 ## 参考与致谢
 
