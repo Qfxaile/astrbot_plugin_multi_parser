@@ -48,10 +48,11 @@ class MediaBundle:
 
 @dataclass
 class ParseDiagnostics:
-    """解析错误及部分媒体失败信息。"""
+    """解析跳过、错误及部分媒体失败信息。"""
 
     error: str = ""
     image_errors: dict[int, str] = field(default_factory=dict)
+    skipped: bool = False
 
 
 @dataclass
@@ -70,6 +71,11 @@ class ParseResult:
     media: MediaBundle = field(default_factory=MediaBundle)
     diagnostics: ParseDiagnostics = field(default_factory=ParseDiagnostics)
     delivery: DeliveryHints = field(default_factory=DeliveryHints)
+
+    @classmethod
+    def skipped(cls, platform: str) -> "ParseResult":
+        """返回静默跳过结果，允许调用方继续检查后续候选。"""
+        return cls(platform=platform, diagnostics=ParseDiagnostics(skipped=True))
 
     @property
     def image_count(self) -> int:

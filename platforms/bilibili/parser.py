@@ -1,6 +1,8 @@
 """识别 B站链接并分派到对应内容解析器。"""
 
 import re
+from collections.abc import Awaitable, Callable, Iterator
+from functools import partial
 
 import httpx
 
@@ -49,58 +51,63 @@ class BilibiliParser(
     )
 
     async def match(self, context: ParseContext) -> bool:
-        text = context.combined_text
-        return find_mall_target(text) is not None or any(
-            re.search(pattern, text)
-            for pattern in (
-                self.DYNAMIC_PATTERN,
-                self.OPUS_PATTERN,
-                self.ARTICLE_PATTERN,
-                self.LIVE_PATTERN,
-                self.BANGUMI_PATTERN,
-                self.ID_PATTERN,
-                self.SHORT_PATTERN,
-            )
+        return any(
+            self._route_enabled(kind) for kind, _ in self._routes(context.combined_text)
         )
 
-    async def parse(self, context: ParseContext) -> ParseResult:
-        text = context.combined_text
+    def _route_enabled(self, kind: str | None) -> bool:
+        if kind is not None:
+            return self.parse_feature_enabled(kind)
+        return any(
+            self.parse_feature_enabled(feature)
+            for feature in ("video", "dynamic", "article", "live", "bangumi", "mall")
+        )
+
+    def _routes(
+        self, text: str
+    ) -> Iterator[tuple[str | None, Callable[[], Awaitable[ParseResult]]]]:
+        """保留直接链接的优先级，最后尝试需要展开的短链。"""
         if mall_target := find_mall_target(text):
-            return await self._parse_mall(mall_target)
-        if match := re.search(self.DYNAMIC_PATTERN, text):
-            return await self._parse_dynamic(match.group("dynamic_id"))
-        if match := re.search(self.OPUS_PATTERN, text):
-            return await self._parse_opus(match.group("opus_id"))
-        if match := re.search(self.ARTICLE_PATTERN, text):
-            return await self._parse_article(match.group("article_id"))
-        if match := re.search(self.LIVE_PATTERN, text):
-            return await self._parse_live(match.group("room_id"))
-        if match := re.search(self.BANGUMI_PATTERN, text):
-            return await self._parse_bangumi(
-                match.group("bangumi_kind"),
-                match.group("bangumi_id"),
-            )
+            yield "mall", partial(self._parse_mall, mall_target)
+        for kind, pattern, handler in (
+            ("dynamic", self.DYNAMIC_PATTERN, self._parse_dynamic),
+            ("dynamic", self.OPUS_PATTERN, self._parse_opus),
+            ("article", self.ARTICLE_PATTERN, self._parse_article),
+            ("live", self.LIVE_PATTERN, self._parse_live),
+            ("bangumi", self.BANGUMI_PATTERN, self._parse_bangumi),
+            ("video", self.ID_PATTERN, self._parse_video),
+        ):
+            if match := re.search(pattern, text):
+                yield kind, partial(handler, *match.groups())
+        for match in re.finditer(self.SHORT_PATTERN, text):
+            yield None, partial(self._parse_short, match.group(0))
 
-        match = re.search(self.ID_PATTERN, text)
-        if not match and (short_match := re.search(self.SHORT_PATTERN, text)):
-            headers = self._headers("https://www.bilibili.com")
-            async with httpx.AsyncClient(
-                timeout=self.request_timeout,
-                follow_redirects=True,
-                **self.http_client_options,
-            ) as client:
-                response = await client.get(short_match.group(0), headers=headers)
-            final_url = str(response.url)
-            if final_url == short_match.group(0):
-                self.raise_for_response_status(response)
-                result = ParseResult(platform=self.name)
-                result.diagnostics.error = "B站短链未发生跳转。"
-                return result
-            return await self.parse(ParseContext(text=final_url))
+    async def parse(self, context: ParseContext) -> ParseResult:
+        matched = False
+        for kind, handler in self._routes(context.combined_text):
+            matched = True
+            if self._route_enabled(kind):
+                result = await handler()
+                if not result.diagnostics.skipped:
+                    return result
+        if matched:
+            return ParseResult.skipped(self.name)
+        result = ParseResult(platform=self.name)
+        result.diagnostics.error = "未找到 B站 视频 ID。"
+        return result
 
-        video_id = match.group(0) if match else ""
-        if not video_id:
+    async def _parse_short(self, url: str) -> ParseResult:
+        headers = self._headers("https://www.bilibili.com")
+        async with httpx.AsyncClient(
+            timeout=self.request_timeout,
+            follow_redirects=True,
+            **self.http_client_options,
+        ) as client:
+            response = await client.get(url, headers=headers)
+        final_url = str(response.url)
+        if final_url == url:
+            self.raise_for_response_status(response)
             result = ParseResult(platform=self.name)
-            result.diagnostics.error = "未找到 B站 视频 ID。"
+            result.diagnostics.error = "B站短链未发生跳转。"
             return result
-        return await self._parse_video(video_id)
+        return await self.parse(ParseContext(text=final_url))

@@ -1,5 +1,10 @@
+import re
+from base64 import b64encode
+from pathlib import Path
+
 import httpx as httpx
-from astrbot.api import AstrBotConfig, logger
+import yaml
+from astrbot.api import AstrBotConfig, logger, web
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star
@@ -20,18 +25,62 @@ from .services.delivery.video import (
 from .services.message_context import extract_context
 from .services.parsing import ParseCoordinator
 from .services.parsing.share_tool import ShareReader
+from .services.settings.group_directory import GroupDirectory
+from .services.settings.runtime_config import RuntimeSettingsConfig
+from .services.settings.service import PluginSettingsService, SettingsValidationError
 from .services.summary.service import AISummaryService
 
 __all__ = ["MultiParserPlugin", "VideoSizeInfo"]
+
+PLUGIN_NAME = "astrbot_plugin_multi_parser"
 
 
 class MultiParserPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
-        self.parsers = build_parsers(config)
-        self._share_reader = ShareReader()
+        self._runtime_config = RuntimeSettingsConfig(config)
+        self._web_settings = PluginSettingsService(
+            config,
+            self._runtime_config,
+            read_store=self.get_kv_data,
+            write_store=self.put_kv_data,
+        )
+        self.parsers = build_parsers(self._runtime_config)
+        self._share_reader = ShareReader(self._access_for_event)
+        self._group_directory = GroupDirectory(context)
         self._services = ServiceContainer(context, config)
+        if context is not None:
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/settings",
+                self._web_settings_api,
+                ["GET", "POST"],
+                "读取或保存多平台解析 WebUI 设置（包含明文凭据）",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/qq-groups",
+                self._web_qq_groups_api,
+                ["POST"],
+                "读取 QQ 群列表",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/dashboard",
+                self._web_dashboard_api,
+                ["GET", "POST"],
+                "读取插件工作台统计",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/logs",
+                self._web_logs_api,
+                ["POST"],
+                "读取插件解析运行日志",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/about",
+                self._web_about_api,
+                ["GET"],
+                "读取插件版本和更新日志",
+            )
 
     def _delivery_service(self) -> DeliveryService:
         return self._services.delivery
@@ -45,6 +94,38 @@ class MultiParserPlugin(Star):
     def enabled_parsers(self):
         """返回当前启用的平台解析器，供自动解析用例调用。"""
         return enabled_parsers(self.config, self.parsers)
+
+    def _access_for_event(self, event: AstrMessageEvent):
+        return self._web_settings.access_rules.for_event(event)
+
+    def record_parse(
+        self,
+        platform,
+        status,
+        duration_ms,
+        *,
+        sent=False,
+        error_type="",
+        source="",
+        umo="",
+        group_id="",
+        links="",
+        result="",
+        error_reason="",
+    ):
+        self._services.observability.record_parse(
+            platform,
+            status,
+            duration_ms,
+            sent=sent,
+            error_type=error_type,
+            source=source,
+            umo=umo,
+            group_id=group_id,
+            links=links,
+            result=result,
+            error_reason=error_reason,
+        )
 
     # ParseCoordinator 依赖的窄接口，直接提供实现
     async def react_success(self, event: AstrMessageEvent) -> None:
@@ -183,7 +264,7 @@ class MultiParserPlugin(Star):
     async def offer_share_reader(self, event: AstrMessageEvent, req: ProviderRequest):
         """有分享来源时，为本轮 LLM 提供后台阅读工具。"""
         if self.tool_mode:
-            await self._share_reader.offer(event, req, self.enabled_parsers())
+            await self._share_reader.offer(event, req, self.enabled_parsers)
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def handle_parse(self, event: AstrMessageEvent):
@@ -192,9 +273,163 @@ class MultiParserPlugin(Star):
         context = extract_context(event)
         if not context.combined_text:
             return
-        async for item in ParseCoordinator(self).run(event, context):
+        async for item in ParseCoordinator(self).run(
+            event, context, access=self._access_for_event(event)
+        ):
             yield item
 
     async def terminate(self):
-        """插件卸载时取消仍在进行的平台登录。"""
-        await self._services.authentication.close()
+        """插件卸载时取消登录并等待后台统计写入。"""
+        try:
+            await self._services.authentication.close()
+        finally:
+            await self._services.observability.flush()
+
+    async def initialize(self) -> None:
+        """加载 WebUI 专属解析设置。"""
+        await self._web_settings.load()
+
+    async def _web_settings_api(self):
+        headers = {"Cache-Control": "no-store"}
+        if web.request.method == "GET":
+            settings = await self._web_settings.read_snapshot()
+            settings["providers"] = self._web_chat_providers()
+            settings["adapters"] = self._group_directory.qq_adapters()
+            return web.json_response(
+                {"status": "ok", "data": settings}, headers=headers
+            )
+        try:
+            payload = await web.request.json()
+            settings = await self._web_settings.update(payload)
+            return web.json_response(
+                {"status": "ok", "data": settings}, headers=headers
+            )
+        except SettingsValidationError as exc:
+            return web.error_response(
+                str(exc), status_code=409 if "重新加载" in str(exc) else 400
+            )
+        except Exception as exc:
+            logger.warning(f"WebUI 设置保存失败: {type(exc).__name__}")
+            return web.error_response("设置保存失败，请重试。", status_code=500)
+
+    def _web_chat_providers(self) -> list[dict[str, str]]:
+        """仅向设置表单公开当前实例已加载聊天模型的 ID 和名称。"""
+        providers = []
+        try:
+            for provider in self.context.get_all_providers():
+                try:
+                    meta = provider.meta()
+                    if isinstance(meta.id, str) and meta.id:
+                        model = meta.model if isinstance(meta.model, str) else ""
+                        providers.append({"id": meta.id, "model": model})
+                except Exception as exc:
+                    logger.debug(f"WebUI 读取模型信息失败: {type(exc).__name__}")
+        except Exception as exc:
+            logger.debug(f"WebUI 读取聊天模型列表失败: {type(exc).__name__}")
+        return providers
+
+    async def _web_qq_groups_api(self):
+        """返回所选 QQ 实例可用于名单配置的群聊。"""
+        payload = await web.request.json()
+        instance = payload.get("instance") if isinstance(payload, dict) else None
+        if not isinstance(instance, str) or not instance or len(instance) > 128:
+            return web.error_response("缺少有效的 QQ 适配器实例 ID", status_code=400)
+        try:
+            data = await self._group_directory.list_groups(instance)
+        except LookupError:
+            return web.error_response("找不到所选 QQ 适配器实例", status_code=404)
+        except Exception as exc:
+            logger.warning(f"读取 QQ 群列表失败: {type(exc).__name__}")
+            return web.error_response(
+                "无法读取 QQ 群列表，请检查适配器连接。", status_code=502
+            )
+        return web.json_response(
+            {"status": "ok", "data": data}, headers={"Cache-Control": "no-store"}
+        )
+
+    async def _web_dashboard_api(self):
+        """返回持久化工作台统计，支持选择统计时间范围。"""
+        period = "14d"
+        if getattr(web.request, "method", "GET").upper() == "POST":
+            payload = await web.request.json()
+            if isinstance(payload, dict):
+                period = payload.get("period", period)
+        if not isinstance(period, str):
+            period = "14d"
+        return web.json_response(
+            {
+                "status": "ok",
+                "data": await self._services.observability.dashboard(period),
+            },
+            headers={"Cache-Control": "no-store"},
+        )
+
+    async def _web_logs_api(self):
+        """返回符合条件的一页插件日志，不读取 AstrBot 全局日志。"""
+        payload = await web.request.json()
+        try:
+            data = await self._services.observability.logs(
+                payload if isinstance(payload, dict) else None
+            )
+        except Exception:
+            logger.exception("读取插件 SQLite 解析日志失败")
+            return web.error_response(
+                "插件解析日志数据库读取失败，请检查 AstrBot 服务日志。",
+                status_code=500,
+            )
+        return web.json_response(
+            {"status": "ok", "data": data}, headers={"Cache-Control": "no-store"}
+        )
+
+    async def _web_about_api(self):
+        """读取已安装插件的标识、版本与更新记录。"""
+        root = Path(__file__).resolve().parent
+        metadata = yaml.safe_load((root / "metadata.yaml").read_text("utf-8"))
+        changelog = (root / "CHANGELOG.md").read_text("utf-8")
+        try:
+            logo = "data:image/png;base64," + b64encode(
+                (root / "logo.png").read_bytes()
+            ).decode("ascii")
+        except OSError:
+            logo = ""
+        return web.json_response(
+            {
+                "status": "ok",
+                "data": {
+                    "name": metadata.get("display_name", PLUGIN_NAME),
+                    "version": metadata.get("version", "未知"),
+                    "author": metadata.get("author", "未知"),
+                    "repo": metadata.get("repo", ""),
+                    "logo": logo,
+                    "updates": _release_notes(changelog),
+                },
+            },
+            headers={"Cache-Control": "no-store"},
+        )
+
+
+def _release_notes(changelog: str) -> list[dict[str, str | list[str]]]:
+    """按 CHANGELOG 的章节顺序提取版本标题、日期和列表项。"""
+    sections: list[tuple[str, str, list[str]]] = []
+    notes = None
+    for line in changelog.splitlines():
+        line = line.strip()
+        if line.startswith("## "):
+            notes = None
+            heading = line[3:].strip()
+            if heading == "未发布":
+                notes = []
+                sections.append((heading, "", notes))
+            elif match := re.fullmatch(
+                r"(v\d+\.\d+\.\d+(?:[-+][\w.-]+)?)(?: - (\d{4}-\d{2}-\d{2}))?",
+                heading,
+            ):
+                notes = []
+                sections.append((match[1], match[2] or "", notes))
+        elif notes is not None and line.startswith("- "):
+            notes.append(line[2:].strip())
+    return [
+        {"version": version, "date": date, "notes": notes}
+        for version, date, notes in sections
+        if notes
+    ]

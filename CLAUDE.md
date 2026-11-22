@@ -18,6 +18,7 @@
 - `main.py` 负责插件注册、命令入口和服务装配，不承载平台解析细节。
 - `core/` 保存跨平台契约和基础能力；`services/` 保存编排与策略；`platforms/` 保存平台特有实现；`tests/` 保存 pytest 测试。
 - `metadata.yaml` 是插件版本的唯一来源。除非用户明确要求发布或升版，不修改版本号。
+- 关于页从已安装插件的 `metadata.yaml`、`CHANGELOG.md` 和 `logo.png` 读取信息，不查询远端版本或图片。
 - 当前代码和文档冲突时，以经过测试验证的代码行为为准，并在同次变更中修正文档。
 
 ## 开发环境
@@ -55,18 +56,23 @@ uv run ruff check .
 | 登录契约、登录 HTTP 基类和二维码渲染 | `core/platform_login.py` |
 | 安全 HTTP、可信 URL、Cookie、平台代理、商品网页元数据、媒体和渲染 | `core/http.py`、`core/webpage.py`、`core/product_metadata.py`、`core/media/operations.py`、`core/rendering/result_renderer.py`；`ParseResultRenderer` 负责结果到消息组件的转换 |
 | 配置类型读取与平台开关 | `core/settings/values.py`；基础设施和服务不得重复实现配置类型转换 |
+| WebUI 配置持久化与名单权限 | `services/settings/service.py` 保存和发布配置；`services/settings/access_rules.py` 按群聊 UMO 和统一私聊设置判定解析权限，自动解析与 AI 按需读取共用 |
 | 解析器窄扩展契约、公共 HTTP 客户端和基础能力 | `core/parser.py` 的 `Parser` Protocol 与可实例化 `BaseParser`；平台适配器优先复用 `BaseParser.http_client()` |
 | 平台扩展接口与能力描述 | `core/ports/platform.py` |
 | 平台清单及解析器、登录适配器对应关系 | `platforms/registry.py` |
 | 配置读取和解析器创建 | `services/composition/configuration.py` |
+| WebUI 配置分组、提交校验和持久化 | `services/settings/native_fields.py` 声明原生字段白名单并复用 Schema，`services/settings/service.py` 负责保存与运行时更新 |
+| 插件 WebUI 界面 | `pages/config/app.js` 协调标签页和请求；`pages/config/features/` 按平台、设置、名单、工作台、日志和关于页面拆分功能模块；`shared/` 保存通用控件与图标，`styles/` 保存统一设计样式 |
 | 登录编排、二维码轮询、登录状态、会话互斥与取消、凭据持久化和文案 | `services/authentication/service.py`、`services/authentication/polling.py`、`services/authentication/status.py`、`services/authentication/sessions.py`、`services/authentication/cookie_store.py`、`services/authentication/messages.py` |
 | 消息上下文、分享卡片、自动解析编排、文本处理和投递 | `services/message_context.py`、`services/share_card.py`、`services/parsing/coordinator.py`、`services/text_processing.py`、`services/delivery/service.py` |
 | 投递策略、内容组装、链接过滤、直链投递、事件身份和 OneBot 适配 | `services/delivery/policy.py`、`services/content_assembly.py`、`services/link_filter.py`、`services/delivery/forward_links.py`、`services/event_identity.py`、`services/onebot_*.py` |
 | 合并转发编排与 OneBot 昵称缓存 | `services/delivery/forward.py`、`services/delivery/onebot_identity.py` |
 | 按需阅读与请求级工具 | `services/parsing/share_tool.py`；`parse_mode=tool` 时从当前或被引用的消息取得分享，按图序读取媒体 |
 | LLM 会话历史写入与媒体序列化 | `services/conversation/history.py` |
+| 插件解析运行日志、按日统计与 AI Token 用量 | `services/observability.py` 异步持久化至 AstrBot 插件数据目录中的 SQLite；日志详情保留群 ID、会话 UMO、脱敏候选链接及运行结果，不保存原消息正文 |
 | AI 总结、Provider 选择和多模态输入 | `services/summary/service.py`、`services/summary/provider.py` |
 | 视频大小探测、发送和回退策略 | `services/delivery/video.py`、`services/delivery/video_delivery.py`、`services/delivery/video_fallback.py` |
+| QQ 群聊目录 | `services/settings/group_directory.py`；按实例查询 OneBot 群列表或读取 QQ 官方已观测群聊，仅返回群 ID、UMO 和名称 |
 | 平台请求、签名、登录和载荷转换 | `platforms/<platform>/` |
 
 跨平台规则放入 `core/` 或 `services/`；平台协议细节留在对应平台目录。Controller/命令入口只做权限与参数检查、调用服务并返回结果。自动解析由 `services/parsing/coordinator.py` 的 `ParseCoordinator` 编排；解析器通过 `core/parser.py` 的 `Parser` Protocol 提供异步 `match` 和 `parse`，并通过 `PlatformSpec` 注册，校验要求声明 `PARSE` 能力。平台适配器不得反向依赖服务层，核心模块不得依赖平台实现；依赖方向由 `tests/test_architecture_dependencies.py` 校验。`BaseParser` 本身保留可实例化的公共 HTTP、Cookie 和媒体能力，供基础能力复用。京东、淘宝、拼多多源码和测试保留，但不注册、不出现在配置开关和自动解析主流程中。
@@ -81,9 +87,11 @@ uv run ruff check .
 - README 和对应测试
 
 平台注册表提供 `validate_platform_registry()` 和
-`validate_platform_configuration()` 校验入口；调整平台时必须确保注册表、配置 Schema
-和对应测试同时通过。核心与服务公共类型优先从包入口惰性导出，新增公共扩展点时同步
+`validate_platform_configuration()` 校验入口；调整平台时必须确保注册表、原生配置 Schema
+和对应测试同时通过。只由插件 WebUI 管理的细粒度解析开关不写入 `_conf_schema.json`，能力元数据及默认值由平台注册表提供；`PlatformSpec.parse_type_controls_ready` 标记细分开关是否已经接入解析路由，未就绪的平台开关必须在 WebUI 禁用并说明。核心与服务公共类型优先从包入口惰性导出，新增公共扩展点时同步
 检查 `core/__init__.py`、`services/__init__.py` 和包边界测试。
+
+细粒度开关只过滤原有解析候选，保留全开时的选链优先级。短链或内容探测确定到已关闭的类型时使用 `ParseResult.skipped()` 表达静默跳过，自动解析与按需阅读继续尝试下一个候选。实际解析错误遵循原有错误路径。
 
 `services/composition/configuration.py` 和 `services/authentication/service.py` 从注册表装配解析器与登录适配器，只有装配语义变化时才修改。
 
@@ -106,7 +114,10 @@ uv run ruff check .
 - 登录适配器复用 `HTTPPlatformLoginProvider`、`read_login_response_body` 和公共二维码渲染；可信域、Cookie 值及 CookieJar 白名单序列化复用 `core/http.py`。
 - 平台解析器或登录适配器的增删与顺序只在 `platforms/registry.py` 声明，配置和认证服务从注册表装配，不维护平行清单。
 - 公开 API 和关键异步入口使用准确的中文文档字符串。注释解释边界、顺序、并发和降级原因，不逐行复述代码。
-- 配置变化同步 `_conf_schema.json`、README 和测试，并检查 `services/composition/configuration.py` 是否需要调整；注册表已经提供所需装配语义时不要制造无意义改动。
+- 原生插件配置变化同步 `_conf_schema.json`、README 和测试；插件 WebUI 专属配置使用独立持久化，不加入原生配置 Schema。并检查 `services/composition/configuration.py` 是否需要调整；注册表已经提供所需装配语义时不要制造无意义改动。
+- 名单规则只限制平台和解析类型，不修改解析后的媒体或文本。QQ 群按实例和原生群 ID 匹配，其他群用完整 UMO，所有私聊共用一份名单项。全局模式为关闭、黑名单或白名单：关闭时名单不生效；黑名单仅禁止名单项中勾选的解析类型；白名单仅允许名单项中勾选的类型，名单外会话全部禁止解析。模式切换即时生效，只切换规则解释，不改写模板或名单项数据，也不要求确认。规则模板可被多个名单项实时引用；单独编辑名单项时复制模板规则并与模板解除关联。默认模板及全部、仅视频、仅图文预设均属于插件 WebUI 配置，不进入 `_conf_schema.json`。自动解析与 AI 工具均在匹配和解析期间施加限制，投递前复位。
+- 工作台与插件日志只展示插件自动解析运行记录，不拦截或读取 AstrBot 全局日志；解析日志、每日统计和 AI Token 用量通过后台任务持久化到插件数据目录的 SQLite，解析和总结不等待写入，插件正常卸载时等待落库，不设日志条数或统计时间上限。工作台默认近 14 天，支持今天、近 7 天、近 14 天、近 30 天及全部时间。日志只在管理界面提供，包含来源类型、原始会话 UMO、群 ID、平台、脱敏候选链接、结果、耗时和错误原因，不保存原消息正文、独立发送者字段或凭据；最多记录 3 条链接，剔除 URL 凭据与片段，隐藏所有查询参数值。旧记录原位迁移，不推断会话。日志支持时间、来源、平台、结果，以及群 ID、UMO、链接或错误关键词组合筛选，在 SQLite 中执行筛选与分页。Token 统计只覆盖插件 AI 总结；Provider 返回用量时记精确值，否则显示基于文本长度的估算，并注明图片 Token 不包含在估算中。
+- 群聊列表直接显示已配置群，不另建空的群聊名单菜单。内置模板由平台注册能力生成，可引用及设为默认，但不可改名、编辑规则或删除；只有自建模板可编辑。模板解析类型开关独立于平台全局开关；模板平台行须表达全选、部分选中和未纳入状态。
 - `_conf_schema.json` 的用户可见文案保持简洁：平台开关用一句话概括支持的内容类型；Cookies 配置只说明是否选填及用途；登录状态、填写格式、兼容限制和故障处理等详细说明放入 README，不堆叠在配置提示中。Cookies 分组仍需保留简短的敏感信息警告。
 - 不为单次需求增加兼容层、重复入口或无调用方的扩展点。
 

@@ -139,6 +139,7 @@ def test_proxy_options_require_explicit_boolean_platform_switch():
         "",
         "socks5://proxy.example.com:1080",
         "http://proxy.example.com:invalid",
+        "http://proxy .example.com:8080",
         "http://user:top-secret@proxy.example.com/path",
         "http://proxy.example.com:8080/?token=top-secret",
     ],

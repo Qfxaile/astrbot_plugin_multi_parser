@@ -48,7 +48,10 @@ class TiebaParser(TiebaThreadContent, BaseParser):
     )
 
     async def match(self, context: ParseContext) -> bool:
-        return self.THREAD_PATTERN.search(context.combined_text) is not None
+        return (
+            self.parse_feature_enabled("post")
+            and self.THREAD_PATTERN.search(context.combined_text) is not None
+        )
 
     async def parse(self, context: ParseContext) -> ParseResult:
         matched = self.THREAD_PATTERN.search(context.combined_text)

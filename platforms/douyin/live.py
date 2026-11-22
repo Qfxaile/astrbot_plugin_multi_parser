@@ -1,9 +1,11 @@
 import json
 import re
+from urllib.parse import urljoin
 
 import httpx
 
 from ...core.contracts import ParseResult
+from ...core.http import is_trusted_https_url
 from ...core.media import mark_invalid_image_slots
 
 
@@ -11,28 +13,36 @@ class DouyinLiveContent:
     """解析抖音直播间和直播回流页。"""
 
     LIVE_API = "https://live.douyin.com/webcast/room/web/enter/"
+    MAX_LIVE_PAGE_BYTES = 4 * 1024 * 1024
     LIVE_REFLOW_PATTERN = (
         r"https?://webcast\.amemv\.com/douyin/webcast/reflow/"
         r"(?P<room_id>\d+)"
     )
 
     def _parse_live_reflow_html(self, html: str) -> ParseResult:
-        """从抖音 App 直播分享回流页提取公开直播间信息。"""
+        """从抖音直播页或分享回流页的 React 数据中提取公开信息。"""
         room = self._extract_live_reflow_room(html)
-        owner = room.get("owner") or {}
+        owner = room.get("owner") or room.get("anchor") or room.get("user") or {}
         if not isinstance(owner, dict):
             owner = {}
-        cover = room.get("cover") or room.get("roomCover") or {}
+        cover = (
+            room.get("cover") or room.get("room_cover") or room.get("roomCover") or {}
+        )
         if isinstance(cover, dict) and "urlList" in cover:
             cover = {"url_list": cover.get("urlList")}
         cover_url = self._select_image_url(cover)
-        live_status = {0: "未开播", 2: "直播中", 4: "已结束"}.get(
-            room.get("status"), "未知"
-        )
+        status = room.get("status")
+        try:
+            status = int(status)
+        except (TypeError, ValueError):
+            status = None
+        live_status = {0: "未开播", 2: "直播中", 4: "已结束"}.get(status, "未知")
         extra_lines = [f"直播状态: {live_status}"]
-        user_count = room.get("userCount")
+        user_count = room.get("userCount", room.get("user_count_str"))
         if isinstance(user_count, int) and user_count >= 0:
             extra_lines.append(f"观看人数: {user_count:,}")
+        elif isinstance(user_count, str) and user_count.strip():
+            extra_lines.append(f"观看人数: {user_count.strip()}")
         result = ParseResult(platform=self.name)
         result.content.title = str(room.get("title") or "抖音直播间")
         result.content.author = str(owner.get("nickname") or "未知主播")
@@ -45,7 +55,7 @@ class DouyinLiveContent:
     def _extract_live_reflow_room(cls, html: str) -> dict:
         """解码 React 流式数据并返回其中的直播间对象。"""
         for matched in re.finditer(
-            r"self\.__rsc_f\.push\((.*?)\)</script>",
+            r"self\.__(?:rsc|pace)_f\.push\((.*?)\)</script>",
             html,
             flags=re.DOTALL,
         ):
@@ -55,7 +65,7 @@ class DouyinLiveContent:
                 continue
             if room := cls._find_live_reflow_room(chunk):
                 return room
-        raise ValueError("抖音直播回流页中未找到直播间数据")
+        raise ValueError("抖音直播页面中未找到直播间数据")
 
     @classmethod
     def _find_live_reflow_room(cls, value: object) -> dict:
@@ -106,9 +116,58 @@ class DouyinLiveContent:
             headers={"Referer": referer},
         )
         self.raise_for_response_status(response)
-        result = self._parse_live_data(response.json())
+        try:
+            payload = response.json()
+        except ValueError:
+            return await self._parse_live_page(client, referer)
+        try:
+            result = self._parse_live_data(payload)
+        except ValueError:
+            if isinstance(payload, dict) and payload.get("status_code") not in (
+                None,
+                0,
+            ):
+                raise
+            return await self._parse_live_page(client, referer)
         mark_invalid_image_slots(result, self.INVALID_IMAGE_URL)
         return await self.materialize_images(result, client, referer)
+
+    async def _parse_live_page(
+        self,
+        client: httpx.AsyncClient,
+        referer: str,
+    ) -> ParseResult:
+        """直播 API 无有效数据时，从公开直播页提取首屏房间信息。"""
+        url = referer
+        for redirect_count in range(self.MAX_REDIRECTS + 1):
+            async with client.stream("GET", url, follow_redirects=False) as response:
+                self._raise_for_auth_page(response)
+                if response.has_redirect_location:
+                    if redirect_count == self.MAX_REDIRECTS:
+                        raise ValueError("抖音直播页面重定向次数超过安全限制。")
+                    url = urljoin(url, response.headers["Location"])
+                    if not is_trusted_https_url(
+                        url, ("live.douyin.com", "webcast.amemv.com")
+                    ):
+                        raise ValueError("抖音直播页面跳转到不可信地址。")
+                    continue
+                self.raise_for_response_status(response)
+                html = await self._read_live_page(response)
+            result = self._parse_live_reflow_html(html)
+            mark_invalid_image_slots(result, self.INVALID_IMAGE_URL)
+            return await self.materialize_images(result, client, url)
+        raise ValueError("抖音直播页面重定向次数超过安全限制。")
+
+    async def _read_live_page(self, response: httpx.Response) -> str:
+        content_length = response.headers.get("Content-Length", "")
+        if content_length.isdigit() and int(content_length) > self.MAX_LIVE_PAGE_BYTES:
+            raise ValueError("抖音直播页面响应过大，已停止解析。")
+        body = bytearray()
+        async for chunk in response.aiter_bytes(chunk_size=64 * 1024):
+            if len(body) + len(chunk) > self.MAX_LIVE_PAGE_BYTES:
+                raise ValueError("抖音直播页面响应过大，已停止解析。")
+            body.extend(chunk)
+        return body.decode("utf-8", errors="replace")
 
     def _parse_live_data(self, payload: dict) -> ParseResult:
         """将抖音直播间载荷转换为统一解析结果。"""

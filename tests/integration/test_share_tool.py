@@ -13,6 +13,7 @@ from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.runners.tool_loop_agent_runner import ToolLoopAgentRunner
 from astrbot.core.agent.tool_image_cache import tool_image_cache
 from astrbot.core.astr_agent_tool_exec import FunctionToolExecutor
+from astrbot_multi_parser.core.contracts import ContentDocument, ParseResult
 from astrbot_multi_parser.main import MultiParserPlugin
 from httpx import AsyncClient
 
@@ -292,6 +293,33 @@ async def test_invalid_index_and_disabled_platform(reader):
     assert await offered(plugin, event) is None
 
 
+@pytest.mark.parametrize("has_next_platform", [False, True])
+async def test_tool_continues_after_a_skipped_candidate(
+    reader, monkeypatch, has_next_platform
+):
+    plugin, urls = reader
+    wechat = plugin.parsers["wechat"]
+    monkeypatch.setattr(
+        wechat, "parse", AsyncMock(return_value=ParseResult.skipped("wechat"))
+    )
+    github = plugin.parsers["github"]
+    github_result = ParseResult(
+        platform="github", content=ContentDocument(title="已启用的仓库")
+    )
+    monkeypatch.setattr(github, "parse", AsyncMock(return_value=github_result))
+    parsers = [wechat, github] if has_next_platform else [wechat]
+    monkeypatch.setattr(plugin, "enabled_parsers", lambda: parsers)
+    event = message(f"说说这两个链接 {ARTICLE} https://github.com/owner/repo")
+
+    tool = await offered(plugin, event)
+    [text] = await invoke(tool, event)
+
+    assert not urls
+    assert (
+        "已启用的仓库" if has_next_platform else "没有已启用的解析类型"
+    ) in text.text
+
+
 async def test_runner_places_only_requested_image_in_user_role(
     reader, tmp_path, monkeypatch
 ):
@@ -353,3 +381,30 @@ async def test_parser_error_is_private_and_does_not_leak_url(reader, monkeypatch
     assert "读取失败" in error.text and NOTE not in error.text
     assert await offered(plugin, message("再看看图片")) is None
     assert not event.sent and not urls
+
+
+async def test_saved_private_policy_applies_to_already_offered_tool(
+    reader, monkeypatch
+):
+    plugin, urls = reader
+    event = message(f"{ARTICLE} 讲什么？")
+    event.unified_msg_origin = "qq:FriendMessage:123"
+    registered = await offered(plugin, event)
+    assert registered is not None
+    monkeypatch.setattr(plugin._web_settings, "write_store", AsyncMock())
+    await plugin._web_settings.update(
+        {
+            "revision": 0,
+            "access_rules": {
+                "mode": "blacklist",
+                "private": {
+                    "template_id": None,
+                    "rules": ["wechat/article"],
+                },
+            },
+        }
+    )
+    assert await offered(plugin, event) is None
+    [text] = await invoke(registered, event)
+    assert "没有已启用的解析类型" in text.text
+    assert not urls

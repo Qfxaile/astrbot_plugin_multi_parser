@@ -1,6 +1,25 @@
 """插件配置的类型化读取工具。"""
 
 from collections.abc import Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
+
+_denied_parse_types: ContextVar[frozenset[str]] = ContextVar(
+    "denied_parse_types", default=frozenset()
+)
+
+
+@contextmanager
+def restrict_parse_types(denied: frozenset[str]):
+    """在当前请求内收紧类型权限，退出作用域时恢复原视图。"""
+    if not denied:
+        yield
+        return
+    token = _denied_parse_types.set(_denied_parse_types.get() | denied)
+    try:
+        yield
+    finally:
+        _denied_parse_types.reset(token)
 
 
 class PluginSettings:
@@ -51,6 +70,22 @@ class PluginSettings:
     def platform_proxy_enabled(self, name: str, default: bool = False) -> bool:
         """返回指定平台是否启用代理。"""
         return self._platform_switch("proxy_switches", name, default)
+
+    def parse_feature_enabled(
+        self, platform: str, feature: str, default: bool = True
+    ) -> bool:
+        """返回指定平台解析类型是否启用，兼容未迁移的旧配置。"""
+        denied = _denied_parse_types.get()
+        if denied and f"{platform}/{feature}" in denied:
+            return False
+        platforms = self.values.get("platform_feature_switches")
+        if not isinstance(platforms, Mapping):
+            return default
+        switches = platforms.get(platform)
+        if not isinstance(switches, Mapping):
+            return default
+        value = switches.get(feature, default)
+        return value if isinstance(value, bool) else default
 
     def _platform_switch(self, key: str, name: str, default: bool) -> bool:
         switches = self.values.get(key)

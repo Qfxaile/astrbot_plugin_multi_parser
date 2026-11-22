@@ -41,6 +41,8 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 - 平台入口和协议实现：`platforms/<platform>/parser.py`、支持登录平台的 `platforms/<platform>/login.py` 及同目录 `client.py`、`models.py`、`content.py` 模块
 - 配置声明：`_conf_schema.json`
 - 行为验证：`tests/`
+- 插件 WebUI：`pages/config/app.js` 为页面入口，`pages/config/shared/` 存放共享 DOM 控件与图标，`pages/config/features/` 按平台、设置、名单、工作台、日志和关于拆分功能模块，`pages/config/styles/` 存放统一设计样式
+- 工作台、解析日志和 Token 用量：`services/observability.py` 通过异步 SQLite 持久化到插件数据目录，`pages/config/features/dashboard/`、`logs/` 和 `about/` 提供只读视图
 
 跨平台能力进入 `core/` 或 `services/`，平台特有细节留在平台目录。每个平台由 `parser.py` 保留顶层解析入口；复杂平台将请求跳转、领域模型和内容转换分别放入 `client.py`、`models.py`、`content.py`，番茄小说、抖音、微博、小红书、Pixiv、腾讯频道已按实际职责拆分，避免为轻量入口创建空壳模块。
 
@@ -58,9 +60,11 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 新增平台或跨层依赖时运行 `tests/test_architecture_dependencies.py`，保持平台适配器不依赖服务层、核心不依赖平台实现。
 
-复用 `BaseParser`、`PlatformSpec`、`PluginSettings`、统一契约、安全 HTTP、平台代理、媒体和投递服务。新增解析器必须覆写 `BaseParser` 的 `match` 与 `parse`，并只通过平台注册表接入；`BaseParser` 本身提供可复用的 HTTP、Cookie 和媒体基础能力。配置值的布尔、数值、枚举和平台开关读取统一使用 `PluginSettings`，不要在服务或基础设施模块重复转换。AI 总结、会话历史等后处理优先使用 `ParseResult.visible_text_lines` 和 `ParseResult.ordered_image_references`，不要重复遍历平台字段。新增请求客户端时接入 `core/http.py` 的平台代理参数，确保解析、登录和插件侧媒体请求遵循同一平台开关。保持内容顺序，区分鉴权失败、网络失败、内容不存在和部分媒体失败。新增平台时更新平台包导出、`platforms/registry.py`、`platforms/__init__.py`、`_conf_schema.json`、README、项目事实文档和测试，并运行注册表的 `validate_platform_registry()`、`validate_platform_configuration()` 校验；按用户可见程度更新 CHANGELOG。核心与服务公共扩展点优先通过 `core/__init__.py`、`services/__init__.py` 惰性导出，并同步包边界测试；`services/composition/configuration.py` 与 `services/authentication/service.py` 从注册表装配，只有装配语义变化时才修改。
+复用 `BaseParser`、`PlatformSpec`、`PluginSettings`、统一契约、安全 HTTP、平台代理、媒体和投递服务。新增解析器必须覆写 `BaseParser` 的 `match` 与 `parse`，并只通过平台注册表接入；`BaseParser` 本身提供可复用的 HTTP、Cookie 和媒体基础能力。细粒度解析能力仅在解析路由完成接入后标记 `PlatformSpec.parse_type_controls_ready`；未就绪能力必须在 WebUI 禁用并明确标注，不允许看起来可操作却不改变实际解析。配置值的布尔、数值、枚举和平台开关读取统一使用 `PluginSettings`，不要在服务或基础设施模块重复转换。AI 总结、会话历史等后处理优先使用 `ParseResult.visible_text_lines` 和 `ParseResult.ordered_image_references`，不要重复遍历平台字段。新增请求客户端时接入 `core/http.py` 的平台代理参数，确保解析、登录和插件侧媒体请求遵循同一平台开关。保持内容顺序，区分鉴权失败、网络失败、内容不存在和部分媒体失败。新增平台时更新平台包导出、`platforms/registry.py`、`platforms/__init__.py`、`_conf_schema.json`、README、项目事实文档和测试，并运行注册表的 `validate_platform_registry()`、`validate_platform_configuration()` 校验；按用户可见程度更新 CHANGELOG。核心与服务公共扩展点优先通过 `core/__init__.py`、`services/__init__.py` 惰性导出，并同步包边界测试；`services/composition/configuration.py` 与 `services/authentication/service.py` 从注册表装配，只有装配语义变化时才修改。
 
 修改自动链接解析入口、平台解析器、表情回应或投递流程时，先核对 AstrBot 的事件传播和默认 LLM 触发条件。自动解析只能附加解析输出，禁止停止事件、修改或消费原消息、设置 LLM 禁用状态，或主动请求 LLM 接管后续流程；发送解析结果后仍须让后续插件与 AstrBot 默认流程按原规则处理。若发送副作用会改变事件状态，恢复进入解析处理器前的原值，并用成功解析、匹配异常、解析异常、未匹配和入口已有发送状态测试防止回归。
+
+修改解析类型开关时，对照 `develop` 检查全开时的选链优先级，并测试混合链接、短链跳转到关闭类型、继续匹配后续平台。调整解析或发送时机时，验证第一条消息等待期间第二条仍可产出结果。
 
 ### 修改平台登录
 
@@ -78,11 +82,21 @@ description: Use when Codex 在 AstrBot 多平台内容解析插件仓库中开�
 
 ### 修改配置或依赖
 
-配置变化同步 `_conf_schema.json`、README 和测试，并检查配置服务是否需要调整。项目环境统一通过 `uv` 管理，不假设仓库、AstrBot 或虚拟环境位于固定目录。改变依赖时同步 `pyproject.toml`，运行依赖还需同步 `requirements.txt`。
+原生插件配置变化同步 `_conf_schema.json`、README 和测试，并检查配置服务是否需要调整。插件 WebUI 专属设置使用独立持久化，不加入 `_conf_schema.json`。项目环境统一通过 `uv` 管理，不假设仓库、AstrBot 或虚拟环境位于固定目录。改变依赖时同步 `pyproject.toml`，运行依赖还需同步 `requirements.txt`。
+
+将原生配置接入 WebUI 时，先核对配置 Schema、运行时消费者和字段生效条件，再在 `services/settings/native_fields.py` 维护菜单白名单。用配置服务测试核对字段覆盖、部分更新与写入失败回滚。用浏览器检查 `pages/config/` 的滚动、即时保存和输入草稿行为。
+
+修改会话名单时，复用 `services/settings/access_rules.py` 与现有设置 API。验证 QQ 多实例隔离、群隔离 UMO、其他平台精确 UMO、统一私聊设置、并发和保存失败回滚。覆盖关闭/黑名单/白名单三态、名单外会话、空规则、直接切换模式但保留模板勾选、默认模板、预设分类、模板实时引用、名单项转自定义及直接切换模板。模板编辑不受全局平台启用状态限制，平台列表需显示全选、部分选中和未选中的模板能力。解析类型规则不改写已解析的结果。修改群聊目录时，覆盖连接失败、空列表及 QQ 官方仅列出已观测群聊的降级行为；用浏览器验证群聊列表、默认模板、手动 UMO、模板选择和规则开关。
+
+修改规则模板时，同时验证 WebUI 的内置模板只读状态、保存接口拒绝内置模板改动、读取旧设置时恢复预设内容，以及自建模板正常保存。
+
+修改插件工作台、日志或关于页时，确认解析日志不含消息正文、独立发送者字段或凭据；来源使用事件原始 UMO 与原生群 ID，不发起额外网络查询。验证 SQLite 旧表原位迁移、后台写入不阻塞解析、正常卸载完成落库、日志与每日统计的一致性，以及不同时间范围和 Token 用量的精确值/估算回退。检查日志接口不缓存且只返回当前页，筛选覆盖全部历史，脱敏链接不含 URL 用户信息、片段或查询参数原值；用浏览器验证筛选、分页、详情和窄屏布局。README 图片在插件文档中无法显示时使用 `raw.githubusercontent.com` 图片地址，不用 GitHub `blob` 页面地址；品牌图在 README 与关于页均应居中显示。
 
 ### 修改版本或发布资料
 
 以 `metadata.yaml` 为唯一版本源。只有用户明确要求发布或升版时才修改版本，并同步 README 徽章、CHANGELOG 和 Git 标签；普通功能、修复和重构不升版。
+
+调整关于页时，验证本地 Logo 缺失的回退、已安装版本与未发布记录的区分，以及按版本折叠和外部仓库链接。
 
 ### 分支与发布流程
 

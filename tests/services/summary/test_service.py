@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 from astrbot_multi_parser.core.contracts import OrderedContent
+from astrbot_multi_parser.services.observability import PluginObservability
 from astrbot_multi_parser.services.summary.service import (
     DEFAULT_PROMPT,
     AISummaryService,
@@ -65,6 +66,34 @@ async def test_text_summary_uses_current_provider_and_default_prompt():
     assert "标题" in provider.calls[0]["prompt"]
     assert DEFAULT_PROMPT.splitlines()[0] in provider.calls[0]["prompt"]
     assert "不要使用 Markdown" in provider.calls[0]["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_summary_records_exact_provider_usage_when_available(tmp_path):
+    from astrbot.core.provider.entities import TokenUsage
+
+    class UsageProvider(FakeProvider):
+        async def text_chat(self, **kwargs):
+            self.calls.append(kwargs)
+            return SimpleNamespace(
+                completion_text=self.text,
+                usage=TokenUsage(input_other=20, input_cached=3, output=5),
+            )
+
+    observability = PluginObservability(tmp_path / "observability.sqlite3")
+    service = AISummaryService(
+        FakeContext(UsageProvider()),
+        {"enable_ai_summary": True},
+        observability,
+    )
+
+    assert await service.summarize(FakeEvent(), build_result(platform="测试")) == [
+        "总结内容"
+    ]
+    await observability.flush()
+    totals = (await observability.dashboard())["totals"]
+    assert totals["tokens"] == 28
+    assert totals["exact_token_calls"] == 1
 
 
 @pytest.mark.asyncio

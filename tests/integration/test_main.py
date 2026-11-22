@@ -1,5 +1,8 @@
+import asyncio
 import base64
+import json
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -11,12 +14,15 @@ from astrbot_multi_parser.core.contracts import (
     DeliveryHints,
     MediaBundle,
     OrderedContent,
+    ParseContext,
     ParseDiagnostics,
     ParseResult,
 )
 from astrbot_multi_parser.core.http import CookieAccessError
 from astrbot_multi_parser.core.media import operations as media
 from astrbot_multi_parser.main import MultiParserPlugin, VideoSizeInfo
+from astrbot_multi_parser.platforms.weibo import parser as weibo_parser
+from astrbot_multi_parser.services.composition import container as container_module
 from astrbot_multi_parser.services.delivery import DeliveryService
 from result_factory import build_result
 
@@ -120,6 +126,9 @@ class FakeEvent:
     def get_platform_id(self):
         return self.platform_id
 
+    def get_session_id(self):
+        return self.unified_msg_origin.split(":", 2)[-1]
+
     def get_self_id(self):
         raw = self.message_obj.raw_message
         return str(raw.get("self_id") or "") if isinstance(raw, dict) else ""
@@ -175,20 +184,18 @@ class FakeConversationManager:
 
 
 def make_plugin(result: ParseResult, *, conversation_manager=None, **config):
-    plugin = MultiParserPlugin.__new__(MultiParserPlugin)
-    plugin.config = {
+    config = {
         "platform_switches": {"fake": True},
         "enable_parse_reaction": False,
         "send_video_by_url": True,
         **config,
     }
-    plugin.parsers = {"fake": FakeParser(result)}
     conv_mgr = conversation_manager or FakeConversationManager()
-    plugin.context = SimpleNamespace(conversation_manager=conv_mgr)
-    # 初始化完整的 ServiceContainer
-    from astrbot_multi_parser.services.composition.container import ServiceContainer
-
-    plugin._services = ServiceContainer(plugin.context, plugin.config)
+    context = SimpleNamespace(
+        conversation_manager=conv_mgr, register_web_api=lambda *_: None
+    )
+    plugin = MultiParserPlugin(context, config)
+    plugin.parsers = {"fake": FakeParser(result)}
     return plugin
 
 
@@ -210,6 +217,254 @@ def test_plugin_registers_all_supported_parsers():
         "qzone",
         "pixiv",
     }
+
+
+def test_plugin_registers_web_settings_api_with_plugin_name_prefix():
+    context = SimpleNamespace(registered_web_apis=[])
+
+    def register_web_api(route, handler, methods, description):
+        context.registered_web_apis.append((route, handler, methods, description))
+
+    context.register_web_api = register_web_api
+    MultiParserPlugin(context, {})
+
+    route, handler, methods, description = context.registered_web_apis[0]
+    assert route == "/astrbot_plugin_multi_parser/settings"
+    assert handler.__name__ == "_web_settings_api"
+    assert methods == ["GET", "POST"]
+    assert description
+    assert len(context.registered_web_apis) == 5
+    assert context.registered_web_apis[1][0:3:2] == (
+        "/astrbot_plugin_multi_parser/qq-groups",
+        ["POST"],
+    )
+    assert [entry[0] for entry in context.registered_web_apis[2:]] == [
+        "/astrbot_plugin_multi_parser/dashboard",
+        "/astrbot_plugin_multi_parser/logs",
+        "/astrbot_plugin_multi_parser/about",
+    ]
+    assert context.registered_web_apis[2][2] == ["GET", "POST"]
+    assert context.registered_web_apis[3][2] == ["POST"]
+
+
+async def test_web_observability_apis_return_plugin_metrics_and_release_metadata(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        container_module,
+        "get_astrbot_plugin_data_path",
+        lambda: str(tmp_path / "plugin-data"),
+    )
+    plugin = MultiParserPlugin(None, {})
+    plugin.record_parse("douyin", "success", 42, sent=True)
+    plugin.record_parse("bilibili", "failure", 7, error_type="ValueError")
+    await plugin._services.observability.flush()
+    monkeypatch.setattr(
+        main.web, "request", SimpleNamespace(json=AsyncMock(return_value={}))
+    )
+
+    dashboard = await plugin._web_dashboard_api()
+    logs = await plugin._web_logs_api()
+    about = await plugin._web_about_api()
+    dashboard_data = json.loads(dashboard.body)["data"]
+    log_data = json.loads(logs.body)["data"]["rows"]
+    about_data = json.loads(about.body)["data"]
+
+    assert dashboard_data["totals"]["parses"] == 1
+    assert dashboard_data["totals"]["sent"] == 1
+    assert dashboard_data["totals"]["failures"] == 1
+    assert len(dashboard_data["days"]) == 14
+    assert dashboard_data["period"] == "14d"
+    assert dashboard.headers["cache-control"] == "no-store"
+    assert log_data[0]["platform"] == "bilibili"
+    assert log_data[0]["error_type"] == "ValueError"
+    assert about_data["version"] == "v1.4.0"
+    assert about_data["author"] == "Qfxaile"
+    assert about_data["repo"].endswith("astrbot_plugin_multi_parser")
+    assert about_data["logo"].startswith("data:image/png;base64,")
+    assert about_data["updates"][0]["version"] == "未发布"
+    assert about_data["updates"][0]["notes"]
+    assert about_data["updates"][1]["version"] == about_data["version"]
+    assert about.headers["cache-control"] == "no-store"
+
+
+async def test_about_keeps_release_notes_without_unreleased_entries_or_logo(
+    monkeypatch, tmp_path
+):
+    (tmp_path / "metadata.yaml").write_text("version: v2.0.0\n", encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text(
+        "# 更新日志\n\n## 未发布\n\n## v2.0.0 - 2026-11-22\n\n"
+        "### 修复\n- 第一条\n\n## 附录\n- 不属于发布记录\n\n"
+        "## v1.0.0 - 2026-11-01\n- 第二条\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(main, "__file__", str(tmp_path / "main.py"))
+
+    response = await MultiParserPlugin(None, {})._web_about_api()
+    data = json.loads(response.body)["data"]
+
+    assert data["logo"] == ""
+    assert data["updates"] == [
+        {"version": "v2.0.0", "date": "2026-11-22", "notes": ["第一条"]},
+        {"version": "v1.0.0", "date": "2026-11-01", "notes": ["第二条"]},
+    ]
+
+
+async def test_web_logs_api_reports_database_query_failure(monkeypatch):
+    plugin = MultiParserPlugin(None, {})
+
+    async def fail_read(filters):
+        raise OSError("database unavailable")
+
+    monkeypatch.setattr(plugin._services.observability, "logs", fail_read)
+    monkeypatch.setattr(
+        main.web, "request", SimpleNamespace(json=AsyncMock(return_value={}))
+    )
+    response = await plugin._web_logs_api()
+
+    assert response.status_code == 500
+    assert "检查 AstrBot 服务日志" in json.loads(response.body)["message"]
+
+
+async def test_auto_parse_logs_identify_the_group_and_exact_astrbot_session(
+    monkeypatch,
+):
+    plugin = make_plugin(build_result(platform="test", title="解析结果"))
+    event = FakeEvent(platform_id="bot-a", raw_message={"group_id": "456"})
+    event.private = False
+    event.unified_msg_origin = "bot-a:GroupMessage:123_456"
+    event.message_str = "https://example.com/post 不保存这段正文"
+    monkeypatch.setattr(
+        main, "extract_context", lambda event: ParseContext(text=event.message_str)
+    )
+
+    await collect_plugin_results(plugin, event)
+    await plugin._services.observability.flush()
+    monkeypatch.setattr(
+        main.web,
+        "request",
+        SimpleNamespace(json=AsyncMock(return_value={"query": "456"})),
+    )
+    response = await plugin._web_logs_api()
+    (row,) = json.loads(response.body)["data"]["rows"]
+
+    assert response.headers["cache-control"] == "no-store"
+    assert row["source"] == "aiocqhttp · 群聊"
+    assert row["group_id"] == "456"
+    assert row["umo"] == "bot-a:GroupMessage:123_456"
+    assert row["links"] == ["https://example.com/post"]
+    assert "不保存这段正文" not in str(row)
+
+
+async def test_auto_parse_does_not_wait_for_observability_writes(monkeypatch):
+    plugin = make_plugin(build_result(platform="test", title="解析结果"))
+    observability = plugin._services.observability
+    release = asyncio.Event()
+    persist = observability._persist
+
+    async def blocked_write(operation):
+        await release.wait()
+        await persist(operation)
+
+    monkeypatch.setattr(observability, "_persist", blocked_write)
+    monkeypatch.setattr(main, "extract_context", lambda event: ParseContext(text="url"))
+
+    try:
+        first, second = await asyncio.wait_for(
+            asyncio.gather(
+                *(collect_plugin_results(plugin, FakeEvent()) for _ in range(2))
+            ),
+            timeout=1,
+        )
+        assert first and second
+    finally:
+        release.set()
+        await plugin.terminate()
+
+    assert (await observability.dashboard())["totals"]["sent"] == 2
+
+
+async def test_auto_parse_records_failed_forward_without_counting_it_as_sent(
+    monkeypatch,
+):
+    plugin = make_plugin(
+        build_result(platform="test", title="解析结果"), forward_mode="always"
+    )
+    monkeypatch.setattr(main, "extract_context", lambda event: ParseContext(text="url"))
+    await collect_plugin_results(plugin, FakeEvent(forward_failure_limit=0))
+    await plugin.terminate()
+
+    observability = plugin._services.observability
+    assert (await observability.dashboard())["totals"]["sent"] == 0
+    (row,) = (await observability.logs())["rows"]
+    assert row["status"] == "success"
+    assert row["error_reason"] == "合并转发发送失败"
+
+
+async def test_web_settings_lists_only_public_chat_model_metadata(monkeypatch):
+    def broken_metadata():
+        raise RuntimeError("broken provider")
+
+    context = SimpleNamespace(
+        register_web_api=lambda *_: None,
+        get_all_providers=lambda: [
+            SimpleNamespace(meta=broken_metadata),
+            SimpleNamespace(
+                meta=lambda: SimpleNamespace(
+                    id="chat-a", model="model-a", api_key="test-provider-secret-key"
+                )
+            ),
+        ],
+    )
+    plugin = MultiParserPlugin(context, {})
+    monkeypatch.setattr(main.web, "request", SimpleNamespace(method="GET"))
+
+    response = await plugin._web_settings_api()
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert json.loads(response.body)["data"]["providers"] == [
+        {"id": "chat-a", "model": "model-a"}
+    ]
+    assert b"test-provider-secret-key" not in response.body
+
+
+async def test_web_settings_can_save_when_chat_model_listing_is_unavailable(
+    monkeypatch,
+):
+    provider_list_calls = []
+
+    def failing_provider_list():
+        provider_list_calls.append(True)
+        raise RuntimeError("unavailable")
+
+    context = SimpleNamespace(
+        register_web_api=lambda *_: None, get_all_providers=failing_provider_list
+    )
+    config = {}
+    plugin = MultiParserPlugin(context, config)
+    monkeypatch.setattr(plugin._web_settings, "write_store", AsyncMock())
+    monkeypatch.setattr(main.web, "request", SimpleNamespace(method="GET"))
+
+    response = await plugin._web_settings_api()
+    assert response.status_code == 200
+    assert json.loads(response.body)["data"]["providers"] == []
+
+    monkeypatch.setattr(
+        main.web,
+        "request",
+        SimpleNamespace(
+            method="POST",
+            json=AsyncMock(
+                return_value={"revision": 0, "settings": {"parse_mode": "tool"}}
+            ),
+        ),
+    )
+    response = await plugin._web_settings_api()
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert json.loads(response.body)["data"]["revision"] == 1
+    assert plugin.tool_mode is True
+    assert len(provider_list_calls) == 1
 
 
 def test_plugin_respects_platform_switches():
@@ -310,6 +565,138 @@ async def test_parse_delivery_preserves_existing_sent_event_state(monkeypatch):
         event._has_send_oper = True
 
     assert event._has_send_oper is True
+
+
+@pytest.mark.asyncio
+async def test_parse_reaction_waits_for_nonempty_successful_result(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda event: SimpleNamespace(combined_text="https://example.com/post"),
+    )
+    plugin = make_plugin(
+        ParseResult(platform="测试平台"),
+        enable_parse_reaction=True,
+    )
+    bot = FakeBot()
+    event = FakeEvent(bot=bot, raw_message={"message_id": 123})
+
+    assert [item async for item in plugin.handle_parse(event)] == []
+    assert bot.actions == []
+
+
+@pytest.mark.asyncio
+async def test_parse_reaction_skips_error_result(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda event: SimpleNamespace(combined_text="https://example.com/post"),
+    )
+    result = ParseResult(platform="测试平台")
+    result.diagnostics.error = "内容不可用"
+    plugin = make_plugin(result, enable_parse_reaction=True)
+    bot = FakeBot()
+    event = FakeEvent(bot=bot, raw_message={"message_id": 123})
+
+    await collect_plugin_results(plugin, event)
+
+    assert bot.actions == []
+
+
+@pytest.mark.asyncio
+async def test_parse_reaction_runs_for_successful_result(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda event: SimpleNamespace(combined_text="https://example.com/post"),
+    )
+    plugin = make_plugin(
+        build_result(platform="测试平台", title="解析结果"),
+        enable_parse_reaction=True,
+    )
+    bot = FakeBot()
+    event = FakeEvent(bot=bot, raw_message={"message_id": 123})
+
+    results = plugin.handle_parse(event)
+    await anext(results)
+
+    assert bot.actions == [
+        ("set_msg_emoji_like", {"message_id": 123, "emoji_id": "124"})
+    ]
+    await results.aclose()
+
+
+@pytest.mark.parametrize("with_next_platform", [False, True])
+async def test_disabled_weibo_short_link_is_silent_and_allows_next_platform(
+    monkeypatch, with_next_platform
+):
+    share = "https://mapp.api.weibo.cn/fx/ABC123.html"
+    context = ParseContext(text=f"{share} https://github.com/owner/repo")
+    plugin = make_plugin(
+        build_result(platform="fake", title="其他平台结果"), enable_parse_reaction=True
+    )
+    weibo = weibo_parser.WeiboParser(
+        {"platform_feature_switches": {"weibo": {"post": False}}}
+    )
+    parsers = [weibo, plugin.parsers["fake"]] if with_next_platform else [weibo]
+    monkeypatch.setattr(plugin, "enabled_parsers", lambda: parsers)
+    monkeypatch.setattr(main, "extract_context", lambda event: context)
+    monkeypatch.setattr(
+        weibo_parser,
+        "resolve_share_url",
+        AsyncMock(return_value="https://weibo.com/123/AbCd"),
+    )
+    bot = FakeBot()
+    event = FakeEvent(bot=bot, raw_message={"message_id": 123})
+
+    results = await collect_plugin_results(plugin, event)
+
+    assert [result[0].text for result in results] == (
+        ["其他平台结果"] if with_next_platform else []
+    )
+    assert len(bot.actions) == int(with_next_platform)
+
+
+@pytest.mark.parametrize("waiting_stage", ["parse", "reaction", "send"])
+async def test_another_message_can_finish_while_first_waits(monkeypatch, waiting_stage):
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def wait_if_first(stage, source):
+        if stage == waiting_stage and source == "first":
+            entered.set()
+            await release.wait()
+
+    async def parse(context):
+        await wait_if_first("parse", context.text)
+        return build_result(platform="fake", title=context.text)
+
+    async def react(event):
+        await wait_if_first("reaction", event.source)
+
+    async def dispatch(event):
+        results = []
+        async for message in plugin.handle_parse(event):
+            await wait_if_first("send", event.source)
+            results.append(message[0].text)
+        return results
+
+    monkeypatch.setattr(
+        main, "extract_context", lambda event: ParseContext(text=event.source)
+    )
+    plugin = make_plugin(ParseResult(platform="fake"))
+    monkeypatch.setattr(plugin.parsers["fake"], "parse", parse)
+    monkeypatch.setattr(plugin, "react_success", react)
+    first, second = FakeEvent(), FakeEvent()
+    first.source, second.source = "first", "second"
+    first_task = asyncio.create_task(dispatch(first))
+    try:
+        await asyncio.wait_for(entered.wait(), timeout=2)
+        assert await asyncio.wait_for(dispatch(second), timeout=2) == ["second"]
+        assert not first_task.done()
+    finally:
+        release.set()
+        assert await asyncio.wait_for(first_task, timeout=2) == ["first"]
 
 
 @pytest.mark.asyncio
@@ -1723,7 +2110,7 @@ async def test_terminate_closes_container_authentication_service():
 
     plugin = make_plugin(build_result(platform="test"))
     authentication = FakeAuthentication()
-    plugin._services = SimpleNamespace(authentication=authentication)
+    plugin._services.authentication = authentication
 
     await plugin.terminate()
 
@@ -2426,3 +2813,177 @@ async def test_probe_preserves_head_and_content_range_header_parsing(
     size_info = await plugin.probe_video_size("https://example.com/video.mp4")
 
     assert size_info.size_bytes == expected_size
+
+
+async def test_group_type_rules_keep_other_candidates_and_concurrent_groups(
+    monkeypatch,
+):
+    plugin = MultiParserPlugin(None, {})
+    douyin = plugin.parsers["douyin"]
+    bilibili = plugin.parsers["bilibili"]
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def douyin_candidate(url):
+        if "1234" in url:
+            entered.set()
+            await release.wait()
+            assert not douyin.parse_feature_enabled("video")
+        else:
+            assert douyin.parse_feature_enabled("video")
+        return build_result(platform="douyin", title=url)
+
+    monkeypatch.setattr(douyin, "_parse_candidate", douyin_candidate)
+    monkeypatch.setattr(
+        bilibili,
+        "_parse_video",
+        AsyncMock(return_value=build_result(platform="bilibili", title="B站视频")),
+    )
+    monkeypatch.setattr(plugin, "react_success", AsyncMock())
+    monkeypatch.setattr(plugin._web_settings, "write_store", AsyncMock())
+    monkeypatch.setattr(
+        main, "extract_context", lambda event: ParseContext(text=event.message_str)
+    )
+    await plugin._web_settings.update(
+        {
+            "revision": 0,
+            "access_rules": {
+                "mode": "blacklist",
+                "groups": {
+                    "bot:GroupMessage:88": {
+                        "label": "A",
+                        "template_id": None,
+                        "rules": ["douyin/video"],
+                    }
+                },
+            },
+        }
+    )
+
+    def message(group, urls, instance="bot"):
+        event = FakeEvent(platform_id=instance, raw_message={"group_id": group})
+        event.private = False
+        event.message_str = urls
+        event.unified_msg_origin = f"{instance}:GroupMessage:123_{group}"
+        return event
+
+    video = "https://www.douyin.com/video/5678"
+    note = "https://www.iesdouyin.com/share/slides/1234/"
+    waiting = asyncio.create_task(
+        collect_plugin_results(plugin, message("88", f"{video} {note}"))
+    )
+    try:
+        await asyncio.wait_for(entered.wait(), 2)
+        other = await asyncio.wait_for(
+            collect_plugin_results(plugin, message("89", video)), 2
+        )
+        assert other[0][0].text == video
+    finally:
+        release.set()
+        first = await waiting
+    assert first[0][0].text == note
+    assert douyin.parse_feature_enabled("video")
+    assert (
+        await collect_plugin_results(
+            plugin,
+            message("88", f"{video} https://www.bilibili.com/video/BV1xx411c7mD"),
+        )
+    )[0][0].text == "B站视频"
+    assert (
+        await collect_plugin_results(plugin, message("88", video, instance="second"))
+    )[0][0].text == video
+    assert await collect_plugin_results(plugin, message("88", video)) == []
+
+    await plugin._web_settings.update(
+        {"revision": 1, "parse_types": {"douyin": {"video": False}}}
+    )
+    assert await collect_plugin_results(plugin, message("89", video)) == []
+    await plugin._web_settings.update(
+        {"revision": 2, "parse_types": {"douyin": {"video": True}}}
+    )
+    assert await collect_plugin_results(plugin, message("88", video)) == []
+    assert (await collect_plugin_results(plugin, message("89", video)))[0][
+        0
+    ].text == video
+
+    access = plugin._web_settings.access_rules.data
+    access["mode"] = "whitelist"
+    await plugin._web_settings.update(
+        {"revision": 3, "access_rules": {**access, "groups": {}}}
+    )
+    assert await collect_plugin_results(plugin, message("88", video)) == []
+    assert await collect_plugin_results(plugin, message("89", video)) == []
+
+    await plugin._web_settings.update(
+        {
+            "revision": 4,
+            "access_rules": access,
+        }
+    )
+    assert (await collect_plugin_results(plugin, message("88", video)))[0][
+        0
+    ].text == video
+    assert await collect_plugin_results(plugin, message("89", video)) == []
+
+
+async def test_disabled_video_type_does_not_strip_attachments_from_allowed_article(
+    monkeypatch,
+):
+    plugin = MultiParserPlugin(None, {"send_video_by_url": False})
+    event = FakeEvent(platform_id="qq", raw_message={"group_id": "88"})
+    event.private = False
+    event.unified_msg_origin = "qq:GroupMessage:88"
+    monkeypatch.setattr(
+        main,
+        "extract_context",
+        lambda _: ParseContext(text="https://weibo.com/ttarticle/p/show?id=123"),
+    )
+    article = build_result(
+        platform="weibo", title="文章", video_url="https://example.com/attached.mp4"
+    )
+    parse = AsyncMock(return_value=article)
+    monkeypatch.setattr(plugin.parsers["weibo"], "_parse_article", parse)
+    monkeypatch.setattr(plugin._web_settings, "write_store", AsyncMock())
+    await plugin._web_settings.update(
+        {
+            "revision": 0,
+            "access_rules": {
+                "mode": "blacklist",
+                "groups": {
+                    event.unified_msg_origin: {
+                        "label": "",
+                        "template_id": None,
+                        "rules": ["weibo/video"],
+                    }
+                },
+            },
+        }
+    )
+    messages = await collect_plugin_results(plugin, event)
+    assert "https://example.com/attached.mp4" in messages[0][0].text
+    assert article.media.video_url == "https://example.com/attached.mp4"
+    parse.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    "instance, expected", [(None, 400), ("missing", 404), ("offline", 502)]
+)
+async def test_qq_directory_endpoint_errors_do_not_leak_adapter_details(
+    monkeypatch, instance, expected
+):
+    plugin = MultiParserPlugin(None, {})
+    monkeypatch.setattr(
+        main.web,
+        "request",
+        SimpleNamespace(json=AsyncMock(return_value={"instance": instance})),
+    )
+    list_groups = AsyncMock(
+        side_effect=LookupError("private adapter details")
+        if instance == "missing"
+        else OSError("private adapter details")
+    )
+    monkeypatch.setattr(plugin._group_directory, "list_groups", list_groups)
+    response = await plugin._web_qq_groups_api()
+    assert response.status_code == expected
+    assert b"private adapter details" not in response.body
+    assert list_groups.await_count == int(instance is not None)

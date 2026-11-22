@@ -44,7 +44,10 @@ class PixivParser(BaseParser):
     AJAX_BASE_URL = "https://www.pixiv.net/ajax/illust"
 
     async def match(self, context: ParseContext) -> bool:
-        return self._find_artwork_id(context.combined_text) is not None
+        return (
+            self.parse_feature_enabled("illustration")
+            and self._find_artwork_id(context.combined_text) is not None
+        )
 
     async def parse(self, context: ParseContext) -> ParseResult:
         artwork_id = self._find_artwork_id(context.combined_text)

@@ -59,7 +59,10 @@ class GitHubParser(BaseParser):
     }
 
     async def match(self, context: ParseContext) -> bool:
-        return self._find_repository(context.combined_text) is not None
+        return (
+            self.parse_feature_enabled("repository")
+            and self._find_repository(context.combined_text) is not None
+        )
 
     async def parse(self, context: ParseContext) -> ParseResult:
         repository = self._find_repository(context.combined_text)

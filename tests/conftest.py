@@ -1,3 +1,4 @@
+import asyncio
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -12,6 +13,28 @@ if PLUGIN_NAME not in sys.modules:
     plugin_package = ModuleType(PLUGIN_NAME)
     plugin_package.__path__ = [str(PLUGIN_ROOT)]
     sys.modules[PLUGIN_NAME] = plugin_package
+
+
+@pytest.fixture(autouse=True)
+async def isolate_plugin_observability_database(monkeypatch, tmp_path):
+    from astrbot_multi_parser.services.composition import container
+
+    monkeypatch.setattr(
+        container,
+        "get_astrbot_plugin_data_path",
+        lambda: str(tmp_path / "astrbot-plugin-data"),
+    )
+    instances = []
+    observability = container.PluginObservability
+
+    def track(path):
+        service = observability(path)
+        instances.append(service)
+        return service
+
+    monkeypatch.setattr(container, "PluginObservability", track)
+    yield
+    await asyncio.gather(*(service.flush() for service in instances))
 
 
 @pytest.fixture
