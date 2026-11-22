@@ -17,7 +17,7 @@
 - 这是 AstrBot 插件，支持 B站、抖音、番茄小说、小红书、贴吧、微博、微信、小黑盒、知乎、GitHub、腾讯频道、QQ空间和 Pixiv。
 - `main.py` 负责插件注册、命令入口和服务装配，不承载平台解析细节。
 - `core/` 保存跨平台契约和基础能力；`services/` 保存编排与策略；`platforms/` 保存平台特有实现；`tests/` 保存 pytest 测试。
-- `metadata.yaml` 是插件版本的唯一来源。除非用户明确要求发布或升版，不修改版本号。
+- `metadata.yaml` 是插件版本的唯一来源。下一版本按分支流程在开发 PR 中确定，未经开发者确认不自行升版。
 - 关于页从已安装插件的 `metadata.yaml`、`CHANGELOG.md` 和 `logo.png` 读取信息，不查询远端版本或图片。
 - 当前代码和文档冲突时，以经过测试验证的代码行为为准，并在同次变更中修正文档。
 
@@ -140,16 +140,19 @@ uv run ruff check .
 - 新增、删除或调整平台时，同步检查 `AGENTS.md`、`CLAUDE.md`、项目 Skill、README、`_conf_schema.json`、`metadata.yaml` 的描述字段、CHANGELOG 和平台清单测试。
 - 模块职责、公共 API、目录结构、配置项、依赖、命令权限或验证流程变化时，在同次变更中更新 `AGENTS.md` 和 `CLAUDE.md` 的对应项目事实，以及项目 Skill 的 AI 执行指南。
 - `AGENTS.md`/`CLAUDE.md` 记录稳定的项目事实、边界和索引；项目 Skill 记录 AI 的查找、实现、验证和交付流程，避免大段重复。
-- 普通功能开发可以更新 `metadata.yaml` 的描述和仓库地址，但只有明确发布或升版时才修改版本号、README 版本徽章和 Git 标签。
+- 普通功能开发可以更新 `metadata.yaml` 的描述和仓库地址；版本号按下方开发 PR 规则处理。README 版本徽章、Git 标签和 GitHub Release 只在正式发布流程中更新。
 
 ## 分支与发布流程
 
 - `main` 是稳定主分支，常规变更只接受从 `develop` 发起的发布 PR。唯一例外是生产发布必须紧急回滚：从最新 `main` 创建 `revert/<说明>` 分支，仅包含回滚所需的变更，通过 PR 合入 `main`，仍须遵守分支保护和审查要求。禁止直接推送 `main`。
 - `develop` 是集成开发分支。新功能、缺陷修复和重构均从最新 `develop` 创建独立开发分支，完成实现和验证后通过 PR 合并回 `develop`。分支名由贡献者自行决定，但应能辨识工作内容。
+- 发起开发 PR 前，更新远端 `main`、`develop` 引用，从两者及 PR 来源分支的 `metadata.yaml` 读取版本。沿用仓库的 `v主.次.修订` 格式，按语义版本比较，不按字符串排序。
+- `develop` 与 `main` 同版本时，需要开发者确认一个严格高于 `main` 的版本号，并在 PR 来源分支更新 `metadata.yaml`；尚未确认或更新时，不发起 PR。`develop` 版本合法且已高于 `main` 时，默认沿用并检查来源分支没有降版，无需重复询问；另行升版仍需开发者确认。版本缺失、格式无效或 `develop` 低于 `main` 时，先解决异常再发起 PR。
+- 发起 PR 时，无论是否升版，都在 PR 正文和交付说明列出当时的 `main`、`develop` 和 PR 来源分支版本；有升版时注明合并后的预期版本。通过开发 PR 前更新远端引用并重新核对，确保合并后的版本仍严格高于 `main`，且不低于当前 `develop`。纯历史回同步和紧急回滚不触发开发 PR 升版要求。
 - 开发分支 → `develop`：使用 GitHub 的 `Squash and merge`，每个开发 PR 保留一个整理后的提交。
 - 发布 PR、紧急回滚 PR，以及 `main` 回同步至 `develop` 的 PR：使用 `Create a merge commit`，不使用 Squash 或 Rebase 合并。
-- 只有准备发布时才从 `develop` 向 `main` 发起 PR。发布 PR 必须更新 `metadata.yaml` 版本号，并同步 README 版本徽章、CHANGELOG；版本号遵循项目已有的语义化版本约定。PR 合并后必须使用同一个版本号创建 Git 标签和 GitHub Release，Release 标题只能写版本号（例如 `v1.4.0`），避免标签或 Release 指向尚未进入 `main` 的提交。
-- 发布 PR 应以 `develop` 为源、`main` 为目标，说明版本号、用户可见变更、兼容性影响和验证结果，并通过仓库配置的必需检查与审查后才能合并。普通开发 PR 不修改版本号、发布标签或 Release。
+- 只有准备发布时才从 `develop` 向 `main` 发起 PR。发起和通过发布 PR 前，核对 `develop` 中已确定的合法版本严格高于 `main`，并核对 README 版本徽章、CHANGELOG 与该版本一致；不因发起发布 PR 而再次升版。PR 合并后必须使用同一个版本号为 `main` 的合并提交创建 Git 标签和 GitHub Release，Release 标题只能写版本号（例如 `v1.4.0`）。
+- 发布 PR 应以 `develop` 为源、`main` 为目标，说明版本号、用户可见变更、兼容性影响和验证结果，并通过仓库配置的必需检查与审查后才能合并。普通开发 PR 不创建发布标签或 Release。
 - 发布前确认当前 `main` 已包含在 `develop` 的历史中；未包含时先通过回同步 PR 对齐，处理冲突时保留 `develop` 中尚未发布的改动。发布合并后，用回同步 PR 将 `main` 的发布提交纳入 `develop`。紧急修复优先在 `develop` 完成；如果必须先在 `main` 紧急回滚，回滚后也要通过 PR 及时同步并核对下一版内容。不得强推或重写长期分支历史。
 - 仓库托管平台应为 `main` 配置分支保护：禁止直接推送和强推，要求 PR、必需 CI 检查及审查；`develop` 至少要求通过 PR 和必需 CI 检查。文档约定不能替代仓库权限配置。
 - GitHub 分支规则按目标分支限制合并方式：`main` 仅允许 Merge commit，`develop` 允许 Squash 与 Merge commit。规则不能按来源分支选择合并方式，`develop` 的 PR 由合并者按上述约定选择。
@@ -179,5 +182,4 @@ git diff --check
 - 提交信息使用 Conventional Commits：`<type>(<scope>): <中文主题>`，主题简洁、使用祈使表达、末尾不加句号。
 - PR 使用中文说明行为变化、验证结果和兼容性影响。
 - 用户功能、配置或安装方式变化时更新 README；用户可见变化按需更新 CHANGELOG。
-- 仅在明确的发布任务中同步 `metadata.yaml`、README 版本徽章、CHANGELOG 和 Git 标签。
 - 不提交凭据、调试日志、缓存、临时文件或无关格式化改动。
