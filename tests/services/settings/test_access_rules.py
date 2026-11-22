@@ -94,6 +94,17 @@ def test_whitelist_denies_nonmembers_and_unselected_types_without_reversal():
     assert blocked.denied_types == TYPE_KEYS
 
 
+@pytest.mark.parametrize(
+    ("mode", "denied"), [("off", False), ("blacklist", False), ("whitelist", True)]
+)
+def test_unconfigured_other_message_uses_mode_default(mode, denied):
+    rules = AccessRules.from_payload(settings(mode=mode))
+    access = rules.for_event(event("misskey:OtherMessage:note%12", adapter="misskey"))
+
+    assert ("bilibili" in access.denied_platforms) is denied
+    assert access.denied_types == (TYPE_KEYS if denied else frozenset())
+
+
 def test_whitelist_platform_selection_allows_all_types_but_respects_global_upper_bound():
     rules = AccessRules.from_payload(
         settings(

@@ -281,16 +281,13 @@ class AccessRules:
         return cls.from_payload(payload)
 
     def for_event(self, event) -> RequestAccess:
-        """应用名单模式；非群聊/私聊事件不受名单拦截。"""
+        """应用名单模式，白名单拒绝所有没有匹配规则的事件。"""
         if self.mode == "off":
             return UNRESTRICTED
         if event.is_private_chat():
             target = self.private
         else:
-            umo = EventIdentity.group_rule_key(event)
-            if not umo:
-                return UNRESTRICTED
-            target = self.groups.get(umo)
+            target = self.groups.get(EventIdentity.group_rule_key(event))
         if target is None:
             return DENY_ALL if self.mode == "whitelist" else UNRESTRICTED
         return target

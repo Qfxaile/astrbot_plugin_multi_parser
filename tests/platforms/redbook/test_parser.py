@@ -147,6 +147,66 @@ async def test_parse_explore_uses_minimal_desktop_headers(monkeypatch):
     assert not any(name.startswith("sec-fetch-") for name in explore_request.headers)
 
 
+@pytest.mark.parametrize("page", ["explore", "discovery"])
+@pytest.mark.parametrize("video_enabled", [False, True])
+async def test_parse_video_note_without_stream_uses_declared_type(
+    monkeypatch, page, video_enabled
+):
+    note = {
+        "type": "video",
+        "title": "没有播放流的视频笔记",
+        "desc": "视频简介",
+        "video": {"media": {"stream": {}}},
+    }
+    requested_paths = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested_paths.append(request.url.path)
+        if request.url.path == "/explore/note123":
+            if page == "discovery":
+                return httpx.Response(200, text="未提供 Explore 笔记数据")
+            state = {"note": {"noteDetailMap": {"note123": {"note": note}}}}
+        else:
+            assert request.url.path == "/discovery/item/note123"
+            state = {"noteData": {"data": {"noteData": note}}}
+        return httpx.Response(
+            200, text=f"<script>window.__INITIAL_STATE__={json.dumps(state)}</script>"
+        )
+
+    real_async_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        redbook.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_async_client(
+            transport=httpx.MockTransport(handler), **kwargs
+        ),
+    )
+    parser = redbook.RedBookParser(
+        {
+            "platform_feature_switches": {
+                "redbook": {
+                    "video_note": video_enabled,
+                    "image_note": not video_enabled,
+                }
+            }
+        }
+    )
+
+    result = await parser.parse(
+        ParseContext(text="https://www.xiaohongshu.com/explore/note123")
+    )
+
+    assert result.diagnostics.skipped is not video_enabled
+    assert not result.media.video_url
+    if video_enabled:
+        assert result.content.title == note["title"]
+        assert result.content.description == note["desc"]
+    expected_paths = ["/explore/note123"]
+    if page == "discovery":
+        expected_paths.append("/discovery/item/note123")
+    assert requested_paths == expected_paths
+
+
 def test_explore_prefers_h265_video():
     state = {
         "note": {

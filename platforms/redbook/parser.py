@@ -143,13 +143,12 @@ class RedBookParser(
                     self._extract_initial_state(response.text)
                 )
                 content_url = discovery_url
+            if result.diagnostics.skipped:
+                return result
             parsed_content_url = urlsplit(content_url)
             image_referer = urlunsplit(
                 parsed_content_url._replace(query="", fragment="")
             )
-            note_type = "video_note" if result.media.video_url else "image_note"
-            if not self.parse_feature_enabled(note_type):
-                return ParseResult.skipped(self.name)
             mark_invalid_image_slots(result, self.INVALID_IMAGE_URL)
             client.cookies.clear()
             return await self.materialize_images(result, client, image_referer)
